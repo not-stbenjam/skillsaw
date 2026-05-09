@@ -184,7 +184,6 @@ __all__ = [
     "AgentsMdStructureRule",
     "ClineRulesValidRule",
     "ContextBudgetRule",
-<<<<<<< HEAD
     "WindsurfRulesValidRule",
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",

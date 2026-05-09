@@ -15,7 +15,6 @@ from skillsaw.rules.builtin.apm import (
     ApmCompilationValidRule,
 )
 
-
 # --- Detection tests ---
 
 
@@ -217,9 +216,7 @@ def test_invalid_target_fails(temp_dir):
 def test_invalid_target_in_list_fails(temp_dir):
     repo = temp_dir / "bad-target-list"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ntarget:\n  - claude\n  - invalid\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ntarget:\n  - claude\n  - invalid\n")
 
     context = RepositoryContext(repo)
     violations = ApmTargetValidRule().check(context)
@@ -229,9 +226,7 @@ def test_invalid_target_in_list_fails(temp_dir):
 def test_all_target_combined_fails(temp_dir):
     repo = temp_dir / "all-combined"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ntarget:\n  - all\n  - claude\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ntarget:\n  - all\n  - claude\n")
 
     context = RepositoryContext(repo)
     violations = ApmTargetValidRule().check(context)
@@ -338,9 +333,7 @@ def test_apm_dep_object_missing_git_and_path_fails(temp_dir):
     repo = temp_dir / "deps-no-git"
     repo.mkdir()
     (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\n"
-        "dependencies:\n  apm:\n"
-        "    - ref: v1.0.0\n"
+        "name: test\nversion: 1.0.0\n" "dependencies:\n  apm:\n" "    - ref: v1.0.0\n"
     )
 
     context = RepositoryContext(repo)
@@ -380,9 +373,7 @@ def test_apm_dep_invalid_alias_fails(temp_dir):
 def test_apm_deps_not_list_fails(temp_dir):
     repo = temp_dir / "deps-not-list"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ndependencies:\n  apm: not-a-list\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ndependencies:\n  apm: not-a-list\n")
 
     context = RepositoryContext(repo)
     violations = ApmDependenciesValidRule().check(context)
@@ -604,9 +595,7 @@ def test_valid_compilation(temp_dir):
 def test_invalid_compilation_strategy_fails(temp_dir):
     repo = temp_dir / "comp-bad-strat"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ncompilation:\n  strategy: merged\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ncompilation:\n  strategy: merged\n")
 
     context = RepositoryContext(repo)
     violations = ApmCompilationValidRule().check(context)
@@ -626,9 +615,7 @@ def test_compilation_not_dict_fails(temp_dir):
 def test_compilation_invalid_target_fails(temp_dir):
     repo = temp_dir / "comp-bad-target"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ncompilation:\n  target: invalid\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ncompilation:\n  target: invalid\n")
 
     context = RepositoryContext(repo)
     violations = ApmCompilationValidRule().check(context)
@@ -662,9 +649,7 @@ def test_compilation_exclude_not_list_fails(temp_dir):
 def test_compilation_placement_not_dict_fails(temp_dir):
     repo = temp_dir / "comp-bad-placement"
     repo.mkdir()
-    (repo / "apm.yml").write_text(
-        "name: test\nversion: 1.0.0\ncompilation:\n  placement: bad\n"
-    )
+    (repo / "apm.yml").write_text("name: test\nversion: 1.0.0\ncompilation:\n  placement: bad\n")
 
     context = RepositoryContext(repo)
     violations = ApmCompilationValidRule().check(context)
