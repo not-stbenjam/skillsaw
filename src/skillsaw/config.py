@@ -63,8 +63,8 @@ class LinterConfig:
                 # Command format rules
                 "command-naming": {"enabled": True, "severity": "warning"},
                 "command-frontmatter": {"enabled": True, "severity": "error"},
-                "command-sections": {"enabled": True, "severity": "warning"},
-                "command-name-format": {"enabled": True, "severity": "warning"},
+                "command-sections": {"enabled": False, "severity": "warning"},
+                "command-name-format": {"enabled": False, "severity": "warning"},
                 # Marketplace rules (auto-enabled for marketplace repos)
                 "marketplace-json-valid": {"enabled": "auto", "severity": "error"},
                 "marketplace-registration": {"enabled": "auto", "severity": "error"},

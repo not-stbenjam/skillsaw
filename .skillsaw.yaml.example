@@ -34,12 +34,12 @@ rules:
 
   # Command files should have Name, Synopsis, Description, and Implementation sections
   command-sections:
-    enabled: true
+    enabled: false
     severity: warning
 
   # Command Name section should be 'plugin-name:command-name'
   command-name-format:
-    enabled: true
+    enabled: false
     severity: warning
 
   # Marketplace.json must be valid JSON with required fields
