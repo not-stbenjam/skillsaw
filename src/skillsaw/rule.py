@@ -23,6 +23,7 @@ class Severity(Enum):
 class AutofixConfidence(Enum):
     SAFE = "safe"
     SUGGEST = "suggest"
+    LLM = "llm"
 
 
 @dataclass
@@ -137,6 +138,10 @@ class Rule(ABC):
     @property
     def supports_autofix(self) -> bool:
         return type(self).fix is not Rule.fix
+
+    @property
+    def llm_fix_prompt(self) -> Optional[str]:
+        return None
 
     def violation(
         self,

@@ -2,6 +2,8 @@
 Configuration management for skillsaw
 """
 
+import os
+
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Set, TYPE_CHECKING
@@ -12,6 +14,19 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class LLMSettings:
+    model: str = "claude-sonnet-4-20250514"
+    max_iterations: int = 3
+    max_tokens: int = 500_000
+    confirm: bool = True
+
+    def __post_init__(self):
+        env_model = os.environ.get("SKILLSAW_MODEL")
+        if env_model:
+            self.model = env_model
+
+
+@dataclass
 class LinterConfig:
     """Configuration for the linter"""
 
@@ -19,6 +34,7 @@ class LinterConfig:
     custom_rules: List[str] = field(default_factory=list)
     exclude_patterns: List[str] = field(default_factory=list)
     strict: bool = False
+    llm: LLMSettings = field(default_factory=LLMSettings)
 
     @classmethod
     def from_file(cls, config_path: Path) -> "LinterConfig":
@@ -40,11 +56,20 @@ class LinterConfig:
         except (yaml.YAMLError, IOError) as e:
             raise ValueError(f"Failed to load config from {config_path}: {e}")
 
+        llm_data = data.get("llm", {})
+        llm_settings = LLMSettings(
+            model=llm_data.get("model", LLMSettings.model),
+            max_iterations=llm_data.get("max_iterations", LLMSettings.max_iterations),
+            max_tokens=llm_data.get("max_tokens", LLMSettings.max_tokens),
+            confirm=llm_data.get("confirm", LLMSettings.confirm),
+        )
+
         return cls(
             rules=data.get("rules", {}),
             custom_rules=data.get("custom-rules", []),
             exclude_patterns=data.get("exclude", []),
             strict=data.get("strict", False),
+            llm=llm_settings,
         )
 
     @classmethod
