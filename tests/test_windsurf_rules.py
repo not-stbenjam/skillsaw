@@ -54,7 +54,9 @@ class TestWindsurfRulesValidRule:
         context = RepositoryContext(temp_dir)
         violations = WindsurfRulesValidRule().check(context)
         assert len(violations) == 1
-        assert "read" in violations[0].message.lower() or "encoding" in violations[0].message.lower()
+        assert (
+            "read" in violations[0].message.lower() or "encoding" in violations[0].message.lower()
+        )
 
     def test_under_char_limit_passes(self, temp_dir):
         content = "x" * (WINDSURF_CHAR_LIMIT - 1)

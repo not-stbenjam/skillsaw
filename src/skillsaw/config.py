@@ -99,6 +99,8 @@ class LinterConfig:
                 "agents-md-structure": {"enabled": False, "severity": "warning"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
+                # Windsurf rules (disabled for back-compat; --init enables)
+                "windsurf-rules-valid": {"enabled": False, "severity": "warning"},
             }
         )
 
@@ -109,6 +111,7 @@ class LinterConfig:
         "copilot-dot-instructions-valid": {"enabled": True},
         "agents-md-structure": {"enabled": True},
         "context-budget": {"enabled": True},
+        "windsurf-rules-valid": {"enabled": True},
     }
 
     @classmethod

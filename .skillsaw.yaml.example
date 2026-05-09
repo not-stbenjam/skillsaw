@@ -142,6 +142,11 @@ rules:
     enabled: true
     severity: warning
 
+  # .windsurfrules must be valid UTF-8, non-empty, and within the 12K character limit
+  windsurf-rules-valid:
+    enabled: true
+    severity: warning
+
 # Load custom rules from these files
 custom-rules: []
 
