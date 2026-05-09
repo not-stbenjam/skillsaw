@@ -121,6 +121,17 @@ class LinterConfig:
                 # Copilot instructions (auto-enabled when copilot files detected)
                 "copilot-instructions-valid": {"enabled": "auto", "severity": "warning"},
                 "copilot-dot-instructions-valid": {"enabled": "auto", "severity": "warning"},
+                # Copilot deep rules (auto-enabled when copilot files detected)
+                "copilot-instructions-length": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-language-quality": {"enabled": "auto", "severity": "info"},
+                "copilot-instructions-actionability": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-stale-refs": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-duplication": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-scope": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-format": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-conflict": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-frontmatter-keys": {"enabled": "auto", "severity": "warning"},
+                "copilot-instructions-exclude-agent": {"enabled": "auto", "severity": "error"},
                 "agents-md-structure": {"enabled": "auto", "severity": "warning"},
                 # Deep AGENTS.md rules (disabled for back-compat; --init enables)
                 "agents-md-size-limit": {"enabled": "auto", "severity": "warning"},

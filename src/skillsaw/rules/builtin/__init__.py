@@ -79,6 +79,16 @@ from .agents_md import (
 from .copilot_instructions import (
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
+    CopilotInstructionsLengthRule,
+    CopilotInstructionsLanguageQualityRule,
+    CopilotInstructionsActionabilityRule,
+    CopilotInstructionsStaleRefsRule,
+    CopilotInstructionsDuplicationRule,
+    CopilotInstructionsScopeRule,
+    CopilotInstructionsFormatRule,
+    CopilotInstructionsConflictRule,
+    CopilotInstructionsFrontmatterKeysRule,
+    CopilotInstructionsExcludeAgentRule,
 )
 
 from .gemini import (
@@ -203,6 +213,17 @@ BUILTIN_RULES = [
     # Copilot instructions
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
+    # Copilot deep rules (auto-enabled when copilot files detected)
+    CopilotInstructionsLengthRule,
+    CopilotInstructionsLanguageQualityRule,
+    CopilotInstructionsActionabilityRule,
+    CopilotInstructionsStaleRefsRule,
+    CopilotInstructionsDuplicationRule,
+    CopilotInstructionsScopeRule,
+    CopilotInstructionsFormatRule,
+    CopilotInstructionsConflictRule,
+    CopilotInstructionsFrontmatterKeysRule,
+    CopilotInstructionsExcludeAgentRule,
     AgentsMdStructureRule,
     # Deep AGENTS.md rules
     AgentsMdSizeLimitRule,
@@ -318,6 +339,16 @@ __all__ = [
     "InstructionImportsValidRule",
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
+    "CopilotInstructionsLengthRule",
+    "CopilotInstructionsLanguageQualityRule",
+    "CopilotInstructionsActionabilityRule",
+    "CopilotInstructionsStaleRefsRule",
+    "CopilotInstructionsDuplicationRule",
+    "CopilotInstructionsScopeRule",
+    "CopilotInstructionsFormatRule",
+    "CopilotInstructionsConflictRule",
+    "CopilotInstructionsFrontmatterKeysRule",
+    "CopilotInstructionsExcludeAgentRule",
     "AgentsMdStructureRule",
     "AgentsMdSizeLimitRule",
     "AgentsMdOverrideSemanticsRule",
