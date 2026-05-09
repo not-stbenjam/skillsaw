@@ -68,9 +68,7 @@ class ClineRulesValidRule(Rule):
         violations = []
         seen_numbers: dict[int, Path] = {}
 
-        files = sorted(
-            f for f in dir_path.iterdir() if f.is_file() and not f.name.startswith(".")
-        )
+        files = sorted(f for f in dir_path.iterdir() if f.is_file() and not f.name.startswith("."))
 
         if not files:
             violations.append(
