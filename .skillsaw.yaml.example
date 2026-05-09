@@ -227,6 +227,61 @@ rules:
     enabled: true
     severity: error
 
+  # Only 3 valid frontmatter fields: description, globs, alwaysApply
+  cursor-mdc-frontmatter:
+    enabled: auto
+    severity: warning
+
+  # Warn when .mdc rule activation type is Manual (no frontmatter)
+  cursor-activation-type:
+    enabled: auto
+    severity: warning
+
+  # CRLF line endings break --- frontmatter detection in .mdc files
+  cursor-crlf-detection:
+    enabled: auto
+    severity: error
+
+  # Validate glob patterns: catch invalid syntax and overly broad patterns
+  cursor-glob-valid:
+    enabled: auto
+    severity: warning
+
+  # Rule file has frontmatter but empty body — the rule has no content
+  cursor-empty-body:
+    enabled: auto
+    severity: warning
+
+  # Agent-requested rules need clear descriptions (the agent's only signal)
+  cursor-description-quality:
+    enabled: auto
+    severity: warning
+
+  # Warn when multiple .mdc files have overlapping glob patterns
+  cursor-glob-overlap:
+    enabled: auto
+    severity: warning
+
+  # Warn when a rule file exceeds 500 lines (wastes context budget)
+  cursor-rule-size:
+    enabled: auto
+    severity: warning
+
+  # alwaysApply must be boolean, globs must be string or list
+  cursor-frontmatter-types:
+    enabled: auto
+    severity: error
+
+  # Detect .mdc files with >80% similar bodies — suggest consolidation
+  cursor-duplicate-rules:
+    enabled: auto
+    severity: warning
+
+  # Warn when >3 rules have alwaysApply: true (context budget)
+  cursor-always-apply-overuse:
+    enabled: auto
+    severity: warning
+
   # apm.yml must exist with required name and version fields
   apm-manifest-valid:
     enabled: auto

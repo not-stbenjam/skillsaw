@@ -88,6 +88,17 @@ from .context_budget import (
 from .cursor import (
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
+    CursorMdcFrontmatterRule,
+    CursorActivationTypeRule,
+    CursorCrlfDetectionRule,
+    CursorGlobValidRule,
+    CursorEmptyBodyRule,
+    CursorDescriptionQualityRule,
+    CursorGlobOverlapRule,
+    CursorRuleSizeRule,
+    CursorFrontmatterTypesRule,
+    CursorDuplicateRulesRule,
+    CursorAlwaysApplyOveruseRule,
 )
 
 from .kiro import (
@@ -177,11 +188,23 @@ BUILTIN_RULES = [
     AgentsMdHookCandidateRule,
     # Context budget
     ContextBudgetRule,
-    # Cursor rules
+    # Cursor rules (monolithic, default disabled)
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
     # Kiro steering
     KiroSteeringValidRule,
+    # Cursor deep rules (auto-enabled)
+    CursorMdcFrontmatterRule,
+    CursorActivationTypeRule,
+    CursorCrlfDetectionRule,
+    CursorGlobValidRule,
+    CursorEmptyBodyRule,
+    CursorDescriptionQualityRule,
+    CursorGlobOverlapRule,
+    CursorRuleSizeRule,
+    CursorFrontmatterTypesRule,
+    CursorDuplicateRulesRule,
+    CursorAlwaysApplyOveruseRule,
     # APM
     ApmManifestValidRule,
     ApmTargetValidRule,
@@ -254,6 +277,17 @@ __all__ = [
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",
     "KiroSteeringValidRule",
+    "CursorMdcFrontmatterRule",
+    "CursorActivationTypeRule",
+    "CursorCrlfDetectionRule",
+    "CursorGlobValidRule",
+    "CursorEmptyBodyRule",
+    "CursorDescriptionQualityRule",
+    "CursorGlobOverlapRule",
+    "CursorRuleSizeRule",
+    "CursorFrontmatterTypesRule",
+    "CursorDuplicateRulesRule",
+    "CursorAlwaysApplyOveruseRule",
     "ApmManifestValidRule",
     "ApmTargetValidRule",
     "ApmTypeValidRule",

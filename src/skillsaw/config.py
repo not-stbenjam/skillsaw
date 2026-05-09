@@ -112,11 +112,23 @@ class LinterConfig:
                 "agents-md-hook-candidate": {"enabled": "auto", "severity": "info"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
-                # Cursor rules
+                # Cursor rules (monolithic, opt-in via --init)
                 "cursor-mdc-valid": {"enabled": False, "severity": "error"},
                 "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
                 # Kiro steering
                 "kiro-steering-valid": {"enabled": False, "severity": "error"},
+                # Cursor deep rules (auto-enabled when .cursor/ present)
+                "cursor-mdc-frontmatter": {"enabled": "auto", "severity": "warning"},
+                "cursor-activation-type": {"enabled": "auto", "severity": "warning"},
+                "cursor-crlf-detection": {"enabled": "auto", "severity": "error"},
+                "cursor-glob-valid": {"enabled": "auto", "severity": "warning"},
+                "cursor-empty-body": {"enabled": "auto", "severity": "warning"},
+                "cursor-description-quality": {"enabled": "auto", "severity": "warning"},
+                "cursor-glob-overlap": {"enabled": "auto", "severity": "warning"},
+                "cursor-rule-size": {"enabled": "auto", "severity": "warning"},
+                "cursor-frontmatter-types": {"enabled": "auto", "severity": "error"},
+                "cursor-duplicate-rules": {"enabled": "auto", "severity": "warning"},
+                "cursor-always-apply-overuse": {"enabled": "auto", "severity": "warning"},
                 # APM manifest rules (auto-enabled for APM repos)
                 "apm-manifest-valid": {"enabled": "auto", "severity": "error"},
                 "apm-target-valid": {"enabled": "auto", "severity": "error"},
