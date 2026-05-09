@@ -60,6 +60,11 @@ from .instruction_files import (
     InstructionImportsValidRule,
 )
 
+from .copilot_instructions import (
+    CopilotInstructionsValidRule,
+    CopilotDotInstructionsValidRule,
+)
+
 from .context_budget import (
     ContextBudgetRule,
 )
@@ -102,6 +107,9 @@ BUILTIN_RULES = [
     # Instruction files
     InstructionFileValidRule,
     InstructionImportsValidRule,
+    # Copilot instructions
+    CopilotInstructionsValidRule,
+    CopilotDotInstructionsValidRule,
     # Context budget
     ContextBudgetRule,
 ]
@@ -135,5 +143,7 @@ __all__ = [
     "OpenclawMetadataRule",
     "InstructionFileValidRule",
     "InstructionImportsValidRule",
+    "CopilotInstructionsValidRule",
+    "CopilotDotInstructionsValidRule",
     "ContextBudgetRule",
 ]
