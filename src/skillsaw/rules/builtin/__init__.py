@@ -124,6 +124,13 @@ from .apm import (
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    ApmMcpTransportRule,
+    ApmLockfileConsistencyRule,
+    ApmReadmePresentRule,
+    ApmEntryPointRule,
+    ApmNameConflictRule,
+    ApmFieldTypesRule,
+    ApmDeprecatedFieldsRule,
 )
 
 from .content_rules import (
@@ -251,6 +258,13 @@ BUILTIN_RULES = [
     ContentCognitiveChunksRule,
     ContentEmbeddedSecretsRule,
     ContentCrossFileConsistencyRule,
+    ApmMcpTransportRule,
+    ApmLockfileConsistencyRule,
+    ApmReadmePresentRule,
+    ApmEntryPointRule,
+    ApmNameConflictRule,
+    ApmFieldTypesRule,
+    ApmDeprecatedFieldsRule,
 ]
 
 

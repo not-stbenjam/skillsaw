@@ -162,6 +162,13 @@ class LinterConfig:
                 "content-cognitive-chunks": {"enabled": False, "severity": "info"},
                 "content-embedded-secrets": {"enabled": False, "severity": "error"},
                 "content-cross-file-consistency": {"enabled": False, "severity": "warning"},
+                "apm-mcp-transport": {"enabled": "auto", "severity": "error"},
+                "apm-lockfile-consistency": {"enabled": "auto", "severity": "warning"},
+                "apm-readme-present": {"enabled": "auto", "severity": "warning"},
+                "apm-entry-point": {"enabled": "auto", "severity": "error"},
+                "apm-name-conflict": {"enabled": "auto", "severity": "warning"},
+                "apm-field-types": {"enabled": "auto", "severity": "error"},
+                "apm-deprecated-fields": {"enabled": "auto", "severity": "warning"},
             }
         )
 
