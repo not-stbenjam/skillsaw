@@ -61,6 +61,21 @@ from .instruction_files import (
     AgentsMdStructureRule,
 )
 
+from .agents_md import (
+    AgentsMdSizeLimitRule,
+    AgentsMdOverrideSemanticsRule,
+    AgentsMdHierarchyConsistencyRule,
+    AgentsMdDeadFileRefsRule,
+    AgentsMdDeadCommandRefsRule,
+    AgentsMdWeakLanguageRule,
+    AgentsMdNegativeOnlyRule,
+    AgentsMdSectionLengthRule,
+    AgentsMdStructureDeepRule,
+    AgentsMdTautologicalRule,
+    AgentsMdCriticalPositionRule,
+    AgentsMdHookCandidateRule,
+)
+
 from .copilot_instructions import (
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
@@ -125,6 +140,19 @@ BUILTIN_RULES = [
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
     AgentsMdStructureRule,
+    # Deep AGENTS.md rules
+    AgentsMdSizeLimitRule,
+    AgentsMdOverrideSemanticsRule,
+    AgentsMdHierarchyConsistencyRule,
+    AgentsMdDeadFileRefsRule,
+    AgentsMdDeadCommandRefsRule,
+    AgentsMdWeakLanguageRule,
+    AgentsMdNegativeOnlyRule,
+    AgentsMdSectionLengthRule,
+    AgentsMdStructureDeepRule,
+    AgentsMdTautologicalRule,
+    AgentsMdCriticalPositionRule,
+    AgentsMdHookCandidateRule,
     # Context budget
     ContextBudgetRule,
     # Cursor rules
@@ -170,6 +198,18 @@ __all__ = [
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
     "AgentsMdStructureRule",
+    "AgentsMdSizeLimitRule",
+    "AgentsMdOverrideSemanticsRule",
+    "AgentsMdHierarchyConsistencyRule",
+    "AgentsMdDeadFileRefsRule",
+    "AgentsMdDeadCommandRefsRule",
+    "AgentsMdWeakLanguageRule",
+    "AgentsMdNegativeOnlyRule",
+    "AgentsMdSectionLengthRule",
+    "AgentsMdStructureDeepRule",
+    "AgentsMdTautologicalRule",
+    "AgentsMdCriticalPositionRule",
+    "AgentsMdHookCandidateRule",
     "ContextBudgetRule",
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",

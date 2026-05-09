@@ -76,6 +76,28 @@ RULE_GROUPS = [
         "that `@import` references resolve to existing files. Disabled by default.",
     ),
     (
+        "AGENTS.md Deep Validation",
+        [
+            "agents-md-structure",
+            "agents-md-size-limit",
+            "agents-md-override-semantics",
+            "agents-md-hierarchy-consistency",
+            "agents-md-dead-file-refs",
+            "agents-md-dead-command-refs",
+            "agents-md-weak-language",
+            "agents-md-negative-only",
+            "agents-md-section-length",
+            "agents-md-structure-deep",
+            "agents-md-tautological",
+            "agents-md-critical-position",
+            "agents-md-hook-candidate",
+        ],
+        "Deep validation for AGENTS.md files (used by OpenAI Codex and GitHub "
+        "Copilot coding agent). Checks size limits, override semantics, hierarchy "
+        "consistency, dead references, weak language, structure quality, and more. "
+        "Auto-enabled when AGENTS.md is detected.",
+    ),
+    (
         "Context Budget",
         ["context-budget"],
         "Warns when instruction and configuration files exceed recommended "

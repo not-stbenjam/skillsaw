@@ -371,6 +371,45 @@ Validates AI coding assistant instruction files (AGENTS.md, CLAUDE.md, GEMINI.md
 | `instruction-file-valid` | Instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) must be valid and non-empty | warning (disabled) |
 | `instruction-imports-valid` | Import references (@path) in CLAUDE.md and GEMINI.md must point to existing files | warning (disabled) |
 
+### AGENTS.md Deep Validation
+
+Deep validation for AGENTS.md files (used by OpenAI Codex and GitHub Copilot coding agent). Checks size limits, override semantics, hierarchy consistency, dead references, weak language, structure quality, and more. Auto-enabled when AGENTS.md is detected.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `agents-md-structure` | AGENTS.md should have at least one heading and meaningful content | warning (disabled) |
+| `agents-md-size-limit` | AGENTS.md must not exceed the Codex 32 KB size limit | warning (auto) |
+| `agents-md-override-semantics` | AGENTS.override.md replaces AGENTS.md entirely — verify it is self-contained | warning (auto) |
+| `agents-md-hierarchy-consistency` | Subdirectory AGENTS.md files should not contradict root AGENTS.md | warning (auto) |
+| `agents-md-dead-file-refs` | File paths referenced in AGENTS.md should exist in the repo | warning (auto) |
+| `agents-md-dead-command-refs` | Shell commands in AGENTS.md (npm scripts, make targets) should exist in the project | warning (auto) |
+| `agents-md-weak-language` | AGENTS.md should use direct, actionable language instead of vague phrases | info (auto) |
+| `agents-md-negative-only` | Negative instructions (never/don't) should include a positive alternative | warning (auto) |
+| `agents-md-section-length` | AGENTS.md sections should not exceed 50 lines (lost-in-the-middle effect) | warning (auto) |
+| `agents-md-structure-deep` | AGENTS.md should have task-organized structure with boundary sections | info (auto) |
+| `agents-md-tautological` | Remove self-evident instructions like 'write clean code' that waste instruction budget | warning (auto) |
+| `agents-md-critical-position` | Critical instructions (MUST/NEVER/ALWAYS) should be in the first or last 20% of the file | info (auto) |
+| `agents-md-hook-candidate` | Deterministic rules in AGENTS.md should be implemented as hooks instead | info (auto) |
+
+**`agents-md-size-limit` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `warn_bytes` | Byte count to warn at | `24576` |
+| `error_bytes` | Byte count to error at | `32768` |
+
+**`agents-md-section-length` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `max_lines` | Max lines per section | `50` |
+
+**`agents-md-critical-position` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `zone_pct` | Percentage of file considered primacy/recency zone | `20` |
+
 ### Context Budget
 
 Warns when instruction and configuration files exceed recommended token limits. Uses a `len(text) / 4` approximation for token counting. Supports per-category `warn` and `error` thresholds. Disabled by default.

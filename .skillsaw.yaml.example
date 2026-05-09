@@ -147,6 +147,66 @@ rules:
     enabled: true
     severity: warning
 
+  # AGENTS.md must not exceed the Codex 32 KB size limit
+  agents-md-size-limit:
+    enabled: auto
+    severity: warning
+
+  # AGENTS.override.md replaces AGENTS.md entirely — verify it is self-contained
+  agents-md-override-semantics:
+    enabled: auto
+    severity: warning
+
+  # Subdirectory AGENTS.md files should not contradict root AGENTS.md
+  agents-md-hierarchy-consistency:
+    enabled: auto
+    severity: warning
+
+  # File paths referenced in AGENTS.md should exist in the repo
+  agents-md-dead-file-refs:
+    enabled: auto
+    severity: warning
+
+  # Shell commands in AGENTS.md (npm scripts, make targets) should exist in the project
+  agents-md-dead-command-refs:
+    enabled: auto
+    severity: warning
+
+  # AGENTS.md should use direct, actionable language instead of vague phrases
+  agents-md-weak-language:
+    enabled: auto
+    severity: info
+
+  # Negative instructions (never/don't) should include a positive alternative
+  agents-md-negative-only:
+    enabled: auto
+    severity: warning
+
+  # AGENTS.md sections should not exceed 50 lines (lost-in-the-middle effect)
+  agents-md-section-length:
+    enabled: auto
+    severity: warning
+
+  # AGENTS.md should have task-organized structure with boundary sections
+  agents-md-structure-deep:
+    enabled: auto
+    severity: info
+
+  # Remove self-evident instructions like 'write clean code' that waste instruction budget
+  agents-md-tautological:
+    enabled: auto
+    severity: warning
+
+  # Critical instructions (MUST/NEVER/ALWAYS) should be in the first or last 20% of the file
+  agents-md-critical-position:
+    enabled: auto
+    severity: info
+
+  # Deterministic rules in AGENTS.md should be implemented as hooks instead
+  agents-md-hook-candidate:
+    enabled: auto
+    severity: info
+
   # Warn when instruction or config files exceed recommended token limits
   context-budget:
     enabled: true

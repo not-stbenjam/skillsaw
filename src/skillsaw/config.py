@@ -97,6 +97,19 @@ class LinterConfig:
                 "copilot-instructions-valid": {"enabled": False, "severity": "warning"},
                 "copilot-dot-instructions-valid": {"enabled": False, "severity": "warning"},
                 "agents-md-structure": {"enabled": False, "severity": "warning"},
+                # Deep AGENTS.md rules (disabled for back-compat; --init enables)
+                "agents-md-size-limit": {"enabled": "auto", "severity": "warning"},
+                "agents-md-override-semantics": {"enabled": "auto", "severity": "warning"},
+                "agents-md-hierarchy-consistency": {"enabled": "auto", "severity": "warning"},
+                "agents-md-dead-file-refs": {"enabled": "auto", "severity": "warning"},
+                "agents-md-dead-command-refs": {"enabled": "auto", "severity": "warning"},
+                "agents-md-weak-language": {"enabled": "auto", "severity": "info"},
+                "agents-md-negative-only": {"enabled": "auto", "severity": "warning"},
+                "agents-md-section-length": {"enabled": "auto", "severity": "warning"},
+                "agents-md-structure-deep": {"enabled": "auto", "severity": "info"},
+                "agents-md-tautological": {"enabled": "auto", "severity": "warning"},
+                "agents-md-critical-position": {"enabled": "auto", "severity": "info"},
+                "agents-md-hook-candidate": {"enabled": "auto", "severity": "info"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
                 # Cursor rules
