@@ -87,8 +87,18 @@ Defined in `tools.py`, scoped to a working directory:
 |------|---------|
 | `read_file(path)` | Read full file contents |
 | `write_file(path, content)` | Overwrite a file |
-| `read_section(path, start_line, end_line)` | Read a line range |
 | `replace_section(path, old_text, new_text)` | Surgical string replacement |
+| `lint(path)` | Run skillsaw lint on a file and return violations |
+| `diff(path)` | Show unified diff of changes vs original |
+
+**Scoped tool set — NO arbitrary execution.** The LLM gets ONLY these 5
+tools. There is no bash/shell tool, no network tool, no arbitrary code
+execution. The tool set is intentionally tight and safe.
+
+The `lint` tool is what powers the self-correcting fix loop: the LLM edits
+a file, lints its own work, sees remaining violations, and fixes again.
+This makes the loop self-contained within the LLM conversation rather than
+requiring external orchestration between iterations.
 
 All paths are resolved relative to a sandbox root and validated to prevent
 path traversal. Tools operate on real files — the engine is a side-effecting
@@ -116,6 +126,63 @@ class ReadFileTool:
         if not resolved.exists():
             return f"Error: file not found: {path}"
         return resolved.read_text(encoding="utf-8")
+
+
+class LintTool:
+    name = "lint"
+    description = "Run skillsaw lint on a file and return violations"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File path relative to repo root"}
+        },
+        "required": ["path"],
+    }
+
+    def __init__(self, root: Path, config: LinterConfig):
+        self._root = root
+        self._config = config
+
+    def execute(self, *, path: str) -> str:
+        resolved = (self._root / path).resolve()
+        if not resolved.is_relative_to(self._root):
+            return "Error: path escapes repository root"
+        context = RepositoryContext(self._root)
+        linter = Linter(context, self._config)
+        violations = linter.run()
+        # Filter to violations in the target file
+        file_violations = [v for v in violations if v.file_path and
+                           v.file_path.resolve() == resolved]
+        if not file_violations:
+            return "No violations found."
+        return "\n".join(str(v) for v in file_violations)
+
+
+class DiffTool:
+    name = "diff"
+    description = "Show unified diff of current file vs original"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File path relative to repo root"}
+        },
+        "required": ["path"],
+    }
+
+    def __init__(self, root: Path, originals: Dict[Path, str]):
+        self._root = root
+        self._originals = originals  # snapshot taken before LLM starts
+
+    def execute(self, *, path: str) -> str:
+        resolved = (self._root / path).resolve()
+        if resolved not in self._originals:
+            return "Error: no original snapshot for this file"
+        import difflib
+        original = self._originals[resolved].splitlines(keepends=True)
+        current = resolved.read_text(encoding="utf-8").splitlines(keepends=True)
+        diff = difflib.unified_diff(original, current, fromfile=f"a/{path}", tofile=f"b/{path}")
+        result = "".join(diff)
+        return result or "No changes."
 ```
 
 ### 2.4 LLMEngine
@@ -235,18 +302,19 @@ The LLM autofix loop lives in the `Linter`, not the engine:
 def llm_fix(
     self,
     engine: LLMEngine,
-    max_iterations: int = 3,
-    callback: Callable[[int, int, List[RuleViolation]], None] | None = None,
+    callback: Callable[[int, List[RuleViolation]], None] | None = None,
 ) -> LLMFixResult:
     """
-    Run the lint-fix-relint loop using an LLM engine.
+    Run the LLM-powered fix loop.
 
     1. Run lint, collect violations from rules that have llm_fix_prompt
-    2. Group violations by file
+    2. Group violations by file, snapshot originals
     3. For each file: give the LLM the content + violations + rule prompts
-    4. LLM uses tools to edit the file
-    5. Re-lint the file
-    6. Repeat until clean or max_iterations
+    4. LLM uses its tools (read, write, replace, lint, diff) to fix
+       violations in a self-correcting loop — the LLM calls lint()
+       itself to verify its work and iterates until clean
+    5. Engine.run() returns when the LLM is satisfied or budget exhausted
+    6. Final external re-lint to confirm
     """
     ...
 ```
@@ -261,9 +329,23 @@ You are fixing lint violations in the file {path}.
 Current violations:
 {formatted_violations}
 
-Use the read_file and replace_section tools to fix these violations.
+Available tools:
+- read_file(path) — read a file
+- write_file(path, content) — overwrite a file
+- replace_section(path, old_text, new_text) — surgical edit
+- lint(path) — run skillsaw lint and see remaining violations
+- diff(path) — see what you've changed vs the original
+
+Workflow:
+1. Read the file to understand context
+2. Use replace_section to fix violations
+3. Run lint() to verify your fixes resolved the violations
+4. If violations remain, fix them and lint again
+5. When lint returns no violations (or only unrelated ones), run diff()
+   to confirm your changes are minimal and correct
+6. Respond with a summary of changes made
+
 Do not change anything unrelated to the violations listed above.
-When done, respond with a summary of changes made.
 ```
 
 ### 3.4 LLMFixResult
@@ -478,9 +560,11 @@ All of these are different system prompts + tool sets passed to the same
 
 ## 9. Security Considerations
 
-- **Path traversal:** All file tools validate paths stay within repo root
+- **Scoped tool set:** The LLM gets exactly 5 tools (read, write, replace, lint, diff). No bash, no shell, no network, no arbitrary code execution. This is a hard constraint, not a configuration option.
+- **Path traversal:** All file tools validate resolved paths stay within repo root via `is_relative_to()` check
 - **No network tools:** The LLM cannot make HTTP requests or access external resources
-- **No shell execution:** The LLM cannot run arbitrary commands
-- **Token budget:** Hard ceiling prevents runaway costs
-- **Confirmation by default:** Changes shown as diff, user must approve (unless `--yes`)
-- **API keys:** Never logged, never included in error messages
+- **No shell execution:** The LLM cannot run arbitrary commands — the `lint` tool calls skillsaw's Python API directly, not via subprocess
+- **Token budget:** Hard ceiling prevents runaway costs (`max_total_tokens` default 500k)
+- **Confirmation by default:** Changes shown as unified diff, user must approve (unless `--yes`)
+- **Revert on degradation:** If re-lint shows more violations than before, revert to original
+- **API keys:** Never logged, never included in error messages or LLM context
