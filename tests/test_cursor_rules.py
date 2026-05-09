@@ -520,6 +520,22 @@ class TestCursorMdcFrontmatter:
         violations = rule.check(context)
         assert violations[0].line == 3
 
+    def test_autofix_removes_unknown_keys(self, repo_with_cursor_rules):
+        content = "---\ndescription: Test\npriority: 5\nauthor: me\n---\n\n# Body\n"
+        _write_mdc(repo_with_cursor_rules, "fix-me.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcFrontmatterRule()
+        violations = rule.check(context)
+        fixes = rule.fix(context, violations)
+        assert len(fixes) == 1
+        assert fixes[0].confidence == AutofixConfidence.SAFE
+        assert "priority" not in fixes[0].fixed_content
+        assert "author" not in fixes[0].fixed_content
+        assert "description: Test" in fixes[0].fixed_content
+        assert fixes[0].fixed_content.startswith("---\n")
+        assert "# Body" in fixes[0].fixed_content
+
     def test_rule_metadata(self):
         rule = CursorMdcFrontmatterRule()
         assert rule.rule_id == "cursor-mdc-frontmatter"

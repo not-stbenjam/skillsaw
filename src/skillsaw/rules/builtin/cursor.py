@@ -96,7 +96,7 @@ def _get_activation_type(frontmatter: Optional[dict]) -> str:
     if frontmatter.get("alwaysApply") is True:
         return "always"
     globs = frontmatter.get("globs")
-    if globs is not None and _normalize_globs(globs):
+    if globs is not None:
         normalized = _normalize_globs(globs)
         if normalized and any(p.strip() for p in normalized):
             return "glob"
@@ -495,22 +495,24 @@ class CursorMdcFrontmatterRule(Rule):
             m = _FRONTMATTER_RE.match(content)
             if not m:
                 continue
+            frontmatter, _ = _parse_mdc_frontmatter(content)
+            if frontmatter is None:
+                continue
+            unknown_keys = set(frontmatter.keys()) - _VALID_FRONTMATTER_KEYS
+            if not unknown_keys:
+                continue
             fm_text = m.group(1)
             fixed_fm = fm_text
-            for v in file_violations:
-                for key in sorted(set(v.message.split("'")[1:2])):
-                    fixed_fm = re.sub(
-                        rf"^{re.escape(key)}\s*:.*\n?",
-                        "",
-                        fixed_fm,
-                        flags=re.MULTILINE,
-                    )
+            for key in unknown_keys:
+                fixed_fm = re.sub(
+                    rf"^{re.escape(key)}\s*:.*\n?",
+                    "",
+                    fixed_fm,
+                    flags=re.MULTILINE,
+                )
             if fixed_fm != fm_text:
-                fixed_content = "---\n" + fixed_fm + "---" + content[m.end() - len("---") :]
-                fixed_content = content[:3] + "\n" + fixed_fm + content[m.end() - len("---\n") :]
-                fixed_content = "---\n" + fixed_fm + content[m.end() :]
-                if not fixed_fm.endswith("\n"):
-                    fixed_content = "---\n" + fixed_fm + "\n" + content[m.end() :]
+                suffix = "\n" if not fixed_fm.endswith("\n") else ""
+                fixed_content = "---\n" + fixed_fm + suffix + content[m.end() :]
                 results.append(
                     AutofixResult(
                         rule_id=self.rule_id,
