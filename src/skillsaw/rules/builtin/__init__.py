@@ -70,6 +70,10 @@ from .context_budget import (
     ContextBudgetRule,
 )
 
+from .windsurf import (
+    WindsurfRulesValidRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -114,6 +118,8 @@ BUILTIN_RULES = [
     AgentsMdStructureRule,
     # Context budget
     ContextBudgetRule,
+    # Windsurf
+    WindsurfRulesValidRule,
 ]
 
 
@@ -149,4 +155,5 @@ __all__ = [
     "CopilotDotInstructionsValidRule",
     "AgentsMdStructureRule",
     "ContextBudgetRule",
+    "WindsurfRulesValidRule",
 ]
