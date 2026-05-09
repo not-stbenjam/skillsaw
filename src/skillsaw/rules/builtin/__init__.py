@@ -66,6 +66,10 @@ from .copilot_instructions import (
     CopilotDotInstructionsValidRule,
 )
 
+from .cline import (
+    ClineRulesValidRule,
+)
+
 from .context_budget import (
     ContextBudgetRule,
 )
@@ -116,6 +120,8 @@ BUILTIN_RULES = [
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
     AgentsMdStructureRule,
+    # Cline
+    ClineRulesValidRule,
     # Context budget
     ContextBudgetRule,
     # Windsurf
@@ -154,6 +160,7 @@ __all__ = [
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
     "AgentsMdStructureRule",
+    "ClineRulesValidRule",
     "ContextBudgetRule",
     "WindsurfRulesValidRule",
 ]
