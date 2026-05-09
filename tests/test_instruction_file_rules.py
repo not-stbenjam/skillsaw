@@ -82,6 +82,71 @@ class TestInstructionFileValidRule:
             "read" in violations[0].message.lower() or "encoding" in violations[0].message.lower()
         )
 
+    def test_gemini_md_in_subdirectory(self, temp_dir):
+        sub = temp_dir / "backend"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_text("# Backend instructions\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_gemini_md_empty_in_subdirectory(self, temp_dir):
+        sub = temp_dir / "frontend"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_text("")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 1
+        assert "empty" in violations[0].message.lower()
+        assert violations[0].file_path == sub / "GEMINI.md"
+
+    def test_gemini_md_invalid_encoding_in_subdirectory(self, temp_dir):
+        sub = temp_dir / "lib"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_bytes(b"\xff\xfe\x00\x80")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].file_path == sub / "GEMINI.md"
+
+    def test_gemini_md_hierarchical_multiple_levels(self, temp_dir):
+        (temp_dir / "GEMINI.md").write_text("# Root\n")
+        sub = temp_dir / "src"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_text("# Src\n")
+        deep = sub / "components"
+        deep.mkdir()
+        (deep / "GEMINI.md").write_text("# Components\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_gemini_md_hierarchical_mixed_valid_invalid(self, temp_dir):
+        (temp_dir / "GEMINI.md").write_text("# Root instructions\n")
+        sub = temp_dir / "api"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_text("")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].file_path == sub / "GEMINI.md"
+
+    def test_gemini_md_in_hidden_dir_skipped(self, temp_dir):
+        hidden = temp_dir / ".hidden"
+        hidden.mkdir()
+        (hidden / "GEMINI.md").write_text("")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_agents_md_not_discovered_in_subdirectory(self, temp_dir):
+        sub = temp_dir / "sub"
+        sub.mkdir()
+        (sub / "AGENTS.md").write_text("")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionFileValidRule().check(context)
+        assert len(violations) == 0
+
 
 class TestInstructionImportsValidRule:
     def test_rule_metadata(self):
@@ -174,6 +239,66 @@ class TestInstructionImportsValidRule:
         docs_dir = temp_dir / "docs"
         docs_dir.mkdir()
         (temp_dir / "GEMINI.md").write_text("@docs\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_gemini_md_subdirectory_imports_resolved_relative(self, temp_dir):
+        sub = temp_dir / "backend"
+        sub.mkdir()
+        helpers = sub / "helpers"
+        helpers.mkdir()
+        (helpers / "auth.md").write_text("# Auth helpers\n")
+        (sub / "GEMINI.md").write_text("@helpers/auth.md\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_gemini_md_subdirectory_missing_import(self, temp_dir):
+        sub = temp_dir / "backend"
+        sub.mkdir()
+        (sub / "GEMINI.md").write_text("@missing/ref.md\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].file_path == sub / "GEMINI.md"
+        assert "non-existent" in violations[0].message.lower()
+
+    def test_gemini_md_subdirectory_import_escapes_root(self, temp_dir):
+        sub = temp_dir / "deep" / "nested"
+        sub.mkdir(parents=True)
+        (sub / "GEMINI.md").write_text("@../../../etc/passwd\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 1
+        assert "escapes" in violations[0].message.lower()
+
+    def test_gemini_md_subdirectory_import_within_root_but_outside_subdir(self, temp_dir):
+        (temp_dir / "shared.md").write_text("# Shared config\n")
+        sub = temp_dir / "services" / "api"
+        sub.mkdir(parents=True)
+        (sub / "GEMINI.md").write_text("@../../shared.md\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 0
+
+    def test_gemini_md_hierarchical_imports_multiple_levels(self, temp_dir):
+        (temp_dir / "root-ref.md").write_text("# Root ref\n")
+        (temp_dir / "GEMINI.md").write_text("@root-ref.md\n")
+        sub = temp_dir / "pkg"
+        sub.mkdir()
+        (sub / "local.md").write_text("# Local\n")
+        (sub / "GEMINI.md").write_text("@local.md\n@missing.md\n")
+        context = RepositoryContext(temp_dir)
+        violations = InstructionImportsValidRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].file_path == sub / "GEMINI.md"
+        assert "missing.md" in violations[0].message
+
+    def test_gemini_md_in_hidden_dir_imports_skipped(self, temp_dir):
+        hidden = temp_dir / ".config"
+        hidden.mkdir()
+        (hidden / "GEMINI.md").write_text("@nonexistent.md\n")
         context = RepositoryContext(temp_dir)
         violations = InstructionImportsValidRule().check(context)
         assert len(violations) == 0
