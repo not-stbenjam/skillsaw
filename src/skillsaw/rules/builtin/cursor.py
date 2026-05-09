@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 import yaml
 
 from skillsaw.rule import AutofixConfidence, AutofixResult, Rule, RuleViolation, Severity
-from skillsaw.context import RepositoryContext
+from skillsaw.context import RepositoryContext, HAS_CURSOR
 from skillsaw.rules.builtin.utils import read_text, frontmatter_key_line
 
 _VALID_FRONTMATTER_KEYS = {"description", "globs", "alwaysApply"}
@@ -115,6 +115,7 @@ class CursorMdcValidRule(Rule):
     """Validate .cursor/rules/*.mdc files: valid frontmatter, known keys, correct types"""
 
     repo_types = None
+    formats = {HAS_CURSOR}
 
     @property
     def rule_id(self) -> str:
@@ -356,6 +357,7 @@ class CursorRulesDeprecatedRule(Rule):
     """Warn about legacy .cursorrules file (deprecated in favor of .cursor/rules/)"""
 
     repo_types = None
+    formats = {HAS_CURSOR}
 
     @property
     def rule_id(self) -> str:

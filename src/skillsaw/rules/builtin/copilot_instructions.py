@@ -8,12 +8,14 @@ import re
 from typing import List
 
 from skillsaw.rule import Rule, RuleViolation, Severity
-from skillsaw.context import RepositoryContext
+from skillsaw.context import RepositoryContext, HAS_COPILOT
 from skillsaw.rules.builtin.utils import read_text, parse_frontmatter, frontmatter_key_line
 
 
 class CopilotInstructionsValidRule(Rule):
     """Check that .github/copilot-instructions.md is valid UTF-8 and non-empty"""
+
+    formats = {HAS_COPILOT}
 
     @property
     def rule_id(self) -> str:
@@ -65,6 +67,8 @@ def _is_valid_glob(pattern: str) -> bool:
 
 class CopilotDotInstructionsValidRule(Rule):
     """Check that .instructions.md files have valid YAML frontmatter with applyTo globs"""
+
+    formats = {HAS_COPILOT}
 
     @property
     def rule_id(self) -> str:

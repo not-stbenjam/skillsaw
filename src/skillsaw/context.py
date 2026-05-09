@@ -24,6 +24,25 @@ class RepositoryType(Enum):
     UNKNOWN = "unknown"  # Not a recognized repo type
 
 
+HAS_CURSOR = "HAS_CURSOR"
+HAS_COPILOT = "HAS_COPILOT"
+HAS_GEMINI = "HAS_GEMINI"
+HAS_AGENTS_MD = "HAS_AGENTS_MD"
+HAS_KIRO = "HAS_KIRO"
+HAS_CLAUDE_MD = "HAS_CLAUDE_MD"
+
+ALL_INSTRUCTION_FORMATS = frozenset(
+    {
+        HAS_CURSOR,
+        HAS_COPILOT,
+        HAS_GEMINI,
+        HAS_AGENTS_MD,
+        HAS_KIRO,
+        HAS_CLAUDE_MD,
+    }
+)
+
+
 class RepositoryContext:
     """
     Context information about the repository being linted
@@ -47,6 +66,27 @@ class RepositoryContext:
         self.plugins = self._discover_plugins()
         self.skills: List[Path] = self._discover_skills()
         self.instruction_files: List[Path] = self._discover_instruction_files()
+        self.detected_formats: Set[str] = self._detect_formats()
+
+    def _detect_formats(self) -> Set[str]:
+        formats: Set[str] = set()
+        if (self.root_path / ".cursor" / "rules").is_dir() or (
+            self.root_path / ".cursorrules"
+        ).exists():
+            formats.add(HAS_CURSOR)
+        if (self.root_path / ".github" / "copilot-instructions.md").exists() or any(
+            self.root_path.glob("**/.instructions.md")
+        ):
+            formats.add(HAS_COPILOT)
+        if (self.root_path / "GEMINI.md").exists():
+            formats.add(HAS_GEMINI)
+        if (self.root_path / "AGENTS.md").exists():
+            formats.add(HAS_AGENTS_MD)
+        if (self.root_path / ".kiro").is_dir():
+            formats.add(HAS_KIRO)
+        if (self.root_path / "CLAUDE.md").exists():
+            formats.add(HAS_CLAUDE_MD)
+        return formats
 
     def _detect_type(self) -> RepositoryType:
         """Detect the type of repository"""

@@ -63,6 +63,7 @@ class Rule(ABC):
     """Base class for linting rules"""
 
     repo_types = None
+    formats = None
     config_schema = {}
 
     def __init__(self, config: Dict[str, Any] = None):
