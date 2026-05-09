@@ -102,6 +102,17 @@ class LinterConfig:
                 # Cursor rules
                 "cursor-mdc-valid": {"enabled": False, "severity": "error"},
                 "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
+                # Gemini rules (auto-enabled when GEMINI.md detected)
+                "gemini-import-valid": {"enabled": "auto", "severity": "warning"},
+                "gemini-import-circular": {"enabled": "auto", "severity": "error"},
+                "gemini-import-depth": {"enabled": "auto", "severity": "warning"},
+                "gemini-scope-false-positive": {"enabled": "auto", "severity": "warning"},
+                "gemini-hierarchy-consistency": {"enabled": "auto", "severity": "warning"},
+                "gemini-size-limit": {"enabled": "auto", "severity": "warning"},
+                "gemini-dead-file-refs": {"enabled": "auto", "severity": "warning"},
+                "gemini-weak-language": {"enabled": "auto", "severity": "info"},
+                "gemini-tautological": {"enabled": "auto", "severity": "info"},
+                "gemini-critical-position": {"enabled": "auto", "severity": "info"},
                 # APM manifest rules (auto-enabled for APM repos)
                 "apm-manifest-valid": {"enabled": "auto", "severity": "error"},
                 "apm-target-valid": {"enabled": "auto", "severity": "error"},

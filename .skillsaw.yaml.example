@@ -162,6 +162,56 @@ rules:
     enabled: true
     severity: warning
 
+  # Validate that @import targets in GEMINI.md resolve to existing files
+  gemini-import-valid:
+    enabled: auto
+    severity: warning
+
+  # Detect circular @import references in GEMINI.md files
+  gemini-import-circular:
+    enabled: auto
+    severity: error
+
+  # Warn when GEMINI.md import chains exceed depth 5
+  gemini-import-depth:
+    enabled: auto
+    severity: warning
+
+  # Detect @scope/package-name patterns that look like npm scoped packages, not imports
+  gemini-scope-false-positive:
+    enabled: auto
+    severity: warning
+
+  # Check subdirectory GEMINI.md files for contradictions with parent
+  gemini-hierarchy-consistency:
+    enabled: auto
+    severity: warning
+
+  # Warn when GEMINI.md is too large
+  gemini-size-limit:
+    enabled: auto
+    severity: warning
+
+  # Scan GEMINI.md for file path references to non-existent files
+  gemini-dead-file-refs:
+    enabled: auto
+    severity: warning
+
+  # Detect weak or hedging language in GEMINI.md instructions
+  gemini-weak-language:
+    enabled: auto
+    severity: info
+
+  # Detect tautological instructions that restate default AI behavior
+  gemini-tautological:
+    enabled: auto
+    severity: info
+
+  # Check that critical instructions are positioned at the top of GEMINI.md
+  gemini-critical-position:
+    enabled: auto
+    severity: info
+
   # apm.yml must exist with required name and version fields
   apm-manifest-valid:
     enabled: auto
