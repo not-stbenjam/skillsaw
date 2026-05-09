@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ._litellm import CompletionProvider, CompletionResult, ToolCall, TokenUsage
@@ -126,7 +127,7 @@ class LLMEngine:
                         "arguments": (
                             tc.arguments
                             if isinstance(tc.arguments, str)
-                            else __import__("json").dumps(tc.arguments)
+                            else json.dumps(tc.arguments)
                         ),
                     },
                 }
