@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 from skillsaw.rule import Rule, RuleViolation, Severity
-from skillsaw.context import RepositoryContext
+from skillsaw.context import RepositoryContext, ALL_INSTRUCTION_FORMATS, HAS_AGENTS_MD
 from skillsaw.rules.builtin.utils import read_text
 
 INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
@@ -44,6 +44,8 @@ def _find_hierarchical_files(root: Path, filename: str) -> List[Path]:
 
 class InstructionFileValidRule(Rule):
     """Check that instruction files are valid UTF-8 and non-empty"""
+
+    formats = ALL_INSTRUCTION_FORMATS
 
     @property
     def rule_id(self) -> str:
@@ -85,6 +87,8 @@ class InstructionFileValidRule(Rule):
 
 class InstructionImportsValidRule(Rule):
     """Check that @import references in instruction files resolve to existing paths"""
+
+    formats = ALL_INSTRUCTION_FORMATS
 
     @property
     def rule_id(self) -> str:
@@ -148,6 +152,8 @@ class InstructionImportsValidRule(Rule):
 
 class AgentsMdStructureRule(Rule):
     """Check that AGENTS.md has reasonable markdown structure"""
+
+    formats = {HAS_AGENTS_MD}
 
     @property
     def rule_id(self) -> str:

@@ -368,8 +368,8 @@ Validates AI coding assistant instruction files (AGENTS.md, CLAUDE.md, GEMINI.md
 
 | Rule ID | Description | Default Severity |
 |---------|-------------|------------------|
-| `instruction-file-valid` | Instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) must be valid and non-empty | warning (disabled) |
-| `instruction-imports-valid` | Import references (@path) in CLAUDE.md and GEMINI.md must point to existing files | warning (disabled) |
+| `instruction-file-valid` | Instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) must be valid and non-empty | warning (auto) |
+| `instruction-imports-valid` | Import references (@path) in CLAUDE.md and GEMINI.md must point to existing files | warning (auto) |
 
 ### AGENTS.md Deep Validation
 
@@ -377,7 +377,7 @@ Deep validation for AGENTS.md files (used by OpenAI Codex and GitHub Copilot cod
 
 | Rule ID | Description | Default Severity |
 |---------|-------------|------------------|
-| `agents-md-structure` | AGENTS.md should have at least one heading and meaningful content | warning (disabled) |
+| `agents-md-structure` | AGENTS.md should have at least one heading and meaningful content | warning (auto) |
 | `agents-md-size-limit` | AGENTS.md must not exceed the Codex 32 KB size limit | warning (auto) |
 | `agents-md-override-semantics` | AGENTS.override.md replaces AGENTS.md entirely — verify it is self-contained | warning (auto) |
 | `agents-md-hierarchy-consistency` | Subdirectory AGENTS.md files should not contradict root AGENTS.md | warning (auto) |
@@ -430,8 +430,8 @@ Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + Markdown co
 
 | Rule ID | Description | Default Severity |
 |---------|-------------|------------------|
-| `cursor-mdc-valid` | Cursor .mdc rule files must have valid frontmatter with known keys and correct types | error (disabled) |
-| `cursor-rules-deprecated` | Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc | warning (disabled) |
+| `cursor-mdc-valid` | Cursor .mdc rule files must have valid frontmatter with known keys and correct types | error (auto) |
+| `cursor-rules-deprecated` | Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc | warning (auto) |
 | `cursor-mdc-frontmatter` | Only 3 valid frontmatter fields: description, globs, alwaysApply | warning (auto) |
 | `cursor-activation-type` | Warn when .mdc rule activation type is Manual (no frontmatter) | warning (auto) |
 | `cursor-crlf-detection` | CRLF line endings break --- frontmatter detection in .mdc files | error (auto) |
@@ -468,7 +468,7 @@ Validates Kiro IDE `.kiro/steering/*.md` files (YAML frontmatter with inclusion 
 
 | Rule ID | Description | Default Severity |
 |---------|-------------|------------------|
-| `kiro-steering-valid` | Kiro steering files must have valid frontmatter with known inclusion mode and correct types | error (disabled) |
+| `kiro-steering-valid` | Kiro steering files must have valid frontmatter with known inclusion mode and correct types | error (auto) |
 
 <!-- END GENERATED RULES -->
 

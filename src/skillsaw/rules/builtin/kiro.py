@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from skillsaw.rule import Rule, RuleViolation, Severity
-from skillsaw.context import RepositoryContext
+from skillsaw.context import RepositoryContext, HAS_KIRO
 from skillsaw.rules.builtin.utils import read_text, parse_frontmatter, frontmatter_key_line
 
 _VALID_INCLUSION_MODES = {"always", "fileMatch", "manual", "auto"}
@@ -26,6 +26,7 @@ class KiroSteeringValidRule(Rule):
     """Validate .kiro/steering/*.md files: valid frontmatter, known keys, correct types"""
 
     repo_types = None
+    formats = {HAS_KIRO}
 
     @property
     def rule_id(self) -> str:

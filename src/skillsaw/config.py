@@ -4,7 +4,7 @@ Configuration management for skillsaw
 
 import yaml
 from pathlib import Path
-from typing import ClassVar, Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
@@ -90,13 +90,13 @@ class LinterConfig:
                 "agentskill-evals": {"enabled": "auto", "severity": "warning"},
                 # Openclaw metadata
                 "openclaw-metadata": {"enabled": "auto", "severity": "warning"},
-                # Instruction file validation (disabled for back-compat; --init enables)
-                "instruction-file-valid": {"enabled": False, "severity": "warning"},
-                "instruction-imports-valid": {"enabled": False, "severity": "warning"},
-                # Copilot instructions (disabled for back-compat; --init enables)
-                "copilot-instructions-valid": {"enabled": False, "severity": "warning"},
-                "copilot-dot-instructions-valid": {"enabled": False, "severity": "warning"},
-                "agents-md-structure": {"enabled": False, "severity": "warning"},
+                # Instruction file validation (auto-enabled when instruction files detected)
+                "instruction-file-valid": {"enabled": "auto", "severity": "warning"},
+                "instruction-imports-valid": {"enabled": "auto", "severity": "warning"},
+                # Copilot instructions (auto-enabled when copilot files detected)
+                "copilot-instructions-valid": {"enabled": "auto", "severity": "warning"},
+                "copilot-dot-instructions-valid": {"enabled": "auto", "severity": "warning"},
+                "agents-md-structure": {"enabled": "auto", "severity": "warning"},
                 # Deep AGENTS.md rules (disabled for back-compat; --init enables)
                 "agents-md-size-limit": {"enabled": "auto", "severity": "warning"},
                 "agents-md-override-semantics": {"enabled": "auto", "severity": "warning"},
@@ -110,13 +110,13 @@ class LinterConfig:
                 "agents-md-tautological": {"enabled": "auto", "severity": "warning"},
                 "agents-md-critical-position": {"enabled": "auto", "severity": "info"},
                 "agents-md-hook-candidate": {"enabled": "auto", "severity": "info"},
-                # Context budget (disabled for back-compat; --init enables)
+                # Context budget (opt-in; checks token limits across skills/commands/files)
                 "context-budget": {"enabled": False, "severity": "warning"},
-                # Cursor rules (monolithic, opt-in via --init)
-                "cursor-mdc-valid": {"enabled": False, "severity": "error"},
-                "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
-                # Kiro steering
-                "kiro-steering-valid": {"enabled": False, "severity": "error"},
+                # Cursor rules (auto-enabled when .cursor/ or .cursorrules detected)
+                "cursor-mdc-valid": {"enabled": "auto", "severity": "error"},
+                "cursor-rules-deprecated": {"enabled": "auto", "severity": "warning"},
+                # Kiro steering (auto-enabled when .kiro/ detected)
+                "kiro-steering-valid": {"enabled": "auto", "severity": "error"},
                 # Cursor deep rules (auto-enabled when .cursor/ present)
                 "cursor-mdc-frontmatter": {"enabled": "auto", "severity": "warning"},
                 "cursor-activation-type": {"enabled": "auto", "severity": "warning"},
@@ -146,22 +146,22 @@ class LinterConfig:
                 "apm-type-valid": {"enabled": "auto", "severity": "error"},
                 "apm-dependencies-valid": {"enabled": "auto", "severity": "error"},
                 "apm-compilation-valid": {"enabled": "auto", "severity": "warning"},
-                # Content intelligence rules (disabled for back-compat; --init enables)
-                "content-weak-language": {"enabled": False, "severity": "warning"},
-                "content-dead-references": {"enabled": False, "severity": "warning"},
-                "content-tautological": {"enabled": False, "severity": "warning"},
-                "content-critical-position": {"enabled": False, "severity": "info"},
-                "content-redundant-with-tooling": {"enabled": False, "severity": "warning"},
-                "content-instruction-budget": {"enabled": False, "severity": "warning"},
-                "content-readme-overlap": {"enabled": False, "severity": "info"},
-                "content-negative-only": {"enabled": False, "severity": "warning"},
-                "content-section-length": {"enabled": False, "severity": "info"},
-                "content-contradiction": {"enabled": False, "severity": "warning"},
-                "content-hook-candidate": {"enabled": False, "severity": "info"},
-                "content-actionability-score": {"enabled": False, "severity": "info"},
-                "content-cognitive-chunks": {"enabled": False, "severity": "info"},
-                "content-embedded-secrets": {"enabled": False, "severity": "error"},
-                "content-cross-file-consistency": {"enabled": False, "severity": "warning"},
+                # Content intelligence rules (auto-enabled when instruction files detected)
+                "content-weak-language": {"enabled": "auto", "severity": "warning"},
+                "content-dead-references": {"enabled": "auto", "severity": "warning"},
+                "content-tautological": {"enabled": "auto", "severity": "warning"},
+                "content-critical-position": {"enabled": "auto", "severity": "info"},
+                "content-redundant-with-tooling": {"enabled": "auto", "severity": "warning"},
+                "content-instruction-budget": {"enabled": "auto", "severity": "warning"},
+                "content-readme-overlap": {"enabled": "auto", "severity": "info"},
+                "content-negative-only": {"enabled": "auto", "severity": "warning"},
+                "content-section-length": {"enabled": "auto", "severity": "info"},
+                "content-contradiction": {"enabled": "auto", "severity": "warning"},
+                "content-hook-candidate": {"enabled": "auto", "severity": "info"},
+                "content-actionability-score": {"enabled": "auto", "severity": "info"},
+                "content-cognitive-chunks": {"enabled": "auto", "severity": "info"},
+                "content-embedded-secrets": {"enabled": "auto", "severity": "error"},
+                "content-cross-file-consistency": {"enabled": "auto", "severity": "warning"},
                 "apm-mcp-transport": {"enabled": "auto", "severity": "error"},
                 "apm-lockfile-consistency": {"enabled": "auto", "severity": "warning"},
                 "apm-readme-present": {"enabled": "auto", "severity": "warning"},
@@ -181,41 +181,10 @@ class LinterConfig:
             }
         )
 
-    _INIT_OVERRIDES: ClassVar[Dict[str, Dict[str, Any]]] = {
-        "instruction-file-valid": {"enabled": True},
-        "instruction-imports-valid": {"enabled": True},
-        "copilot-instructions-valid": {"enabled": True},
-        "copilot-dot-instructions-valid": {"enabled": True},
-        "agents-md-structure": {"enabled": True},
-        "context-budget": {"enabled": True},
-        "cursor-mdc-valid": {"enabled": True},
-        "cursor-rules-deprecated": {"enabled": True},
-        "kiro-steering-valid": {"enabled": True},
-        "content-weak-language": {"enabled": True},
-        "content-dead-references": {"enabled": True},
-        "content-tautological": {"enabled": True},
-        "content-critical-position": {"enabled": True},
-        "content-redundant-with-tooling": {"enabled": True},
-        "content-instruction-budget": {"enabled": True},
-        "content-readme-overlap": {"enabled": True},
-        "content-negative-only": {"enabled": True},
-        "content-section-length": {"enabled": True},
-        "content-contradiction": {"enabled": True},
-        "content-hook-candidate": {"enabled": True},
-        "content-actionability-score": {"enabled": True},
-        "content-cognitive-chunks": {"enabled": True},
-        "content-embedded-secrets": {"enabled": True},
-        "content-cross-file-consistency": {"enabled": True},
-    }
-
     @classmethod
     def for_init(cls) -> "LinterConfig":
-        """Config for --init: like default() but enables opt-in rules."""
-        config = cls.default()
-        for rule_id, overrides in cls._INIT_OVERRIDES.items():
-            if rule_id in config.rules:
-                config.rules[rule_id].update(overrides)
-        return config
+        """Config for --init: identical to default() now that all rules use auto-detection."""
+        return cls.default()
 
     def get_rule_config(self, rule_id: str) -> Dict[str, Any]:
         """
@@ -233,7 +202,13 @@ class LinterConfig:
         merged = {**defaults, **overrides}
         return merged
 
-    def is_rule_enabled(self, rule_id: str, context: "RepositoryContext", repo_types=None) -> bool:
+    def is_rule_enabled(
+        self,
+        rule_id: str,
+        context: "RepositoryContext",
+        repo_types=None,
+        formats: Optional[Set[str]] = None,
+    ) -> bool:
         """
         Check if a rule is enabled for the given context
 
@@ -241,6 +216,7 @@ class LinterConfig:
             rule_id: Rule identifier
             context: Repository context
             repo_types: Set of RepositoryType values the rule applies to (None = all)
+            formats: Set of detected format constants the rule requires (None = all)
 
         Returns:
             True if rule should run
@@ -249,9 +225,13 @@ class LinterConfig:
         enabled = rule_config.get("enabled", True)
 
         if enabled == "auto":
-            if repo_types is None:
+            if repo_types is None and formats is None:
                 return True
-            return context.repo_type in repo_types
+            if repo_types is not None and context.repo_type in repo_types:
+                return True
+            if formats is not None and formats & context.detected_formats:
+                return True
+            return False
 
         return bool(enabled)
 
