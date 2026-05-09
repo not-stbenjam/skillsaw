@@ -14,11 +14,7 @@ from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.rules.builtin.utils import frontmatter_key_line, read_json, read_text
 
-_DOT_CLAUDE_TYPES = {
-    RepositoryType.DOT_CLAUDE,
-    RepositoryType.SINGLE_PLUGIN,
-    RepositoryType.MARKETPLACE,
-}
+_DOT_CLAUDE_TYPES = {RepositoryType.DOT_CLAUDE}
 
 # ---------------------------------------------------------------------------
 # Weak-language and tautology detectors (content intelligence)
