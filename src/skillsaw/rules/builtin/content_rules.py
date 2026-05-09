@@ -42,6 +42,23 @@ class ContentWeakLanguageRule(Rule):
     def default_severity(self) -> Severity:
         return Severity.WARNING
 
+    @property
+    def llm_fix_prompt(self):
+        return (
+            "You are a technical writing assistant fixing AI coding assistant "
+            "instruction files. Your job is to replace weak, hedging language "
+            "with direct, actionable instructions.\n\n"
+            "Rules:\n"
+            "- Replace 'try to X' with 'X'\n"
+            "- Replace 'consider doing X' with 'do X' or remove the line\n"
+            "- Replace 'if possible' with explicit conditions\n"
+            "- Replace vague adverbs (properly, correctly, appropriately) "
+            "with specific behavior\n"
+            "- Do NOT change the meaning or intent of the instruction\n"
+            "- Do NOT add new instructions\n"
+            "- Preserve markdown formatting"
+        )
+
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         detector = WeakLanguageDetector()
@@ -103,6 +120,21 @@ class ContentTautologicalRule(Rule):
 
     def default_severity(self) -> Severity:
         return Severity.WARNING
+
+    @property
+    def llm_fix_prompt(self):
+        return (
+            "You are fixing AI coding assistant instruction files. Remove "
+            "tautological instructions that the AI model already follows "
+            "by default (e.g., 'write clean code', 'follow best practices', "
+            "'use meaningful variable names').\n\n"
+            "Rules:\n"
+            "- Remove lines that state something the model does by default\n"
+            "- If the line is in a list, remove the list item\n"
+            "- If removing leaves an empty section, remove the section heading too\n"
+            "- Do NOT remove instructions that add project-specific constraints\n"
+            "- Preserve markdown formatting"
+        )
 
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
@@ -379,6 +411,22 @@ class ContentNegativeOnlyRule(Rule):
 
     def default_severity(self) -> Severity:
         return Severity.WARNING
+
+    @property
+    def llm_fix_prompt(self):
+        return (
+            "You are fixing AI coding assistant instruction files. Rewrite "
+            'negative-only instructions ("don\'t do X", "never use X", '
+            '"avoid X") to include a positive alternative.\n\n'
+            "Rules:\n"
+            "- Keep the prohibition but add what to do instead\n"
+            "- Example: 'Don't use var' → 'Use const or let instead of var'\n"
+            "- Example: 'Never commit secrets' → 'Store secrets in environment "
+            "variables, never commit them to the repository'\n"
+            "- Infer the positive alternative from context\n"
+            "- Do NOT change the meaning of the prohibition\n"
+            "- Preserve markdown formatting"
+        )
 
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
