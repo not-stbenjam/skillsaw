@@ -81,6 +81,13 @@ from .apm import (
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    ApmMcpTransportRule,
+    ApmLockfileConsistencyRule,
+    ApmReadmePresentRule,
+    ApmEntryPointRule,
+    ApmNameConflictRule,
+    ApmFieldTypesRule,
+    ApmDeprecatedFieldsRule,
 )
 
 # All builtin rules
@@ -136,6 +143,13 @@ BUILTIN_RULES = [
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    ApmMcpTransportRule,
+    ApmLockfileConsistencyRule,
+    ApmReadmePresentRule,
+    ApmEntryPointRule,
+    ApmNameConflictRule,
+    ApmFieldTypesRule,
+    ApmDeprecatedFieldsRule,
 ]
 
 

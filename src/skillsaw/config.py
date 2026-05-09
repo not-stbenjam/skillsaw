@@ -108,6 +108,13 @@ class LinterConfig:
                 "apm-type-valid": {"enabled": "auto", "severity": "error"},
                 "apm-dependencies-valid": {"enabled": "auto", "severity": "error"},
                 "apm-compilation-valid": {"enabled": "auto", "severity": "warning"},
+                "apm-mcp-transport": {"enabled": "auto", "severity": "error"},
+                "apm-lockfile-consistency": {"enabled": "auto", "severity": "warning"},
+                "apm-readme-present": {"enabled": "auto", "severity": "warning"},
+                "apm-entry-point": {"enabled": "auto", "severity": "error"},
+                "apm-name-conflict": {"enabled": "auto", "severity": "warning"},
+                "apm-field-types": {"enabled": "auto", "severity": "error"},
+                "apm-deprecated-fields": {"enabled": "auto", "severity": "warning"},
             }
         )
 

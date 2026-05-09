@@ -187,6 +187,41 @@ rules:
     enabled: auto
     severity: warning
 
+  # MCP server declarations must have valid transport configuration
+  apm-mcp-transport:
+    enabled: auto
+    severity: error
+
+  # apm.lock.yaml must be consistent with apm.yml dependencies
+  apm-lockfile-consistency:
+    enabled: auto
+    severity: warning
+
+  # APM packages should have a README.md
+  apm-readme-present:
+    enabled: auto
+    severity: warning
+
+  # Entry point file specified in main/entry must exist
+  apm-entry-point:
+    enabled: auto
+    severity: error
+
+  # Package name should not conflict with well-known npm/pypi packages
+  apm-name-conflict:
+    enabled: auto
+    severity: warning
+
+  # YAML field value types must match the APM specification
+  apm-field-types:
+    enabled: auto
+    severity: error
+
+  # Flag deprecated or renamed fields in apm.yml
+  apm-deprecated-fields:
+    enabled: auto
+    severity: warning
+
 # Load custom rules from these files
 custom-rules: []
 
