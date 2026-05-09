@@ -83,6 +83,24 @@ from .apm import (
     ApmCompilationValidRule,
 )
 
+from .content_rules import (
+    ContentWeakLanguageRule,
+    ContentDeadReferencesRule,
+    ContentTautologicalRule,
+    ContentCriticalPositionRule,
+    ContentRedundantWithToolingRule,
+    ContentInstructionBudgetRule,
+    ContentReadmeOverlapRule,
+    ContentNegativeOnlyRule,
+    ContentSectionLengthRule,
+    ContentContradictionRule,
+    ContentHookCandidateRule,
+    ContentActionabilityScoreRule,
+    ContentCognitiveChunksRule,
+    ContentEmbeddedSecretsRule,
+    ContentCrossFileConsistencyRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -136,6 +154,22 @@ BUILTIN_RULES = [
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    # Content intelligence
+    ContentWeakLanguageRule,
+    ContentDeadReferencesRule,
+    ContentTautologicalRule,
+    ContentCriticalPositionRule,
+    ContentRedundantWithToolingRule,
+    ContentInstructionBudgetRule,
+    ContentReadmeOverlapRule,
+    ContentNegativeOnlyRule,
+    ContentSectionLengthRule,
+    ContentContradictionRule,
+    ContentHookCandidateRule,
+    ContentActionabilityScoreRule,
+    ContentCognitiveChunksRule,
+    ContentEmbeddedSecretsRule,
+    ContentCrossFileConsistencyRule,
 ]
 
 
@@ -178,4 +212,19 @@ __all__ = [
     "ApmTypeValidRule",
     "ApmDependenciesValidRule",
     "ApmCompilationValidRule",
+    "ContentWeakLanguageRule",
+    "ContentDeadReferencesRule",
+    "ContentTautologicalRule",
+    "ContentCriticalPositionRule",
+    "ContentRedundantWithToolingRule",
+    "ContentInstructionBudgetRule",
+    "ContentReadmeOverlapRule",
+    "ContentNegativeOnlyRule",
+    "ContentSectionLengthRule",
+    "ContentContradictionRule",
+    "ContentHookCandidateRule",
+    "ContentActionabilityScoreRule",
+    "ContentCognitiveChunksRule",
+    "ContentEmbeddedSecretsRule",
+    "ContentCrossFileConsistencyRule",
 ]

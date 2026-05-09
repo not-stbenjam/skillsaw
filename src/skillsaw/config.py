@@ -108,6 +108,22 @@ class LinterConfig:
                 "apm-type-valid": {"enabled": "auto", "severity": "error"},
                 "apm-dependencies-valid": {"enabled": "auto", "severity": "error"},
                 "apm-compilation-valid": {"enabled": "auto", "severity": "warning"},
+                # Content intelligence rules (disabled for back-compat; --init enables)
+                "content-weak-language": {"enabled": False, "severity": "warning"},
+                "content-dead-references": {"enabled": False, "severity": "warning"},
+                "content-tautological": {"enabled": False, "severity": "warning"},
+                "content-critical-position": {"enabled": False, "severity": "info"},
+                "content-redundant-with-tooling": {"enabled": False, "severity": "warning"},
+                "content-instruction-budget": {"enabled": False, "severity": "warning"},
+                "content-readme-overlap": {"enabled": False, "severity": "info"},
+                "content-negative-only": {"enabled": False, "severity": "warning"},
+                "content-section-length": {"enabled": False, "severity": "info"},
+                "content-contradiction": {"enabled": False, "severity": "warning"},
+                "content-hook-candidate": {"enabled": False, "severity": "info"},
+                "content-actionability-score": {"enabled": False, "severity": "info"},
+                "content-cognitive-chunks": {"enabled": False, "severity": "info"},
+                "content-embedded-secrets": {"enabled": False, "severity": "error"},
+                "content-cross-file-consistency": {"enabled": False, "severity": "warning"},
             }
         )
 
