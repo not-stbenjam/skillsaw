@@ -66,16 +66,8 @@ from .copilot_instructions import (
     CopilotDotInstructionsValidRule,
 )
 
-from .cline import (
-    ClineRulesValidRule,
-)
-
 from .context_budget import (
     ContextBudgetRule,
-)
-
-from .windsurf import (
-    WindsurfRulesValidRule,
 )
 
 from .cursor import (
@@ -133,12 +125,8 @@ BUILTIN_RULES = [
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
     AgentsMdStructureRule,
-    # Cline
-    ClineRulesValidRule,
     # Context budget
     ContextBudgetRule,
-    # Windsurf
-    WindsurfRulesValidRule,
     # Cursor rules
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
@@ -182,9 +170,7 @@ __all__ = [
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
     "AgentsMdStructureRule",
-    "ClineRulesValidRule",
     "ContextBudgetRule",
-    "WindsurfRulesValidRule",
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",
     "ApmManifestValidRule",

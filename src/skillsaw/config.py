@@ -90,8 +90,6 @@ class LinterConfig:
                 "agentskill-evals": {"enabled": "auto", "severity": "warning"},
                 # Openclaw metadata
                 "openclaw-metadata": {"enabled": "auto", "severity": "warning"},
-                # Cline rules
-                "cline-rules-valid": {"enabled": "auto", "severity": "warning"},
                 # Instruction file validation (disabled for back-compat; --init enables)
                 "instruction-file-valid": {"enabled": False, "severity": "warning"},
                 "instruction-imports-valid": {"enabled": False, "severity": "warning"},
@@ -101,8 +99,6 @@ class LinterConfig:
                 "agents-md-structure": {"enabled": False, "severity": "warning"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
-                # Windsurf rules (disabled for back-compat; --init enables)
-                "windsurf-rules-valid": {"enabled": False, "severity": "warning"},
                 # Cursor rules
                 "cursor-mdc-valid": {"enabled": False, "severity": "error"},
                 "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
@@ -122,7 +118,6 @@ class LinterConfig:
         "copilot-dot-instructions-valid": {"enabled": True},
         "agents-md-structure": {"enabled": True},
         "context-budget": {"enabled": True},
-        "windsurf-rules-valid": {"enabled": True},
         "cursor-mdc-valid": {"enabled": True},
         "cursor-rules-deprecated": {"enabled": True},
     }
