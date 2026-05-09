@@ -12,14 +12,12 @@ from typing import Dict, List, Optional, Set, Tuple
 from skillsaw.rule import AutofixConfidence, AutofixResult, Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext, HAS_COPILOT
 from skillsaw.rules.builtin.content_analysis import (
-    CriticalPositionAnalyzer,
     DeadReferenceScanner,
     TautologicalDetector,
     WeakLanguageDetector,
     _strip_fenced_code_blocks,
 )
 from skillsaw.rules.builtin.utils import read_text, parse_frontmatter, frontmatter_key_line
-
 
 _VALID_FRONTMATTER_KEYS = {"applyTo", "excludeAgent"}
 _VALID_EXCLUDE_AGENTS = {"code-review", "cloud-agent"}
@@ -275,9 +273,7 @@ class CopilotInstructionsLengthRule(Rule):
         violations: List[RuleViolation] = []
         max_lines = self.config.get("max-lines", 200)
         for path, content in _iter_all_copilot_files(context):
-            line_count = content.count("\n") + (
-                1 if content and not content.endswith("\n") else 0
-            )
+            line_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
             if line_count > max_lines:
                 violations.append(
                     self.violation(
@@ -362,9 +358,7 @@ class CopilotInstructionsLanguageQualityRule(Rule):
             if changed:
                 fm, _ = parse_frontmatter(content)
                 if fm is not None:
-                    fm_match = re.match(
-                        r"^---[ \t]*\n.*?\n---[ \t]*\n?", content, re.DOTALL
-                    )
+                    fm_match = re.match(r"^---[ \t]*\n.*?\n---[ \t]*\n?", content, re.DOTALL)
                     prefix = fm_match.group(0) if fm_match else ""
                     fixed_content = prefix + "\n".join(lines)
                 else:
@@ -407,8 +401,7 @@ class CopilotInstructionsActionabilityRule(Rule):
             for match in matches:
                 violations.append(
                     self.violation(
-                        f"Tautological instruction: '{match.phrase}'. "
-                        f"{match.reason}",
+                        f"Tautological instruction: '{match.phrase}'. " f"{match.reason}",
                         file_path=path,
                         line=match.line,
                     )
@@ -438,11 +431,7 @@ class CopilotInstructionsActionabilityRule(Rule):
             for match in matches:
                 lines_to_remove.add(match.line)
             lines = content.split("\n")
-            fixed_lines = [
-                line
-                for i, line in enumerate(lines, 1)
-                if i not in lines_to_remove
-            ]
+            fixed_lines = [line for i, line in enumerate(lines, 1) if i not in lines_to_remove]
             fixed_content = "\n".join(fixed_lines)
             if fixed_content != content:
                 results.append(
@@ -623,7 +612,9 @@ class CopilotInstructionsScopeRule(Rule):
             if not extensions:
                 continue
             ext_pattern = ",".join(sorted(ext.lstrip(".") for ext in extensions))
-            suggested = f"**/*.{{{ext_pattern}}}" if len(extensions) > 1 else f"**/*{sorted(extensions)[0]}"
+            suggested = (
+                f"**/*.{{{ext_pattern}}}" if len(extensions) > 1 else f"**/*{sorted(extensions)[0]}"
+            )
             fixed_content = re.sub(
                 r"(applyTo\s*:\s*)[^\n]+",
                 f'\\1"{suggested}"',
@@ -736,9 +727,7 @@ class CopilotInstructionsFormatRule(Rule):
             elif "no markdown headings" in v.message:
                 fm, body = parse_frontmatter(content)
                 if fm is not None:
-                    fm_match = re.match(
-                        r"^---[ \t]*\n.*?\n---[ \t]*\n?", content, re.DOTALL
-                    )
+                    fm_match = re.match(r"^---[ \t]*\n.*?\n---[ \t]*\n?", content, re.DOTALL)
                     prefix = fm_match.group(0) if fm_match else ""
                     fixed = prefix + "# Instructions\n\n" + body
                 else:
@@ -807,13 +796,9 @@ class CopilotInstructionsConflictRule(Rule):
             for line_num, line in enumerate(stripped.splitlines(), 1):
                 for pos_re, neg_re, verb in self._POLARITY_PATTERNS:
                     for m in pos_re.finditer(line):
-                        directives.append(
-                            (line_num, "positive", verb, m.group(1).lower())
-                        )
+                        directives.append((line_num, "positive", verb, m.group(1).lower()))
                     for m in neg_re.finditer(line):
-                        directives.append(
-                            (line_num, "negative", verb, m.group(1).lower())
-                        )
+                        directives.append((line_num, "negative", verb, m.group(1).lower()))
             if directives:
                 file_directives[path] = directives
 
@@ -1024,9 +1009,7 @@ class CopilotInstructionsExcludeAgentRule(Rule):
                         confidence=AutofixConfidence.SAFE,
                         original_content=content,
                         fixed_content=fixed_content,
-                        description=(
-                            f"Fix excludeAgent value '{bad_val}' → '{corrected}'"
-                        ),
+                        description=(f"Fix excludeAgent value '{bad_val}' → '{corrected}'"),
                         violations_fixed=[v],
                     )
                 )

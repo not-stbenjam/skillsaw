@@ -142,6 +142,56 @@ rules:
     enabled: auto
     severity: warning
 
+  # Copilot instruction files that are too long waste context budget
+  copilot-instructions-length:
+    enabled: auto
+    severity: warning
+
+  # Weak/hedging language wastes instruction budget (try to, if possible, etc.)
+  copilot-instructions-language-quality:
+    enabled: auto
+    severity: info
+
+  # Tautological instructions that models already follow waste context budget
+  copilot-instructions-actionability:
+    enabled: auto
+    severity: warning
+
+  # References to non-existent files, npm scripts, or make targets
+  copilot-instructions-stale-refs:
+    enabled: auto
+    severity: warning
+
+  # Duplicate content across instruction files wastes Copilot context budget
+  copilot-instructions-duplication:
+    enabled: auto
+    severity: warning
+
+  # applyTo patterns should not be overly broad — narrow scope improves relevance
+  copilot-instructions-scope:
+    enabled: auto
+    severity: warning
+
+  # Instruction files should use markdown headings for structure
+  copilot-instructions-format:
+    enabled: auto
+    severity: warning
+
+  # Contradictions between instruction files cause non-deterministic behavior
+  copilot-instructions-conflict:
+    enabled: auto
+    severity: warning
+
+  # Only applyTo and excludeAgent are valid frontmatter keys in .instructions.md
+  copilot-instructions-frontmatter-keys:
+    enabled: auto
+    severity: warning
+
+  # excludeAgent must be 'code-review' or 'cloud-agent'
+  copilot-instructions-exclude-agent:
+    enabled: auto
+    severity: error
+
   # AGENTS.md should have at least one heading and meaningful content
   agents-md-structure:
     enabled: auto
