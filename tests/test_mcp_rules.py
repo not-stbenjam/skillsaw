@@ -266,12 +266,17 @@ def test_invalid_mcp_json(plugin_with_invalid_mcp_json):
 
 
 def test_missing_mcp_servers_key(plugin_with_missing_mcp_servers_key):
-    """Test that missing mcpServers key is detected"""
+    """Test that .mcp.json without mcpServers is treated as flat format.
+
+    A config like {"other_key": "value"} is treated as flat format where
+    "other_key" is a server name. Since "value" is not a dict, it fails
+    server config validation.
+    """
     context = RepositoryContext(plugin_with_missing_mcp_servers_key)
     rule = McpValidJsonRule()
     violations = rule.check(context)
     assert len(violations) == 1
-    assert "mcpServers" in violations[0].message
+    assert "configuration must be an object" in violations[0].message
 
 
 def test_missing_command_field(plugin_with_missing_command_field):
@@ -702,6 +707,83 @@ def test_valid_oauth_config(temp_dir):
     plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
     context = RepositoryContext(plugin_dir)
     rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 0
+
+
+def test_flat_format_stdio_valid(temp_dir):
+    """Test that flat format .mcp.json (no mcpServers wrapper) passes validation"""
+    mcp_config = {"my-server": {"command": "node", "args": ["server.js"]}}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 0
+
+
+def test_flat_format_http_valid(temp_dir):
+    """Test that flat format HTTP MCP config passes validation"""
+    mcp_config = {
+        "github": {
+            "type": "http",
+            "url": "https://api.githubcopilot.com/mcp/",
+            "headers": {"Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"},
+        }
+    }
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 0
+
+
+def test_flat_format_sse_valid(temp_dir):
+    """Test that flat format SSE MCP config passes validation"""
+    mcp_config = {"linear": {"type": "sse", "url": "https://mcp.linear.app/mcp"}}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 0
+
+
+def test_flat_format_missing_command(temp_dir):
+    """Test that flat format validates required fields"""
+    mcp_config = {"my-server": {"args": ["test"]}}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 1
+    assert "'command' field" in violations[0].message
+
+
+def test_flat_format_empty_valid(temp_dir):
+    """Test that empty flat format .mcp.json is valid (no servers)"""
+    mcp_config = {}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpValidJsonRule()
+    violations = rule.check(context)
+    assert len(violations) == 0
+
+
+def test_flat_format_prohibited(temp_dir):
+    """Test that flat format MCP servers are detected by prohibited rule"""
+    mcp_config = {"my-server": {"command": "node", "args": ["server.js"]}}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpProhibitedRule()
+    violations = rule.check(context)
+    assert len(violations) == 1
+
+
+def test_flat_format_prohibited_with_allowlist(temp_dir):
+    """Test that flat format MCP servers work with allowlist"""
+    mcp_config = {"my-server": {"command": "node", "args": ["server.js"]}}
+    plugin_dir = _create_plugin_with_mcp(temp_dir, mcp_config)
+    context = RepositoryContext(plugin_dir)
+    rule = McpProhibitedRule(config={"allowlist": ["my-server"]})
     violations = rule.check(context)
     assert len(violations) == 0
 

@@ -77,7 +77,12 @@ class McpValidJsonRule(Rule):
         return violations
 
     def _validate_mcp_structure(self, data: Dict[str, Any], file_path: Path) -> List[RuleViolation]:
-        """Validate MCP configuration structure"""
+        """Validate MCP configuration structure.
+
+        Accepts two formats:
+        - Wrapped: { "mcpServers": { "name": { ... } } }  (settings.json style)
+        - Flat:    { "name": { ... } }                     (plugin .mcp.json style)
+        """
         violations = []
 
         if not isinstance(data, dict):
@@ -86,16 +91,10 @@ class McpValidJsonRule(Rule):
             )
             return violations
 
-        if "mcpServers" not in data:
-            violations.append(
-                self.violation(
-                    "MCP configuration must contain 'mcpServers' key",
-                    file_path=file_path,
-                )
-            )
-            return violations
-
-        mcp_servers = data["mcpServers"]
+        if "mcpServers" in data:
+            mcp_servers = data["mcpServers"]
+        else:
+            mcp_servers = data
         if not isinstance(mcp_servers, dict):
             violations.append(
                 self.violation("'mcpServers' must be a JSON object", file_path=file_path)
@@ -278,8 +277,9 @@ class McpProhibitedRule(Rule):
         if error:
             return violations
 
-        if "mcpServers" in data:
-            prohibited = self._get_prohibited_servers(data["mcpServers"], allowlist)
+        servers = data.get("mcpServers", data) if isinstance(data, dict) else data
+        if isinstance(servers, dict) and servers:
+            prohibited = self._get_prohibited_servers(servers, allowlist)
             if prohibited:
                 if allowlist:
                     violations.append(
