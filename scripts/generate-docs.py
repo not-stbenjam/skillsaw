@@ -106,11 +106,26 @@ RULE_GROUPS = [
     ),
     (
         "Cursor Rules",
-        ["cursor-mdc-valid", "cursor-rules-deprecated"],
+        [
+            "cursor-mdc-valid",
+            "cursor-rules-deprecated",
+            "cursor-mdc-frontmatter",
+            "cursor-activation-type",
+            "cursor-crlf-detection",
+            "cursor-glob-valid",
+            "cursor-empty-body",
+            "cursor-description-quality",
+            "cursor-glob-overlap",
+            "cursor-rule-size",
+            "cursor-frontmatter-types",
+            "cursor-duplicate-rules",
+            "cursor-always-apply-overuse",
+        ],
         "Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + "
         "Markdown content) and warns about the deprecated `.cursorrules` file. "
-        "Checks frontmatter structure, key types, and glob patterns. "
-        "Disabled by default.",
+        "The monolithic rules (`cursor-mdc-valid`, `cursor-rules-deprecated`) are "
+        "disabled by default. The 11 focused rules auto-enable when `.cursor/` "
+        "is present and include autofixes for common issues.",
     ),
     (
         "Kiro Steering",

@@ -426,12 +426,41 @@ Warns when instruction and configuration files exceed recommended token limits. 
 
 ### Cursor Rules
 
-Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + Markdown content) and warns about the deprecated `.cursorrules` file. Checks frontmatter structure, key types, and glob patterns. Disabled by default.
+Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + Markdown content) and warns about the deprecated `.cursorrules` file. The monolithic rules (`cursor-mdc-valid`, `cursor-rules-deprecated`) are disabled by default. The 11 focused rules auto-enable when `.cursor/` is present and include autofixes for common issues.
 
 | Rule ID | Description | Default Severity |
 |---------|-------------|------------------|
 | `cursor-mdc-valid` | Cursor .mdc rule files must have valid frontmatter with known keys and correct types | error (disabled) |
 | `cursor-rules-deprecated` | Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc | warning (disabled) |
+| `cursor-mdc-frontmatter` | Only 3 valid frontmatter fields: description, globs, alwaysApply | warning (auto) |
+| `cursor-activation-type` | Warn when .mdc rule activation type is Manual (no frontmatter) | warning (auto) |
+| `cursor-crlf-detection` | CRLF line endings break --- frontmatter detection in .mdc files | error (auto) |
+| `cursor-glob-valid` | Validate glob patterns: catch invalid syntax and overly broad patterns | warning (auto) |
+| `cursor-empty-body` | Rule file has frontmatter but empty body — the rule has no content | warning (auto) |
+| `cursor-description-quality` | Agent-requested rules need clear descriptions (the agent's only signal) | warning (auto) |
+| `cursor-glob-overlap` | Warn when multiple .mdc files have overlapping glob patterns | warning (auto) |
+| `cursor-rule-size` | Warn when a rule file exceeds 500 lines (wastes context budget) | warning (auto) |
+| `cursor-frontmatter-types` | alwaysApply must be boolean, globs must be string or list | error (auto) |
+| `cursor-duplicate-rules` | Detect .mdc files with >80% similar bodies — suggest consolidation | warning (auto) |
+| `cursor-always-apply-overuse` | Warn when >3 rules have alwaysApply: true (context budget) | warning (auto) |
+
+**`cursor-rule-size` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `max-lines` | Maximum lines before warning | `500` |
+
+**`cursor-duplicate-rules` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `similarity-threshold` | Minimum similarity ratio (0-1) to flag as duplicate | `0.8` |
+
+**`cursor-always-apply-overuse` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `max-always-apply` | Maximum number of rules with alwaysApply: true before warning | `3` |
 
 ### Kiro Steering
 
