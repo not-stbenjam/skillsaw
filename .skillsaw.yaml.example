@@ -142,6 +142,56 @@ rules:
     enabled: true
     severity: warning
 
+  # .instructions.md only allows applyTo, description, and globs as frontmatter keys
+  copilot-frontmatter-valid:
+    enabled: true
+    severity: warning
+
+  # applyTo globs must be syntactically valid and match files in the repo
+  copilot-apply-to-valid:
+    enabled: true
+    severity: warning
+
+  # Copilot code review silently truncates instructions beyond 4000 characters
+  copilot-code-review-truncation:
+    enabled: true
+    severity: warning
+
+  # Check for contradictions and redundancy between parent and child .instructions.md files
+  copilot-instruction-hierarchy:
+    enabled: true
+    severity: warning
+
+  # File paths referenced in copilot instructions must exist
+  copilot-dead-file-refs:
+    enabled: true
+    severity: warning
+
+  # Commands referenced in copilot instructions must exist in package.json or Makefile
+  copilot-dead-command-refs:
+    enabled: true
+    severity: warning
+
+  # Copilot instructions should use direct, actionable language instead of hedging
+  copilot-weak-language:
+    enabled: true
+    severity: info
+
+  # .github/copilot-instructions.md should be 60-150 lines for best effectiveness
+  copilot-size-limit:
+    enabled: true
+    severity: info
+
+  # Remove self-evident instructions (e.g. 'write clean code') that waste context tokens
+  copilot-tautological:
+    enabled: true
+    severity: info
+
+  # Critical instructions (MUST/NEVER/ALWAYS) should be near the top or bottom of the file
+  copilot-critical-position:
+    enabled: true
+    severity: info
+
   # AGENTS.md should have at least one heading and meaningful content
   agents-md-structure:
     enabled: true
