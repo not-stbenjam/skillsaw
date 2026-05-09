@@ -122,11 +122,6 @@ rules:
     enabled: auto
     severity: warning
 
-  # .clinerules file must be valid UTF-8 and non-empty; .clinerules/ directory files must be markdown with numbered prefixes
-  cline-rules-valid:
-    enabled: auto
-    severity: warning
-
   # Instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) must be valid and non-empty
   instruction-file-valid:
     enabled: true
@@ -154,11 +149,6 @@ rules:
 
   # Warn when instruction or config files exceed recommended token limits
   context-budget:
-    enabled: true
-    severity: warning
-
-  # .windsurfrules must be valid UTF-8, non-empty, and within the 12K character limit
-  windsurf-rules-valid:
     enabled: true
     severity: warning
 
