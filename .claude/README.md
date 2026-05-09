@@ -1,6 +1,24 @@
-# skillsaw
+# skillsawng
+
+## Commands
+
+### done
+
+### handoff
+
+Hand off to fresh session, work continues from hook
+
+### review
+
+Review code changes with structured grading (A-F)
 
 ## Skills
+
+### skillsaw-ecosystem-scout
+
+Survey the AI coding assistant and agentic tool ecosystem, assess skillsaw's competitive position, identify emerging patterns and missing capabilities, and produce a prioritized strategic report as a GitHub issue.
+
+**Compatibility:** Requires git, gh CLI, and internet access (WebFetch, WebSearch)
 
 ### skillsaw-issue-solver
 

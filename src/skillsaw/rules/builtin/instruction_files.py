@@ -15,6 +15,8 @@ INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
 IMPORT_SUPPORTING_FILES = ("CLAUDE.md", "GEMINI.md")
 
 _IMPORT_RE = re.compile(r"^\s*@(\S+)")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)", re.MULTILINE)
+_MIN_CONTENT_CHARS = 20
 
 
 class InstructionFileValidRule(Rule):
@@ -109,5 +111,51 @@ class InstructionImportsValidRule(Rule):
                             line=line_num,
                         )
                     )
+
+        return violations
+
+
+class AgentsMdStructureRule(Rule):
+    """Check that AGENTS.md has reasonable markdown structure"""
+
+    @property
+    def rule_id(self) -> str:
+        return "agents-md-structure"
+
+    @property
+    def description(self) -> str:
+        return "AGENTS.md should have at least one heading and meaningful content"
+
+    def default_severity(self) -> Severity:
+        return Severity.WARNING
+
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
+        violations = []
+        file_path = context.root_path / "AGENTS.md"
+
+        if not file_path.exists():
+            return violations
+
+        content = read_text(file_path)
+        if content is None or not content.strip():
+            return violations
+
+        headings = _HEADING_RE.findall(content)
+        if not headings:
+            violations.append(
+                self.violation(
+                    "AGENTS.md has no markdown headings — add at least one heading to organize instructions",
+                    file_path=file_path,
+                )
+            )
+
+        non_heading_text = _HEADING_RE.sub("", content).strip()
+        if len(non_heading_text) < _MIN_CONTENT_CHARS:
+            violations.append(
+                self.violation(
+                    "AGENTS.md has little content beyond headings — add meaningful instructions",
+                    file_path=file_path,
+                )
+            )
 
         return violations

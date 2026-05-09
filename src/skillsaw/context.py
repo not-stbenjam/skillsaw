@@ -45,6 +45,7 @@ class RepositoryContext:
         )  # marketplace metadata for strict:false plugins without plugin.json
         self.plugins = self._discover_plugins()
         self.skills: List[Path] = self._discover_skills()
+        self.instruction_files: List[Path] = self._discover_instruction_files()
 
     def _detect_type(self) -> RepositoryType:
         """Detect the type of repository"""
@@ -427,6 +428,16 @@ class RepositoryContext:
                     self._discover_skills_in_dir(item, skills, discovered)
         except OSError:
             pass
+
+    _INSTRUCTION_FILENAMES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
+
+    def _discover_instruction_files(self) -> List[Path]:
+        """Discover instruction files (AGENTS.md, CLAUDE.md, GEMINI.md) at the repo root."""
+        return [
+            self.root_path / name
+            for name in self._INSTRUCTION_FILENAMES
+            if (self.root_path / name).exists()
+        ]
 
     def __str__(self):
         """String representation of context"""

@@ -58,6 +58,7 @@ from .openclaw import (
 from .instruction_files import (
     InstructionFileValidRule,
     InstructionImportsValidRule,
+    AgentsMdStructureRule,
 )
 
 from .copilot_instructions import (
@@ -110,6 +111,7 @@ BUILTIN_RULES = [
     # Copilot instructions
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
+    AgentsMdStructureRule,
     # Context budget
     ContextBudgetRule,
 ]
@@ -145,5 +147,6 @@ __all__ = [
     "InstructionImportsValidRule",
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
+    "AgentsMdStructureRule",
     "ContextBudgetRule",
 ]

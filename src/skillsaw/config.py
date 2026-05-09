@@ -96,6 +96,7 @@ class LinterConfig:
                 # Copilot instructions (disabled for back-compat; --init enables)
                 "copilot-instructions-valid": {"enabled": False, "severity": "warning"},
                 "copilot-dot-instructions-valid": {"enabled": False, "severity": "warning"},
+                "agents-md-structure": {"enabled": False, "severity": "warning"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
             }
@@ -106,6 +107,7 @@ class LinterConfig:
         "instruction-imports-valid": {"enabled": True},
         "copilot-instructions-valid": {"enabled": True},
         "copilot-dot-instructions-valid": {"enabled": True},
+        "agents-md-structure": {"enabled": True},
         "context-budget": {"enabled": True},
     }
 

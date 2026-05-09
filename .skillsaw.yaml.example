@@ -132,6 +132,11 @@ rules:
     enabled: true
     severity: warning
 
+  # AGENTS.md should have at least one heading and meaningful content
+  agents-md-structure:
+    enabled: true
+    severity: warning
+
   # Warn when instruction or config files exceed recommended token limits
   context-budget:
     enabled: true

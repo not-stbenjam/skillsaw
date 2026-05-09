@@ -10,6 +10,7 @@ from skillsaw.rule import Severity
 from skillsaw.rules.builtin.instruction_files import (
     InstructionFileValidRule,
     InstructionImportsValidRule,
+    AgentsMdStructureRule,
 )
 
 
@@ -176,3 +177,103 @@ class TestInstructionImportsValidRule:
         context = RepositoryContext(temp_dir)
         violations = InstructionImportsValidRule().check(context)
         assert len(violations) == 0
+
+
+class TestAgentsMdStructureRule:
+    def test_rule_metadata(self):
+        rule = AgentsMdStructureRule()
+        assert rule.rule_id == "agents-md-structure"
+        assert rule.default_severity() == Severity.WARNING
+        assert rule.repo_types is None
+
+    def test_no_agents_md_passes(self, temp_dir):
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_well_structured_agents_md_passes(self, temp_dir):
+        content = "# Project Instructions\n\nFollow the coding standards below.\n\n## Style\n\nUse consistent formatting.\n"
+        (temp_dir / "AGENTS.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_no_headings_warns(self, temp_dir):
+        content = "This file has no headings, just a block of text that is long enough to count as content.\n"
+        (temp_dir / "AGENTS.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 1
+        assert "no markdown headings" in violations[0].message.lower()
+
+    def test_headings_only_warns(self, temp_dir):
+        content = "# Heading One\n\n## Heading Two\n\n"
+        (temp_dir / "AGENTS.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 1
+        assert "little content" in violations[0].message.lower()
+
+    def test_empty_file_no_structure_violation(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_text("")
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_whitespace_only_no_structure_violation(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_text("   \n\n  \n")
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_invalid_encoding_no_structure_violation(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_bytes(b"\x80\x81\x82\x83")
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_single_heading_with_content_passes(self, temp_dir):
+        content = "# Instructions\n\nHere are the instructions for this project.\n"
+        (temp_dir / "AGENTS.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 0
+
+    def test_both_violations_no_heading_and_short_content(self, temp_dir):
+        content = "short\n"
+        (temp_dir / "AGENTS.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = AgentsMdStructureRule().check(context)
+        assert len(violations) == 2
+        messages = [v.message.lower() for v in violations]
+        assert any("no markdown headings" in m for m in messages)
+        assert any("little content" in m for m in messages)
+
+
+class TestContextInstructionFiles:
+    def test_no_instruction_files(self, temp_dir):
+        context = RepositoryContext(temp_dir)
+        assert context.instruction_files == []
+
+    def test_agents_md_discovered(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_text("# Instructions\n")
+        context = RepositoryContext(temp_dir)
+        assert len(context.instruction_files) == 1
+        assert context.instruction_files[0].name == "AGENTS.md"
+
+    def test_all_instruction_files_discovered(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_text("# Agents\n")
+        (temp_dir / "CLAUDE.md").write_text("# Claude\n")
+        (temp_dir / "GEMINI.md").write_text("# Gemini\n")
+        context = RepositoryContext(temp_dir)
+        names = [p.name for p in context.instruction_files]
+        assert "AGENTS.md" in names
+        assert "CLAUDE.md" in names
+        assert "GEMINI.md" in names
+
+    def test_order_preserved(self, temp_dir):
+        (temp_dir / "AGENTS.md").write_text("# A\n")
+        (temp_dir / "GEMINI.md").write_text("# G\n")
+        context = RepositoryContext(temp_dir)
+        names = [p.name for p in context.instruction_files]
+        assert names == ["AGENTS.md", "GEMINI.md"]
