@@ -132,7 +132,9 @@ class TestClineRulesValidRule:
         context = RepositoryContext(temp_dir)
         violations = ClineRulesValidRule().check(context)
         assert len(violations) == 1
-        assert "read" in violations[0].message.lower() or "encoding" in violations[0].message.lower()
+        assert (
+            "read" in violations[0].message.lower() or "encoding" in violations[0].message.lower()
+        )
 
     def test_hidden_files_ignored(self, temp_dir):
         rules_dir = temp_dir / ".clinerules"

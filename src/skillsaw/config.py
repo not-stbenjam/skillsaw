@@ -90,6 +90,8 @@ class LinterConfig:
                 "agentskill-evals": {"enabled": "auto", "severity": "warning"},
                 # Openclaw metadata
                 "openclaw-metadata": {"enabled": "auto", "severity": "warning"},
+                # Cline rules
+                "cline-rules-valid": {"enabled": "auto", "severity": "warning"},
                 # Instruction file validation (disabled for back-compat; --init enables)
                 "instruction-file-valid": {"enabled": False, "severity": "warning"},
                 "instruction-imports-valid": {"enabled": False, "severity": "warning"},
