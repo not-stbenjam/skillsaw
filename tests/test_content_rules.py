@@ -46,7 +46,9 @@ class TestContentWeakLanguageRule:
         assert len(violations) >= 3
 
     def test_clean_instructions_pass(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use 4-space indentation.\nReturn 404 for missing resources.\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use 4-space indentation.\nReturn 404 for missing resources.\n"
+        )
         context = RepositoryContext(temp_dir)
         violations = ContentWeakLanguageRule().check(context)
         assert len(violations) == 0
@@ -98,7 +100,9 @@ class TestContentTautologicalRule:
         assert len(violations) >= 2
 
     def test_specific_instructions_pass(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use 4-space indentation for Python.\nReturn early on error.\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use 4-space indentation for Python.\nReturn early on error.\n"
+        )
         context = RepositoryContext(temp_dir)
         violations = ContentTautologicalRule().check(context)
         assert len(violations) == 0
@@ -216,7 +220,9 @@ class TestContentReadmeOverlapRule:
         assert len(violations) == 0
 
     def test_no_overlap_passes(self, temp_dir):
-        (temp_dir / "README.md").write_text("# MyProject\nThis is a web application for managing tasks.\n")
+        (temp_dir / "README.md").write_text(
+            "# MyProject\nThis is a web application for managing tasks.\n"
+        )
         (temp_dir / "CLAUDE.md").write_text("# Instructions\nUse 4-space indentation always.\n")
         context = RepositoryContext(temp_dir)
         violations = ContentReadmeOverlapRule().check(context)
@@ -417,7 +423,9 @@ class TestContentEmbeddedSecretsRule:
         assert "API key" in violations[0].message
 
     def test_detects_github_token(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use token ghp_abcdefghijklmnopqrstuvwxyz123456789012\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use token ghp_abcdefghijklmnopqrstuvwxyz123456789012\n"
+        )
         context = RepositoryContext(temp_dir)
         violations = ContentEmbeddedSecretsRule().check(context)
         assert len(violations) >= 1
@@ -429,7 +437,9 @@ class TestContentEmbeddedSecretsRule:
         assert len(violations) >= 1
 
     def test_clean_file_passes(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use environment variables for API keys.\nNever hardcode secrets.\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use environment variables for API keys.\nNever hardcode secrets.\n"
+        )
         context = RepositoryContext(temp_dir)
         violations = ContentEmbeddedSecretsRule().check(context)
         assert len(violations) == 0

@@ -86,7 +86,10 @@ _TAUTOLOGICAL_PHRASES = [
     (r"\bwrite clean code\b", "Models already aim for clean code — this wastes instruction budget"),
     (r"\bwrite readable code\b", "Models already aim for readable code"),
     (r"\bwrite maintainable code\b", "Models already aim for maintainable code"),
-    (r"\bfollow the project conventions\b", "Agents read existing code and follow conventions automatically"),
+    (
+        r"\bfollow the project conventions\b",
+        "Agents read existing code and follow conventions automatically",
+    ),
     (r"\buse descriptive variable names\b", "Models already use descriptive names by default"),
     (r"\badd appropriate error handling\b", "Too vague — specify which errors to handle and how"),
     (r"\bwrite comprehensive tests\b", "Too vague — specify what coverage is expected"),
@@ -189,7 +192,9 @@ class WeakLanguageDetector:
 
 class DeadReferenceScanner:
     _BACKTICK_PATH = re.compile(r"`((?:\w[\w.-]*/)+[\w.-]+(?:\.\w+)?)`")
-    _SEE_PATH = re.compile(r"(?:see|refer to|check)\s+((?:\w[\w.-]*/)+[\w.-]+(?:\.\w+)?)", re.IGNORECASE)
+    _SEE_PATH = re.compile(
+        r"(?:see|refer to|check)\s+((?:\w[\w.-]*/)+[\w.-]+(?:\.\w+)?)", re.IGNORECASE
+    )
     _MD_LINK = re.compile(r"\[([^\]]*)\]\((\./[^)]+)\)")
     _NPM_SCRIPT = re.compile(r"`npm run\s+([\w:.-]+)`")
     _MAKE_TARGET = re.compile(r"`make\s+([\w.-]+)`")
@@ -224,12 +229,14 @@ class DeadReferenceScanner:
                 if pkg_json.exists():
                     pkg_content = read_text(pkg_json)
                     if pkg_content and f'"{script_name}"' not in pkg_content:
-                        results.append(DeadReference(
-                            line_num,
-                            f"npm run {script_name}",
-                            str(pkg_json),
-                            False,
-                        ))
+                        results.append(
+                            DeadReference(
+                                line_num,
+                                f"npm run {script_name}",
+                                str(pkg_json),
+                                False,
+                            )
+                        )
 
             for m in self._MAKE_TARGET.finditer(line):
                 target = m.group(1)
@@ -239,12 +246,14 @@ class DeadReferenceScanner:
                     if mk_content:
                         target_re = re.compile(rf"^{re.escape(target)}\s*:", re.MULTILINE)
                         if not target_re.search(mk_content):
-                            results.append(DeadReference(
-                                line_num,
-                                f"make {target}",
-                                str(makefile),
-                                False,
-                            ))
+                            results.append(
+                                DeadReference(
+                                    line_num,
+                                    f"make {target}",
+                                    str(makefile),
+                                    False,
+                                )
+                            )
         return results
 
 
@@ -279,12 +288,14 @@ class CriticalPositionAnalyzer:
             position = line_num / total
             if 0.2 < position < 0.8:
                 score = 0.5
-                results.append(PositionIssue(
-                    line_num,
-                    m.group(),
-                    score,
-                    "Move to the first 20% or last 20% of the file for better attention",
-                ))
+                results.append(
+                    PositionIssue(
+                        line_num,
+                        m.group(),
+                        score,
+                        "Move to the first 20% or last 20% of the file for better attention",
+                    )
+                )
         return results
 
 
@@ -305,9 +316,25 @@ class RedundancyDetector:
         editorconfig = root / ".editorconfig"
         has_editorconfig = editorconfig.exists()
 
-        eslintrc_names = [".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc"]
-        has_eslint = any((root / n).exists() for n in eslintrc_names) or (root / "eslint.config.js").exists() or (root / "eslint.config.mjs").exists()
-        prettierrc_names = [".prettierrc", ".prettierrc.json", ".prettierrc.js", ".prettierrc.yml", ".prettierrc.yaml"]
+        eslintrc_names = [
+            ".eslintrc.json",
+            ".eslintrc.js",
+            ".eslintrc.yml",
+            ".eslintrc.yaml",
+            ".eslintrc",
+        ]
+        has_eslint = (
+            any((root / n).exists() for n in eslintrc_names)
+            or (root / "eslint.config.js").exists()
+            or (root / "eslint.config.mjs").exists()
+        )
+        prettierrc_names = [
+            ".prettierrc",
+            ".prettierrc.json",
+            ".prettierrc.js",
+            ".prettierrc.yml",
+            ".prettierrc.yaml",
+        ]
         has_prettier = any((root / n).exists() for n in prettierrc_names)
         has_tsconfig = (root / "tsconfig.json").exists()
 
@@ -315,22 +342,49 @@ class RedundancyDetector:
             if has_editorconfig:
                 for pattern, config_key in self._INDENT_PATTERNS:
                     if pattern.search(line):
-                        results.append(RedundancyMatch(
-                            line_num, line.strip(), ".editorconfig", config_key,
-                        ))
+                        results.append(
+                            RedundancyMatch(
+                                line_num,
+                                line.strip(),
+                                ".editorconfig",
+                                config_key,
+                            )
+                        )
 
             if has_eslint or has_prettier:
-                if re.search(r"\b(semicolons?|trailing commas?|single quotes?|double quotes?)\b", line, re.IGNORECASE):
-                    config_file = ".eslintrc / .prettierrc" if has_eslint and has_prettier else (".eslintrc" if has_eslint else ".prettierrc")
-                    results.append(RedundancyMatch(
-                        line_num, line.strip(), config_file, "style rule",
-                    ))
+                if re.search(
+                    r"\b(semicolons?|trailing commas?|single quotes?|double quotes?)\b",
+                    line,
+                    re.IGNORECASE,
+                ):
+                    config_file = (
+                        ".eslintrc / .prettierrc"
+                        if has_eslint and has_prettier
+                        else (".eslintrc" if has_eslint else ".prettierrc")
+                    )
+                    results.append(
+                        RedundancyMatch(
+                            line_num,
+                            line.strip(),
+                            config_file,
+                            "style rule",
+                        )
+                    )
 
             if has_tsconfig:
-                if re.search(r"\b(strict\s+type|enable\s+strict\s+mode|use\s+strict\s+typescript)\b", line, re.IGNORECASE):
-                    results.append(RedundancyMatch(
-                        line_num, line.strip(), "tsconfig.json", "strict mode",
-                    ))
+                if re.search(
+                    r"\b(strict\s+type|enable\s+strict\s+mode|use\s+strict\s+typescript)\b",
+                    line,
+                    re.IGNORECASE,
+                ):
+                    results.append(
+                        RedundancyMatch(
+                            line_num,
+                            line.strip(),
+                            "tsconfig.json",
+                            "strict mode",
+                        )
+                    )
 
         return results
 
