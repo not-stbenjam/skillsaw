@@ -281,6 +281,7 @@ rules:
   cursor-always-apply-overuse:
     enabled: auto
     severity: warning
+
   # Validate that @import targets in GEMINI.md resolve to existing files
   gemini-import-valid:
     enabled: auto
@@ -353,6 +354,41 @@ rules:
 
   # apm.yml compilation config must use valid values
   apm-compilation-valid:
+    enabled: auto
+    severity: warning
+
+  # MCP server declarations must have valid transport configuration
+  apm-mcp-transport:
+    enabled: auto
+    severity: error
+
+  # apm.lock.yaml must be consistent with apm.yml dependencies
+  apm-lockfile-consistency:
+    enabled: auto
+    severity: warning
+
+  # APM packages should have a README.md
+  apm-readme-present:
+    enabled: auto
+    severity: warning
+
+  # Entry point file specified in main/entry must exist
+  apm-entry-point:
+    enabled: auto
+    severity: error
+
+  # Package name should not conflict with well-known npm/pypi packages
+  apm-name-conflict:
+    enabled: auto
+    severity: warning
+
+  # YAML field value types must match the APM specification
+  apm-field-types:
+    enabled: auto
+    severity: error
+
+  # Flag deprecated or renamed fields in apm.yml
+  apm-deprecated-fields:
     enabled: auto
     severity: warning
 
@@ -429,38 +465,8 @@ rules:
   # Check consistency across multiple instruction file formats (CLAUDE.md, AGENTS.md, .cursorrules, etc.)
   content-cross-file-consistency:
     enabled: true
-  # MCP server declarations must have valid transport configuration
-  apm-mcp-transport:
-    enabled: auto
-    severity: error
-
-  # apm.lock.yaml must be consistent with apm.yml dependencies
-  apm-lockfile-consistency:
-    enabled: auto
     severity: warning
 
-  # APM packages should have a README.md
-  apm-readme-present:
-    enabled: auto
-    severity: warning
-
-  # Entry point file specified in main/entry must exist
-  apm-entry-point:
-    enabled: auto
-    severity: error
-
-  # Package name should not conflict with well-known npm/pypi packages
-  apm-name-conflict:
-    enabled: auto
-    severity: warning
-
-  # YAML field value types must match the APM specification
-  apm-field-types:
-    enabled: auto
-    severity: error
-
-  # Flag deprecated or renamed fields in apm.yml
-  apm-deprecated-fields:
   # CLAUDE.md should contain clear, actionable instructions without weak language or tautologies
   claude-md-quality:
     enabled: auto

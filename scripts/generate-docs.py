@@ -134,6 +134,98 @@ RULE_GROUPS = [
         "inclusion modes, fileMatchPattern globs, and auto-mode metadata). "
         "Disabled by default.",
     ),
+    (
+        "Gemini",
+        [
+            "gemini-import-valid",
+            "gemini-import-circular",
+            "gemini-import-depth",
+            "gemini-scope-false-positive",
+            "gemini-hierarchy-consistency",
+            "gemini-size-limit",
+            "gemini-dead-file-refs",
+            "gemini-weak-language",
+            "gemini-tautological",
+            "gemini-critical-position",
+        ],
+        "Validates GEMINI.md instruction files for the Gemini CLI. "
+        "Checks `@import` resolution, circular imports, hierarchy consistency, "
+        "dead file references, weak language, and instruction positioning. "
+        "Auto-enabled when GEMINI.md is detected.",
+    ),
+    (
+        "Copilot Instructions",
+        [
+            "copilot-instructions-valid",
+            "copilot-dot-instructions-valid",
+        ],
+        "Validates GitHub Copilot instruction files: "
+        "`.github/copilot-instructions.md` and `.instructions.md` files with "
+        "YAML frontmatter `applyTo` glob patterns. Disabled by default.",
+    ),
+    (
+        "APM (Agent Package Manager)",
+        [
+            "apm-manifest-valid",
+            "apm-target-valid",
+            "apm-type-valid",
+            "apm-dependencies-valid",
+            "apm-compilation-valid",
+            "apm-mcp-transport",
+            "apm-lockfile-consistency",
+            "apm-readme-present",
+            "apm-entry-point",
+            "apm-name-conflict",
+            "apm-field-types",
+            "apm-deprecated-fields",
+        ],
+        "Validates `apm.yml` manifests and related files for the Agent Package "
+        "Manager ecosystem. Checks required fields, type validation, dependency "
+        "structure, lockfile consistency, entry points, and naming conflicts. "
+        "Auto-enabled when `apm.yml` is detected.",
+    ),
+    (
+        "Content Intelligence",
+        [
+            "content-weak-language",
+            "content-dead-references",
+            "content-tautological",
+            "content-critical-position",
+            "content-redundant-with-tooling",
+            "content-instruction-budget",
+            "content-readme-overlap",
+            "content-negative-only",
+            "content-section-length",
+            "content-contradiction",
+            "content-hook-candidate",
+            "content-actionability-score",
+            "content-cognitive-chunks",
+            "content-embedded-secrets",
+            "content-cross-file-consistency",
+        ],
+        "Cross-format analysis rules that apply to all instruction files "
+        "(CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, etc.). Detect weak "
+        "language, dead references, tautological instructions, buried critical "
+        "directives, contradictions, embedded secrets, and cross-file "
+        "inconsistencies. Disabled by default; enabled via `--init`.",
+    ),
+    (
+        "Claude Code Deep Rules",
+        [
+            "claude-md-quality",
+            "claude-md-hook-migration",
+            "claude-skill-quality",
+            "claude-mcp-security",
+            "claude-plugin-size",
+            "claude-rules-overlap",
+            "claude-agent-delegation",
+            "claude-context-budget-total",
+        ],
+        "Deep validation for Claude Code configuration: CLAUDE.md quality, "
+        "hook migration candidates, skill quality, MCP security, plugin size "
+        "budgets, rules overlap detection, agent delegation checks, and total "
+        "context budget analysis. Auto-enabled when `.claude/` is detected.",
+    ),
 ]
 
 

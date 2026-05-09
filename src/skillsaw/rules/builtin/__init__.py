@@ -203,8 +203,8 @@ BUILTIN_RULES = [
     # Copilot instructions
     CopilotInstructionsValidRule,
     CopilotDotInstructionsValidRule,
+    # AGENTS.md rules
     AgentsMdStructureRule,
-    # Deep AGENTS.md rules
     AgentsMdSizeLimitRule,
     AgentsMdOverrideSemanticsRule,
     AgentsMdHierarchyConsistencyRule,
@@ -219,12 +219,9 @@ BUILTIN_RULES = [
     AgentsMdHookCandidateRule,
     # Context budget
     ContextBudgetRule,
-    # Cursor rules (monolithic, default disabled)
+    # Cursor rules
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
-    # Kiro steering
-    KiroSteeringValidRule,
-    # Cursor deep rules (auto-enabled)
     CursorMdcFrontmatterRule,
     CursorActivationTypeRule,
     CursorCrlfDetectionRule,
@@ -236,6 +233,8 @@ BUILTIN_RULES = [
     CursorFrontmatterTypesRule,
     CursorDuplicateRulesRule,
     CursorAlwaysApplyOveruseRule,
+    # Kiro steering
+    KiroSteeringValidRule,
     # Gemini
     GeminiImportValidRule,
     GeminiImportCircularRule,
@@ -253,6 +252,13 @@ BUILTIN_RULES = [
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    ApmMcpTransportRule,
+    ApmLockfileConsistencyRule,
+    ApmReadmePresentRule,
+    ApmEntryPointRule,
+    ApmNameConflictRule,
+    ApmFieldTypesRule,
+    ApmDeprecatedFieldsRule,
     # Content intelligence
     ContentWeakLanguageRule,
     ContentDeadReferencesRule,
@@ -269,13 +275,6 @@ BUILTIN_RULES = [
     ContentCognitiveChunksRule,
     ContentEmbeddedSecretsRule,
     ContentCrossFileConsistencyRule,
-    ApmMcpTransportRule,
-    ApmLockfileConsistencyRule,
-    ApmReadmePresentRule,
-    ApmEntryPointRule,
-    ApmNameConflictRule,
-    ApmFieldTypesRule,
-    ApmDeprecatedFieldsRule,
     # Deep Claude Code rules
     ClaudeMdQualityRule,
     ClaudeMdHookMigrationRule,
@@ -290,34 +289,44 @@ BUILTIN_RULES = [
 
 __all__ = [
     "BUILTIN_RULES",
-    # Export individual rules too
+    # Plugin structure
     "PluginJsonRequiredRule",
     "PluginJsonValidRule",
     "PluginNamingRule",
     "PluginReadmeRule",
+    # Command format
     "CommandNamingRule",
     "CommandFrontmatterRule",
     "CommandSectionsRule",
     "CommandNameFormatRule",
+    # Marketplace
     "MarketplaceJsonValidRule",
     "MarketplaceRegistrationRule",
+    # Skills, Agents, Hooks
     "SkillFrontmatterRule",
     "AgentFrontmatterRule",
     "HooksJsonValidRule",
+    # MCP
     "McpValidJsonRule",
     "McpProhibitedRule",
+    # Rules directory
     "RulesValidRule",
+    # Agentskills
     "AgentSkillValidRule",
     "AgentSkillNameRule",
     "AgentSkillDescriptionRule",
     "AgentSkillStructureRule",
     "AgentSkillEvalsRequiredRule",
     "AgentSkillEvalsRule",
+    # Openclaw
     "OpenclawMetadataRule",
+    # Instruction files
     "InstructionFileValidRule",
     "InstructionImportsValidRule",
+    # Copilot instructions
     "CopilotInstructionsValidRule",
     "CopilotDotInstructionsValidRule",
+    # AGENTS.md
     "AgentsMdStructureRule",
     "AgentsMdSizeLimitRule",
     "AgentsMdOverrideSemanticsRule",
@@ -331,10 +340,11 @@ __all__ = [
     "AgentsMdTautologicalRule",
     "AgentsMdCriticalPositionRule",
     "AgentsMdHookCandidateRule",
+    # Context budget
     "ContextBudgetRule",
+    # Cursor
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",
-    "KiroSteeringValidRule",
     "CursorMdcFrontmatterRule",
     "CursorActivationTypeRule",
     "CursorCrlfDetectionRule",
@@ -346,11 +356,33 @@ __all__ = [
     "CursorFrontmatterTypesRule",
     "CursorDuplicateRulesRule",
     "CursorAlwaysApplyOveruseRule",
+    # Kiro
+    "KiroSteeringValidRule",
+    # Gemini
+    "GeminiImportValidRule",
+    "GeminiImportCircularRule",
+    "GeminiImportDepthRule",
+    "GeminiScopeFalsePositiveRule",
+    "GeminiHierarchyConsistencyRule",
+    "GeminiSizeLimitRule",
+    "GeminiDeadFileRefsRule",
+    "GeminiWeakLanguageRule",
+    "GeminiTautologicalRule",
+    "GeminiCriticalPositionRule",
+    # APM
     "ApmManifestValidRule",
     "ApmTargetValidRule",
     "ApmTypeValidRule",
     "ApmDependenciesValidRule",
     "ApmCompilationValidRule",
+    "ApmMcpTransportRule",
+    "ApmLockfileConsistencyRule",
+    "ApmReadmePresentRule",
+    "ApmEntryPointRule",
+    "ApmNameConflictRule",
+    "ApmFieldTypesRule",
+    "ApmDeprecatedFieldsRule",
+    # Content intelligence
     "ContentWeakLanguageRule",
     "ContentDeadReferencesRule",
     "ContentTautologicalRule",
@@ -366,16 +398,7 @@ __all__ = [
     "ContentCognitiveChunksRule",
     "ContentEmbeddedSecretsRule",
     "ContentCrossFileConsistencyRule",
-    "GeminiImportValidRule",
-    "GeminiImportCircularRule",
-    "GeminiImportDepthRule",
-    "GeminiScopeFalsePositiveRule",
-    "GeminiHierarchyConsistencyRule",
-    "GeminiSizeLimitRule",
-    "GeminiDeadFileRefsRule",
-    "GeminiWeakLanguageRule",
-    "GeminiTautologicalRule",
-    "GeminiCriticalPositionRule",
+    # Claude Code deep rules
     "ClaudeMdQualityRule",
     "ClaudeMdHookMigrationRule",
     "ClaudeSkillQualityRule",

@@ -470,6 +470,128 @@ Validates Kiro IDE `.kiro/steering/*.md` files (YAML frontmatter with inclusion 
 |---------|-------------|------------------|
 | `kiro-steering-valid` | Kiro steering files must have valid frontmatter with known inclusion mode and correct types | error (disabled) |
 
+### Gemini
+
+Validates GEMINI.md instruction files for the Gemini CLI. Checks `@import` resolution, circular imports, hierarchy consistency, dead file references, weak language, and instruction positioning. Auto-enabled when GEMINI.md is detected.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `gemini-import-valid` | Validate that @import targets in GEMINI.md resolve to existing files | warning (auto) |
+| `gemini-import-circular` | Detect circular @import references in GEMINI.md files | error (auto) |
+| `gemini-import-depth` | Warn when GEMINI.md import chains exceed depth 5 | warning (auto) |
+| `gemini-scope-false-positive` | Detect @scope/package-name patterns that look like npm scoped packages, not imports | warning (auto) |
+| `gemini-hierarchy-consistency` | Check subdirectory GEMINI.md files for contradictions with parent | warning (auto) |
+| `gemini-size-limit` | Warn when GEMINI.md is too large | warning (auto) |
+| `gemini-dead-file-refs` | Scan GEMINI.md for file path references to non-existent files | warning (auto) |
+| `gemini-weak-language` | Detect weak or hedging language in GEMINI.md instructions | info (auto) |
+| `gemini-tautological` | Detect tautological instructions that restate default AI behavior | info (auto) |
+| `gemini-critical-position` | Check that critical instructions are positioned at the top of GEMINI.md | info (auto) |
+
+**`gemini-size-limit` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `warn_lines` | Line count warning threshold | `150` |
+| `error_lines` | Line count error threshold | `500` |
+
+### Copilot Instructions
+
+Validates GitHub Copilot instruction files: `.github/copilot-instructions.md` and `.instructions.md` files with YAML frontmatter `applyTo` glob patterns. Disabled by default.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `copilot-instructions-valid` | .github/copilot-instructions.md must be valid UTF-8 and non-empty | warning (disabled) |
+| `copilot-dot-instructions-valid` | .instructions.md files must have valid YAML frontmatter with applyTo glob patterns | warning (disabled) |
+
+### APM (Agent Package Manager)
+
+Validates `apm.yml` manifests and related files for the Agent Package Manager ecosystem. Checks required fields, type validation, dependency structure, lockfile consistency, entry points, and naming conflicts. Auto-enabled when `apm.yml` is detected.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `apm-manifest-valid` | apm.yml must exist with required name and version fields | error (auto) |
+| `apm-target-valid` | apm.yml target must use valid target values | error (auto) |
+| `apm-type-valid` | apm.yml type must be a valid package type | error (auto) |
+| `apm-dependencies-valid` | apm.yml dependencies must have valid apm and mcp entries | error (auto) |
+| `apm-compilation-valid` | apm.yml compilation config must use valid values | warning (auto) |
+| `apm-mcp-transport` | MCP server declarations must have valid transport configuration | error (auto) |
+| `apm-lockfile-consistency` | apm.lock.yaml must be consistent with apm.yml dependencies | warning (auto) |
+| `apm-readme-present` | APM packages should have a README.md | warning (auto) |
+| `apm-entry-point` | Entry point file specified in main/entry must exist | error (auto) |
+| `apm-name-conflict` | Package name should not conflict with well-known npm/pypi packages | warning (auto) |
+| `apm-field-types` | YAML field value types must match the APM specification | error (auto) |
+| `apm-deprecated-fields` | Flag deprecated or renamed fields in apm.yml | warning (auto) |
+
+### Content Intelligence
+
+Cross-format analysis rules that apply to all instruction files (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, etc.). Detect weak language, dead references, tautological instructions, buried critical directives, contradictions, embedded secrets, and cross-file inconsistencies. Disabled by default; enabled via `--init`.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `content-weak-language` | Detect hedging, vague, and non-actionable language in instruction files | warning (disabled) |
+| `content-dead-references` | Detect broken file paths, npm scripts, and Makefile targets in instruction files | warning (disabled) |
+| `content-tautological` | Detect tautological instructions that the model already follows by default | warning (disabled) |
+| `content-critical-position` | Detect critical instructions in the middle of files where LLM attention is lowest | info (disabled) |
+| `content-redundant-with-tooling` | Detect instructions that duplicate .editorconfig, ESLint, Prettier, or tsconfig settings | warning (disabled) |
+| `content-instruction-budget` | Check if total instruction count across all files exceeds LLM instruction budget (~150) | warning (disabled) |
+| `content-readme-overlap` | Detect instruction file sections that significantly overlap with README.md content | info (disabled) |
+| `content-negative-only` | Detect prohibitions without a positive alternative (agent has no path forward) | warning (disabled) |
+| `content-section-length` | Warn about markdown sections longer than 50 lines (optimal: 10-30 lines) | info (disabled) |
+| `content-contradiction` | Detect likely contradictions within instruction files using keyword-pair heuristics | warning (disabled) |
+| `content-hook-candidate` | Detect instructions that should be automated as hooks instead of prose instructions | info (disabled) |
+| `content-actionability-score` | Score instruction files on actionability (verb density, commands, file references) | info (disabled) |
+| `content-cognitive-chunks` | Check that instruction files are organized into cognitive chunks with headings | info (disabled) |
+| `content-embedded-secrets` | Detect potential API keys, tokens, and passwords in instruction files | error (disabled) |
+| `content-cross-file-consistency` | Check consistency across multiple instruction file formats (CLAUDE.md, AGENTS.md, .cursorrules, etc.) | warning (disabled) |
+
+### Claude Code Deep Rules
+
+Deep validation for Claude Code configuration: CLAUDE.md quality, hook migration candidates, skill quality, MCP security, plugin size budgets, rules overlap detection, agent delegation checks, and total context budget analysis. Auto-enabled when `.claude/` is detected.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `claude-md-quality` | CLAUDE.md should contain clear, actionable instructions without weak language or tautologies | warning (auto) |
+| `claude-md-hook-migration` | Detect instructions in CLAUDE.md that would be more reliable as hooks.json entries | info (auto) |
+| `claude-skill-quality` | SKILL.md files should have a clear purpose, examples, and reasonable size | warning (auto) |
+| `claude-mcp-security` | Check MCP server configurations for security issues | warning (auto) |
+| `claude-plugin-size` | Warn when total plugin content exceeds reasonable context budget limits | warning (auto) |
+| `claude-rules-overlap` | Check for overlapping path globs in .claude/rules/ frontmatter | warning (auto) |
+| `claude-agent-delegation` | Check AGENTS.md for vague descriptions and missing tool/scope definitions | warning (auto) |
+| `claude-context-budget-total` | Check total context budget across all Claude Code configuration files | warning (auto) |
+
+**`claude-md-quality` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `min_length` | Minimum character length for CLAUDE.md body content | `50` |
+| `max_weak_phrases` | Maximum number of weak/hedging phrases before warning | `5` |
+
+**`claude-skill-quality` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `max_lines` | Maximum recommended lines for a single SKILL.md | `200` |
+
+**`claude-plugin-size` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `warn_tokens` | Token count at which to warn | `8000` |
+| `error_tokens` | Token count at which to error | `16000` |
+
+**`claude-agent-delegation` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `min_description_words` | Minimum word count for agent descriptions | `5` |
+
+**`claude-context-budget-total` parameters:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `warn_total_tokens` | Total token count across all context files at which to warn | `8000` |
+| `error_total_tokens` | Total token count across all context files at which to error | `16000` |
+
 <!-- END GENERATED RULES -->
 
 ## Custom Rules
