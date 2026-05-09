@@ -433,6 +433,14 @@ Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + Markdown co
 | `cursor-mdc-valid` | Cursor .mdc rule files must have valid frontmatter with known keys and correct types | error (disabled) |
 | `cursor-rules-deprecated` | Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc | warning (disabled) |
 
+### Kiro Steering
+
+Validates Kiro IDE `.kiro/steering/*.md` files (YAML frontmatter with inclusion modes, fileMatchPattern globs, and auto-mode metadata). Disabled by default.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `kiro-steering-valid` | Kiro steering files must have valid frontmatter with known inclusion mode and correct types | error (disabled) |
+
 <!-- END GENERATED RULES -->
 
 ## Custom Rules
