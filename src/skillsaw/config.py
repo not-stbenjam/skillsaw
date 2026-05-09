@@ -103,6 +103,9 @@ class LinterConfig:
                 "context-budget": {"enabled": False, "severity": "warning"},
                 # Windsurf rules (disabled for back-compat; --init enables)
                 "windsurf-rules-valid": {"enabled": False, "severity": "warning"},
+                # Cursor rules
+                "cursor-mdc-valid": {"enabled": False, "severity": "error"},
+                "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
             }
         )
 
@@ -114,6 +117,8 @@ class LinterConfig:
         "agents-md-structure": {"enabled": True},
         "context-budget": {"enabled": True},
         "windsurf-rules-valid": {"enabled": True},
+        "cursor-mdc-valid": {"enabled": True},
+        "cursor-rules-deprecated": {"enabled": True},
     }
 
     @classmethod

@@ -152,6 +152,16 @@ rules:
     enabled: true
     severity: warning
 
+  # Cursor .mdc rule files must have valid frontmatter with known keys and correct types
+  cursor-mdc-valid:
+    enabled: true
+    severity: error
+
+  # Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc
+  cursor-rules-deprecated:
+    enabled: true
+    severity: warning
+
 # Load custom rules from these files
 custom-rules: []
 

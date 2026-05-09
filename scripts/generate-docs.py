@@ -82,6 +82,14 @@ RULE_GROUPS = [
         "token limits. Uses a `len(text) / 4` approximation for token counting. "
         "Supports per-category `warn` and `error` thresholds. Disabled by default.",
     ),
+    (
+        "Cursor Rules",
+        ["cursor-mdc-valid", "cursor-rules-deprecated"],
+        "Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + "
+        "Markdown content) and warns about the deprecated `.cursorrules` file. "
+        "Checks frontmatter structure, key types, and glob patterns. "
+        "Disabled by default.",
+    ),
 ]
 
 

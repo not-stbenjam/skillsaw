@@ -78,6 +78,11 @@ from .windsurf import (
     WindsurfRulesValidRule,
 )
 
+from .cursor import (
+    CursorMdcValidRule,
+    CursorRulesDeprecatedRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -126,6 +131,9 @@ BUILTIN_RULES = [
     ContextBudgetRule,
     # Windsurf
     WindsurfRulesValidRule,
+    # Cursor rules
+    CursorMdcValidRule,
+    CursorRulesDeprecatedRule,
 ]
 
 
@@ -163,4 +171,6 @@ __all__ = [
     "ClineRulesValidRule",
     "ContextBudgetRule",
     "WindsurfRulesValidRule",
+    "CursorMdcValidRule",
+    "CursorRulesDeprecatedRule",
 ]

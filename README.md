@@ -385,6 +385,15 @@ Warns when instruction and configuration files exceed recommended token limits. 
 |-----------|-------------|---------|
 | `limits` | Token limits per file category (int for warn-only, or {warn, error} dict) | `{"agents-md": {"warn": 6000, "error": 12000}, "claude-md": {"warn": 6000, "error": 12000}, "gemini-md": {"warn": 6000, "error": 12000}, "skill": {"warn": 3000, "error": 6000}, "command": {"warn": 2000, "error": 4000}, "agent": {"warn": 2000, "error": 4000}, "rule": {"warn": 2000, "error": 4000}}` |
 
+### Cursor Rules
+
+Validates Cursor IDE `.cursor/rules/*.mdc` files (YAML frontmatter + Markdown content) and warns about the deprecated `.cursorrules` file. Checks frontmatter structure, key types, and glob patterns. Disabled by default.
+
+| Rule ID | Description | Default Severity |
+|---------|-------------|------------------|
+| `cursor-mdc-valid` | Cursor .mdc rule files must have valid frontmatter with known keys and correct types | error (disabled) |
+| `cursor-rules-deprecated` | Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc | warning (disabled) |
+
 <!-- END GENERATED RULES -->
 
 ## Custom Rules
