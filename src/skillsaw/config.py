@@ -93,6 +93,9 @@ class LinterConfig:
                 # Instruction file validation (disabled for back-compat; --init enables)
                 "instruction-file-valid": {"enabled": False, "severity": "warning"},
                 "instruction-imports-valid": {"enabled": False, "severity": "warning"},
+                # Copilot instructions (disabled for back-compat; --init enables)
+                "copilot-instructions-valid": {"enabled": False, "severity": "warning"},
+                "copilot-dot-instructions-valid": {"enabled": False, "severity": "warning"},
                 # Context budget (disabled for back-compat; --init enables)
                 "context-budget": {"enabled": False, "severity": "warning"},
             }
@@ -101,6 +104,8 @@ class LinterConfig:
     _INIT_OVERRIDES: ClassVar[Dict[str, Dict[str, Any]]] = {
         "instruction-file-valid": {"enabled": True},
         "instruction-imports-valid": {"enabled": True},
+        "copilot-instructions-valid": {"enabled": True},
+        "copilot-dot-instructions-valid": {"enabled": True},
         "context-budget": {"enabled": True},
     }
 

@@ -67,7 +67,9 @@ class TestCopilotInstructionsValidRule:
         context = RepositoryContext(temp_dir)
         violations = CopilotInstructionsValidRule().check(context)
         assert len(violations) == 1
-        assert "encoding" in violations[0].message.lower() or "read" in violations[0].message.lower()
+        assert (
+            "encoding" in violations[0].message.lower() or "read" in violations[0].message.lower()
+        )
 
 
 class TestCopilotDotInstructionsValidRule:
@@ -117,7 +119,9 @@ class TestCopilotDotInstructionsValidRule:
         context = RepositoryContext(temp_dir)
         violations = CopilotDotInstructionsValidRule().check(context)
         assert len(violations) == 1
-        assert "encoding" in violations[0].message.lower() or "read" in violations[0].message.lower()
+        assert (
+            "encoding" in violations[0].message.lower() or "read" in violations[0].message.lower()
+        )
 
     def test_missing_frontmatter_fails(self, temp_dir):
         (temp_dir / ".instructions.md").write_text("Just some text without frontmatter.\n")
@@ -151,7 +155,7 @@ class TestCopilotDotInstructionsValidRule:
         assert "empty pattern" in violations[0].message.lower()
 
     def test_apply_to_list_with_non_string_fails(self, temp_dir):
-        content = "---\napplyTo:\n  - \"**/*.py\"\n  - 42\n---\nContent.\n"
+        content = '---\napplyTo:\n  - "**/*.py"\n  - 42\n---\nContent.\n'
         (temp_dir / ".instructions.md").write_text(content)
         context = RepositoryContext(temp_dir)
         violations = CopilotDotInstructionsValidRule().check(context)
