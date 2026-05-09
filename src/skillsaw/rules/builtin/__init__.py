@@ -81,6 +81,19 @@ from .copilot_instructions import (
     CopilotDotInstructionsValidRule,
 )
 
+from .gemini import (
+    GeminiImportValidRule,
+    GeminiImportCircularRule,
+    GeminiImportDepthRule,
+    GeminiScopeFalsePositiveRule,
+    GeminiHierarchyConsistencyRule,
+    GeminiSizeLimitRule,
+    GeminiDeadFileRefsRule,
+    GeminiWeakLanguageRule,
+    GeminiTautologicalRule,
+    GeminiCriticalPositionRule,
+)
+
 from .context_budget import (
     ContextBudgetRule,
 )
@@ -205,6 +218,17 @@ BUILTIN_RULES = [
     CursorFrontmatterTypesRule,
     CursorDuplicateRulesRule,
     CursorAlwaysApplyOveruseRule,
+    # Gemini
+    GeminiImportValidRule,
+    GeminiImportCircularRule,
+    GeminiImportDepthRule,
+    GeminiScopeFalsePositiveRule,
+    GeminiHierarchyConsistencyRule,
+    GeminiSizeLimitRule,
+    GeminiDeadFileRefsRule,
+    GeminiWeakLanguageRule,
+    GeminiTautologicalRule,
+    GeminiCriticalPositionRule,
     # APM
     ApmManifestValidRule,
     ApmTargetValidRule,
@@ -308,4 +332,14 @@ __all__ = [
     "ContentCognitiveChunksRule",
     "ContentEmbeddedSecretsRule",
     "ContentCrossFileConsistencyRule",
+    "GeminiImportValidRule",
+    "GeminiImportCircularRule",
+    "GeminiImportDepthRule",
+    "GeminiScopeFalsePositiveRule",
+    "GeminiHierarchyConsistencyRule",
+    "GeminiSizeLimitRule",
+    "GeminiDeadFileRefsRule",
+    "GeminiWeakLanguageRule",
+    "GeminiTautologicalRule",
+    "GeminiCriticalPositionRule",
 ]
