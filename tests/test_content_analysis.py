@@ -48,7 +48,9 @@ class TestWeakLanguageDetector:
         assert results[0].category == "non-actionable"
 
     def test_clean_file_no_matches(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use 4-space indentation.\nRun tests before committing.\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use 4-space indentation.\nRun tests before committing.\n"
+        )
         detector = WeakLanguageDetector()
         results = detector.analyze(temp_dir / "CLAUDE.md")
         assert len(results) == 0
@@ -164,7 +166,9 @@ class TestTautologicalDetector:
         assert len(results) >= 1
 
     def test_specific_instructions_pass(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Use 4-space indentation for Python files.\nReturn 404 for missing resources.\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "Use 4-space indentation for Python files.\nReturn 404 for missing resources.\n"
+        )
         detector = TautologicalDetector()
         results = detector.analyze(temp_dir / "CLAUDE.md")
         assert len(results) == 0

@@ -45,11 +45,13 @@ class ContentWeakLanguageRule(Rule):
         detector = WeakLanguageDetector()
         for path in gather_all_instruction_files(context):
             for match in detector.analyze(path):
-                violations.append(self.violation(
-                    f"Weak language ({match.category}): '{match.phrase}' — {match.suggested_fix}",
-                    file_path=path,
-                    line=match.line,
-                ))
+                violations.append(
+                    self.violation(
+                        f"Weak language ({match.category}): '{match.phrase}' — {match.suggested_fix}",
+                        file_path=path,
+                        line=match.line,
+                    )
+                )
         return violations
 
 
@@ -72,11 +74,13 @@ class ContentDeadReferencesRule(Rule):
         scanner = DeadReferenceScanner()
         for path in gather_all_instruction_files(context):
             for ref in scanner.analyze(path, context.root_path):
-                violations.append(self.violation(
-                    f"Dead reference: '{ref.reference}' does not exist",
-                    file_path=path,
-                    line=ref.line,
-                ))
+                violations.append(
+                    self.violation(
+                        f"Dead reference: '{ref.reference}' does not exist",
+                        file_path=path,
+                        line=ref.line,
+                    )
+                )
         return violations
 
 
@@ -99,11 +103,13 @@ class ContentTautologicalRule(Rule):
         detector = TautologicalDetector()
         for path in gather_all_instruction_files(context):
             for match in detector.analyze(path):
-                violations.append(self.violation(
-                    f"Tautological: '{match.phrase}' — {match.reason}",
-                    file_path=path,
-                    line=match.line,
-                ))
+                violations.append(
+                    self.violation(
+                        f"Tautological: '{match.phrase}' — {match.reason}",
+                        file_path=path,
+                        line=match.line,
+                    )
+                )
         return violations
 
     def fix(
@@ -123,22 +129,21 @@ class ContentTautologicalRule(Rule):
                 continue
             all_lines = content.splitlines(keepends=True)
             remove_set = set(lines_to_remove)
-            new_lines = [
-                line for i, line in enumerate(all_lines, 1)
-                if i not in remove_set
-            ]
+            new_lines = [line for i, line in enumerate(all_lines, 1) if i not in remove_set]
             new_content = "".join(new_lines)
             if new_content != content:
                 fixed_violations = [v for v in violations if v.file_path == file_path]
-                results.append(AutofixResult(
-                    rule_id=self.rule_id,
-                    file_path=file_path,
-                    confidence=AutofixConfidence.SAFE,
-                    original_content=content,
-                    fixed_content=new_content,
-                    description="Remove tautological instructions",
-                    violations_fixed=fixed_violations,
-                ))
+                results.append(
+                    AutofixResult(
+                        rule_id=self.rule_id,
+                        file_path=file_path,
+                        confidence=AutofixConfidence.SAFE,
+                        original_content=content,
+                        fixed_content=new_content,
+                        description="Remove tautological instructions",
+                        violations_fixed=fixed_violations,
+                    )
+                )
         return results
 
 
@@ -161,11 +166,13 @@ class ContentCriticalPositionRule(Rule):
         analyzer = CriticalPositionAnalyzer()
         for path in gather_all_instruction_files(context):
             for issue in analyzer.analyze(path):
-                violations.append(self.violation(
-                    f"'{issue.keyword}' instruction at line {issue.line} is in the attention dead zone (20-80%) — {issue.suggested_position}",
-                    file_path=path,
-                    line=issue.line,
-                ))
+                violations.append(
+                    self.violation(
+                        f"'{issue.keyword}' instruction at line {issue.line} is in the attention dead zone (20-80%) — {issue.suggested_position}",
+                        file_path=path,
+                        line=issue.line,
+                    )
+                )
         return violations
 
 
@@ -188,11 +195,13 @@ class ContentRedundantWithToolingRule(Rule):
         detector = RedundancyDetector()
         for path in gather_all_instruction_files(context):
             for match in detector.analyze(path, context.root_path):
-                violations.append(self.violation(
-                    f"Redundant with {match.existing_config_file} ({match.config_value}): '{match.instruction}'",
-                    file_path=path,
-                    line=match.line,
-                ))
+                violations.append(
+                    self.violation(
+                        f"Redundant with {match.existing_config_file} ({match.config_value}): '{match.instruction}'",
+                        file_path=path,
+                        line=match.line,
+                    )
+                )
         return violations
 
     def fix(
@@ -212,22 +221,21 @@ class ContentRedundantWithToolingRule(Rule):
                 continue
             all_lines = content.splitlines(keepends=True)
             remove_set = set(lines_to_remove)
-            new_lines = [
-                line for i, line in enumerate(all_lines, 1)
-                if i not in remove_set
-            ]
+            new_lines = [line for i, line in enumerate(all_lines, 1) if i not in remove_set]
             new_content = "".join(new_lines)
             if new_content != content:
                 fixed_violations = [v for v in violations if v.file_path == file_path]
-                results.append(AutofixResult(
-                    rule_id=self.rule_id,
-                    file_path=file_path,
-                    confidence=AutofixConfidence.SAFE,
-                    original_content=content,
-                    fixed_content=new_content,
-                    description="Remove instructions redundant with tooling config",
-                    violations_fixed=fixed_violations,
-                ))
+                results.append(
+                    AutofixResult(
+                        rule_id=self.rule_id,
+                        file_path=file_path,
+                        confidence=AutofixConfidence.SAFE,
+                        original_content=content,
+                        fixed_content=new_content,
+                        description="Remove instructions redundant with tooling config",
+                        violations_fixed=fixed_violations,
+                    )
+                )
         return results
 
 
@@ -254,16 +262,20 @@ class ContentInstructionBudgetRule(Rule):
         violations = []
         if budget.total_count >= 120:
             sev = Severity.ERROR if budget.over_budget else Severity.WARNING
-            violations.append(self.violation(
-                f"Instruction budget: {budget.total_count}/{analyzer.BUDGET} instructions across {len(budget.files_counted)} files "
-                f"({budget.budget_remaining} remaining)",
-                severity=sev,
-            ))
+            violations.append(
+                self.violation(
+                    f"Instruction budget: {budget.total_count}/{analyzer.BUDGET} instructions across {len(budget.files_counted)} files "
+                    f"({budget.budget_remaining} remaining)",
+                    severity=sev,
+                )
+            )
         elif budget.total_count >= 80:
-            violations.append(self.violation(
-                f"Instruction budget: {budget.total_count}/{analyzer.BUDGET} instructions across {len(budget.files_counted)} files — approaching limit",
-                severity=Severity.INFO,
-            ))
+            violations.append(
+                self.violation(
+                    f"Instruction budget: {budget.total_count}/{analyzer.BUDGET} instructions across {len(budget.files_counted)} files — approaching limit",
+                    severity=Severity.INFO,
+                )
+            )
         return violations
 
 
@@ -320,10 +332,12 @@ class ContentReadmeOverlapRule(Rule):
                 jaccard = len(intersection) / len(union) if union else 0
                 if jaccard > self._JACCARD_THRESHOLD:
                     preview = section[:60].replace("\n", " ")
-                    violations.append(self.violation(
-                        f"Section overlaps {jaccard:.0%} with README.md: '{preview}...' — consider using @import instead",
-                        file_path=path,
-                    ))
+                    violations.append(
+                        self.violation(
+                            f"Section overlaps {jaccard:.0%} with README.md: '{preview}...' — consider using @import instead",
+                            file_path=path,
+                        )
+                    )
         return violations
 
 
@@ -360,13 +374,15 @@ class ContentNegativeOnlyRule(Rule):
             for i, line in enumerate(lines):
                 if not self._NEGATIVE_RE.search(line):
                     continue
-                window = "\n".join(lines[max(0, i - 1):i + 4])
+                window = "\n".join(lines[max(0, i - 1) : i + 4])
                 if not self._POSITIVE_RE.search(window):
-                    violations.append(self.violation(
-                        f"Negative-only instruction without alternative: '{line.strip()[:80]}'",
-                        file_path=path,
-                        line=i + 1,
-                    ))
+                    violations.append(
+                        self.violation(
+                            f"Negative-only instruction without alternative: '{line.strip()[:80]}'",
+                            file_path=path,
+                            line=i + 1,
+                        )
+                    )
         return violations
 
 
@@ -402,22 +418,28 @@ class ContentSectionLengthRule(Rule):
                 m = _HEADING_RE.match(line)
                 if m:
                     if i > section_start:
-                        sections.append((current_heading_text, current_heading_line, section_start, i))
+                        sections.append(
+                            (current_heading_text, current_heading_line, section_start, i)
+                        )
                     current_heading_text = m.group(2)
                     current_heading_line = i + 1
                     section_start = i + 1
 
             if len(lines) > section_start:
-                sections.append((current_heading_text, current_heading_line, section_start, len(lines)))
+                sections.append(
+                    (current_heading_text, current_heading_line, section_start, len(lines))
+                )
 
             for heading, heading_line, start, end in sections:
                 length = end - start
                 if length > self.MAX_LINES:
-                    violations.append(self.violation(
-                        f"Section '{heading}' is {length} lines (max recommended: {self.MAX_LINES})",
-                        file_path=path,
-                        line=heading_line if heading_line > 0 else None,
-                    ))
+                    violations.append(
+                        self.violation(
+                            f"Section '{heading}' is {length} lines (max recommended: {self.MAX_LINES})",
+                            file_path=path,
+                            line=heading_line if heading_line > 0 else None,
+                        )
+                    )
         return violations
 
 
@@ -426,11 +448,27 @@ class ContentContradictionRule(Rule):
 
     _CONTRADICTION_PAIRS = [
         (r"\bmove fast\b", r"\bcomprehensive tests?\b", "'move fast' vs 'comprehensive tests'"),
-        (r"\bkeep it simple\b", r"\bhandle all edge cases\b", "'keep it simple' vs 'handle all edge cases'"),
-        (r"\bdon'?t over-?engineer\b", r"\bdetailed architecture\b", "'don't over-engineer' vs 'detailed architecture'"),
+        (
+            r"\bkeep it simple\b",
+            r"\bhandle all edge cases\b",
+            "'keep it simple' vs 'handle all edge cases'",
+        ),
+        (
+            r"\bdon'?t over-?engineer\b",
+            r"\bdetailed architecture\b",
+            "'don't over-engineer' vs 'detailed architecture'",
+        ),
         (r"\bminimal\b", r"\bexhaustive\b", "'minimal' vs 'exhaustive'"),
-        (r"\bdon'?t add comments\b", r"\bdocument\s+(everything|all|every)\b", "'don't add comments' vs 'document everything'"),
-        (r"\bavoid abstractions?\b", r"\bcreate\s+(abstractions?|interfaces?|base\s+class)\b", "'avoid abstractions' vs 'create abstractions'"),
+        (
+            r"\bdon'?t add comments\b",
+            r"\bdocument\s+(everything|all|every)\b",
+            "'don't add comments' vs 'document everything'",
+        ),
+        (
+            r"\bavoid abstractions?\b",
+            r"\bcreate\s+(abstractions?|interfaces?|base\s+class)\b",
+            "'avoid abstractions' vs 'create abstractions'",
+        ),
     ]
 
     @property
@@ -455,10 +493,12 @@ class ContentContradictionRule(Rule):
                 match_a = re.search(pat_a, body_lower)
                 match_b = re.search(pat_b, body_lower)
                 if match_a and match_b:
-                    violations.append(self.violation(
-                        f"Possible contradiction: {desc}",
-                        file_path=path,
-                    ))
+                    violations.append(
+                        self.violation(
+                            f"Possible contradiction: {desc}",
+                            file_path=path,
+                        )
+                    )
         return violations
 
 
@@ -466,12 +506,27 @@ class ContentHookCandidateRule(Rule):
     """Detect instructions that should be automated hooks"""
 
     _HOOK_PATTERNS = [
-        (re.compile(r"\balways run\s+.+\s+(?:after|before)\b", re.IGNORECASE), "PostToolUse or PreToolUse hook"),
-        (re.compile(r"\bformat\s+(?:code|files?)\s+before\s+committ?ing\b", re.IGNORECASE), "pre-commit hook"),
-        (re.compile(r"\bnever\s+push\s+without\s+(?:running\s+)?tests?\b", re.IGNORECASE), "pre-push hook or Stop hook"),
+        (
+            re.compile(r"\balways run\s+.+\s+(?:after|before)\b", re.IGNORECASE),
+            "PostToolUse or PreToolUse hook",
+        ),
+        (
+            re.compile(r"\bformat\s+(?:code|files?)\s+before\s+committ?ing\b", re.IGNORECASE),
+            "pre-commit hook",
+        ),
+        (
+            re.compile(r"\bnever\s+push\s+without\s+(?:running\s+)?tests?\b", re.IGNORECASE),
+            "pre-push hook or Stop hook",
+        ),
         (re.compile(r"\balways\s+lint\s+before\b", re.IGNORECASE), "pre-commit hook"),
-        (re.compile(r"\brun\s+tests?\s+before\s+(?:every\s+)?commit\b", re.IGNORECASE), "pre-commit hook"),
-        (re.compile(r"\bafter\s+(?:every|each)\s+(?:change|edit|save)\b", re.IGNORECASE), "PostToolUse hook"),
+        (
+            re.compile(r"\brun\s+tests?\s+before\s+(?:every\s+)?commit\b", re.IGNORECASE),
+            "pre-commit hook",
+        ),
+        (
+            re.compile(r"\bafter\s+(?:every|each)\s+(?:change|edit|save)\b", re.IGNORECASE),
+            "PostToolUse hook",
+        ),
         (re.compile(r"\bbefore\s+(?:every|each)\s+commit\b", re.IGNORECASE), "pre-commit hook"),
     ]
 
@@ -495,11 +550,13 @@ class ContentHookCandidateRule(Rule):
             for line_num, line in enumerate(body.splitlines(), 1):
                 for pattern, hook_type in self._HOOK_PATTERNS:
                     if pattern.search(line):
-                        violations.append(self.violation(
-                            f"Hook candidate: '{line.strip()[:80]}' — consider automating as a {hook_type}",
-                            file_path=path,
-                            line=line_num,
-                        ))
+                        violations.append(
+                            self.violation(
+                                f"Hook candidate: '{line.strip()[:80]}' — consider automating as a {hook_type}",
+                                file_path=path,
+                                line=line_num,
+                            )
+                        )
                         break
         return violations
 
@@ -551,10 +608,12 @@ class ContentActionabilityScoreRule(Rule):
             score = min(100, score)
 
             if score < self.WARN_THRESHOLD:
-                violations.append(self.violation(
-                    f"Low actionability score: {score}/100 (verbs: {verb_ratio:.0%}, commands: {cmd_ratio:.0%}, paths: {path_ratio:.0%})",
-                    file_path=path,
-                ))
+                violations.append(
+                    self.violation(
+                        f"Low actionability score: {score}/100 (verbs: {verb_ratio:.0%}, commands: {cmd_ratio:.0%}, paths: {path_ratio:.0%})",
+                        file_path=path,
+                    )
+                )
         return violations
 
 
@@ -582,17 +641,21 @@ class ContentCognitiveChunksRule(Rule):
             headings = [l for l in lines if _HEADING_RE.match(l)]
 
             if not headings and len(lines) > 10:
-                violations.append(self.violation(
-                    "No headings in instruction file — add section headings for cognitive chunking",
-                    file_path=path,
-                ))
+                violations.append(
+                    self.violation(
+                        "No headings in instruction file — add section headings for cognitive chunking",
+                        file_path=path,
+                    )
+                )
                 continue
 
             if len(headings) == 1 and len(lines) > 30:
-                violations.append(self.violation(
-                    "All content under a single heading — break into task-organized sections",
-                    file_path=path,
-                ))
+                violations.append(
+                    self.violation(
+                        "All content under a single heading — break into task-organized sections",
+                        file_path=path,
+                    )
+                )
         return violations
 
 
@@ -600,7 +663,8 @@ class ContentEmbeddedSecretsRule(Rule):
     """Detect potential secrets embedded in instruction files"""
 
     _PATTERNS = [
-        (re.compile(p), desc) for p, desc in [
+        (re.compile(p), desc)
+        for p, desc in [
             (r"\bsk-[a-zA-Z0-9]{20,}", "OpenAI/Anthropic API key"),
             (r"\bghp_[a-zA-Z0-9]{36,}", "GitHub personal access token"),
             (r"\bghs_[a-zA-Z0-9]{36,}", "GitHub server token"),
@@ -635,11 +699,13 @@ class ContentEmbeddedSecretsRule(Rule):
             for line_num, line in enumerate(content.splitlines(), 1):
                 for pattern, desc in self._PATTERNS:
                     if pattern.search(line):
-                        violations.append(self.violation(
-                            f"Potential secret detected: {desc}",
-                            file_path=path,
-                            line=line_num,
-                        ))
+                        violations.append(
+                            self.violation(
+                                f"Potential secret detected: {desc}",
+                                file_path=path,
+                                line=line_num,
+                            )
+                        )
                         break
         return violations
 
@@ -688,11 +754,13 @@ class ContentCrossFileConsistencyRule(Rule):
 
         paths_with_tech = [(p, t) for p, t in all_tech.items() if t]
         for i, (path_a, tech_a) in enumerate(paths_with_tech):
-            for path_b, tech_b in paths_with_tech[i + 1:]:
+            for path_b, tech_b in paths_with_tech[i + 1 :]:
                 if tech_a and tech_b and not (tech_a & tech_b):
-                    violations.append(self.violation(
-                        f"Tech stack mismatch: {path_a.name} mentions {', '.join(sorted(tech_a))} "
-                        f"but {path_b.name} mentions {', '.join(sorted(tech_b))}",
-                    ))
+                    violations.append(
+                        self.violation(
+                            f"Tech stack mismatch: {path_a.name} mentions {', '.join(sorted(tech_a))} "
+                            f"but {path_b.name} mentions {', '.join(sorted(tech_b))}",
+                        )
+                    )
 
         return violations

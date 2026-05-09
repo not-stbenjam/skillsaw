@@ -152,6 +152,21 @@ class LinterConfig:
         "cursor-mdc-valid": {"enabled": True},
         "cursor-rules-deprecated": {"enabled": True},
         "kiro-steering-valid": {"enabled": True},
+        "content-weak-language": {"enabled": True},
+        "content-dead-references": {"enabled": True},
+        "content-tautological": {"enabled": True},
+        "content-critical-position": {"enabled": True},
+        "content-redundant-with-tooling": {"enabled": True},
+        "content-instruction-budget": {"enabled": True},
+        "content-readme-overlap": {"enabled": True},
+        "content-negative-only": {"enabled": True},
+        "content-section-length": {"enabled": True},
+        "content-contradiction": {"enabled": True},
+        "content-hook-candidate": {"enabled": True},
+        "content-actionability-score": {"enabled": True},
+        "content-cognitive-chunks": {"enabled": True},
+        "content-embedded-secrets": {"enabled": True},
+        "content-cross-file-consistency": {"enabled": True},
     }
 
     @classmethod
