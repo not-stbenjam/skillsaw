@@ -106,6 +106,12 @@ class LinterConfig:
                 # Cursor rules
                 "cursor-mdc-valid": {"enabled": False, "severity": "error"},
                 "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
+                # APM manifest rules (auto-enabled for APM repos)
+                "apm-manifest-valid": {"enabled": "auto", "severity": "error"},
+                "apm-target-valid": {"enabled": "auto", "severity": "error"},
+                "apm-type-valid": {"enabled": "auto", "severity": "error"},
+                "apm-dependencies-valid": {"enabled": "auto", "severity": "error"},
+                "apm-compilation-valid": {"enabled": "auto", "severity": "warning"},
             }
         )
 

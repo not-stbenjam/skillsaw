@@ -83,6 +83,14 @@ from .cursor import (
     CursorRulesDeprecatedRule,
 )
 
+from .apm import (
+    ApmManifestValidRule,
+    ApmTargetValidRule,
+    ApmTypeValidRule,
+    ApmDependenciesValidRule,
+    ApmCompilationValidRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -134,6 +142,12 @@ BUILTIN_RULES = [
     # Cursor rules
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
+    # APM
+    ApmManifestValidRule,
+    ApmTargetValidRule,
+    ApmTypeValidRule,
+    ApmDependenciesValidRule,
+    ApmCompilationValidRule,
 ]
 
 
@@ -170,7 +184,13 @@ __all__ = [
     "AgentsMdStructureRule",
     "ClineRulesValidRule",
     "ContextBudgetRule",
+<<<<<<< HEAD
     "WindsurfRulesValidRule",
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",
+    "ApmManifestValidRule",
+    "ApmTargetValidRule",
+    "ApmTypeValidRule",
+    "ApmDependenciesValidRule",
+    "ApmCompilationValidRule",
 ]

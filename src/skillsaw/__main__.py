@@ -191,7 +191,7 @@ def _run_lint(args):
     if context.repo_type == RepositoryType.UNKNOWN:
         print("Warning: Directory doesn't appear to be a recognized repository", file=sys.stderr)
         print(
-            "Expected: .claude-plugin/plugin.json, plugins/ directory, or SKILL.md (agentskills.io)\n",
+            "Expected: .claude-plugin/plugin.json, plugins/ directory, SKILL.md (agentskills.io), or apm.yml (APM)\n",
             file=sys.stderr,
         )
 
@@ -296,7 +296,7 @@ def _run_docs(args):
     if context.repo_type == RepositoryType.UNKNOWN:
         print("Warning: Directory doesn't appear to be a recognized repository", file=sys.stderr)
         print(
-            "Expected: .claude-plugin/plugin.json, plugins/ directory, or SKILL.md (agentskills.io)\n",
+            "Expected: .claude-plugin/plugin.json, plugins/ directory, SKILL.md (agentskills.io), or apm.yml (APM)\n",
             file=sys.stderr,
         )
 
