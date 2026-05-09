@@ -137,6 +137,16 @@ rules:
     enabled: true
     severity: warning
 
+  # .github/copilot-instructions.md must be valid UTF-8 and non-empty
+  copilot-instructions-valid:
+    enabled: true
+    severity: warning
+
+  # .instructions.md files must have valid YAML frontmatter with applyTo glob patterns
+  copilot-dot-instructions-valid:
+    enabled: true
+    severity: warning
+
   # AGENTS.md should have at least one heading and meaningful content
   agents-md-structure:
     enabled: true
@@ -160,6 +170,31 @@ rules:
   # Legacy .cursorrules file is deprecated; migrate to .cursor/rules/*.mdc
   cursor-rules-deprecated:
     enabled: true
+    severity: warning
+
+  # apm.yml must exist with required name and version fields
+  apm-manifest-valid:
+    enabled: auto
+    severity: error
+
+  # apm.yml target must use valid target values
+  apm-target-valid:
+    enabled: auto
+    severity: error
+
+  # apm.yml type must be a valid package type
+  apm-type-valid:
+    enabled: auto
+    severity: error
+
+  # apm.yml dependencies must have valid apm and mcp entries
+  apm-dependencies-valid:
+    enabled: auto
+    severity: error
+
+  # apm.yml compilation config must use valid values
+  apm-compilation-valid:
+    enabled: auto
     severity: warning
 
 # Load custom rules from these files

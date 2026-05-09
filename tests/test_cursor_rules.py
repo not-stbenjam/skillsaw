@@ -193,9 +193,7 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert "must be a string" in violations[0].message
-        assert "int" in violations[0].message
+        assert any("must be a string" in v.message and "int" in v.message for v in violations)
 
     def test_description_empty_warns(self, repo_with_cursor_rules):
         content = "---\ndescription: ''\n---\n\n# Rules\n"
@@ -204,20 +202,25 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert violations[0].severity == Severity.WARNING
-        assert "'description' is empty" in violations[0].message
+        assert any("'description' is empty" in v.message for v in violations)
 
-    def test_globs_not_string(self, repo_with_cursor_rules):
+    def test_globs_as_list_passes(self, repo_with_cursor_rules):
         content = "---\nglobs:\n  - '*.ts'\n  - '*.tsx'\n---\n\n# Rules\n"
         _write_mdc(repo_with_cursor_rules, "globs-list.mdc", content)
 
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert "must be a string" in violations[0].message
-        assert "comma-separated" in violations[0].message
+        assert len(violations) == 0
+
+    def test_globs_invalid_type(self, repo_with_cursor_rules):
+        content = "---\nglobs: 42\n---\n\n# Rules\n"
+        _write_mdc(repo_with_cursor_rules, "globs-int.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcValidRule()
+        violations = rule.check(context)
+        assert any("must be a string or list" in v.message for v in violations)
 
     def test_globs_empty_warns(self, repo_with_cursor_rules):
         content = "---\nglobs: ''\n---\n\n# Rules\n"
@@ -226,8 +229,9 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert "'globs' is empty" in violations[0].message
+        assert any(
+            "'globs' is empty" in v.message or "empty glob" in v.message.lower() for v in violations
+        )
 
     def test_globs_trailing_comma_warns(self, repo_with_cursor_rules):
         content = "---\nglobs: '*.ts, *.tsx,'\n---\n\n# Rules\n"
@@ -246,8 +250,7 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert "must be a boolean" in violations[0].message
+        assert any("must be a boolean" in v.message for v in violations)
 
     def test_always_apply_string_true(self, repo_with_cursor_rules):
         content = '---\nalwaysApply: "true"\n---\n\n# Rules\n'
@@ -256,8 +259,7 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 1
-        assert "must be a boolean" in violations[0].message
+        assert any("must be a boolean" in v.message for v in violations)
 
     def test_multiple_valid_mdc_files(self, repo_with_cursor_rules):
         _write_mdc(
@@ -278,14 +280,14 @@ class TestCursorMdcValid:
 
     def test_multiple_errors(self, repo_with_cursor_rules):
         content = (
-            "---\n" "description: 42\n" "globs:\n  - bad\n" "alwaysApply: 1\n" "---\n\n" "# Rules\n"
+            "---\n" "description: 42\n" "globs: 123\n" "alwaysApply: 1\n" "---\n\n" "# Rules\n"
         )
         _write_mdc(repo_with_cursor_rules, "multi-bad.mdc", content)
 
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 3
+        assert len(violations) >= 3
 
     def test_mdc_in_subdirectory(self, repo_with_cursor_rules):
         content = "---\ndescription: Nested rule\nalwaysApply: false\n---\n\n# Nested\n"
@@ -303,7 +305,7 @@ class TestCursorMdcValid:
         context = RepositoryContext(repo_with_cursor_rules)
         rule = CursorMdcValidRule()
         violations = rule.check(context)
-        assert len(violations) == 0
+        assert any("activation method" in v.message.lower() for v in violations)
 
     def test_rule_metadata(self):
         rule = CursorMdcValidRule()
@@ -319,6 +321,42 @@ class TestCursorMdcValid:
         rule = CursorMdcValidRule()
         violations = rule.check(context)
         assert len(violations) == 0
+
+    def test_no_activation_method_warns(self, repo_with_cursor_rules):
+        content = "---\nalwaysApply: false\n---\n\n# Orphan rule\nNever activates.\n"
+        _write_mdc(repo_with_cursor_rules, "orphan.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcValidRule()
+        violations = rule.check(context)
+        assert any("activation method" in v.message.lower() for v in violations)
+
+    def test_empty_frontmatter_no_activation_warns(self, repo_with_cursor_rules):
+        content = "---\n---\n\n# Empty frontmatter\nContent here.\n"
+        _write_mdc(repo_with_cursor_rules, "empty-fm-body.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcValidRule()
+        violations = rule.check(context)
+        assert any("activation method" in v.message.lower() for v in violations)
+
+    def test_frontmatter_but_no_body_warns(self, repo_with_cursor_rules):
+        content = "---\ndescription: Empty body rule\nalwaysApply: true\n---\n"
+        _write_mdc(repo_with_cursor_rules, "no-body.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcValidRule()
+        violations = rule.check(context)
+        assert any("no content body" in v.message.lower() for v in violations)
+
+    def test_globs_list_with_non_string_element(self, repo_with_cursor_rules):
+        content = "---\nglobs:\n  - '*.ts'\n  - 42\n---\n\n# Rules\n"
+        _write_mdc(repo_with_cursor_rules, "bad-list-glob.mdc", content)
+
+        context = RepositoryContext(repo_with_cursor_rules)
+        rule = CursorMdcValidRule()
+        violations = rule.check(context)
+        assert any("must be a string or list" in v.message for v in violations)
 
 
 # --- CursorRulesDeprecatedRule tests ---

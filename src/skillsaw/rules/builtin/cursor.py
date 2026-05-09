@@ -43,6 +43,21 @@ def _parse_mdc_frontmatter(content: str):
     return data, None
 
 
+def _normalize_globs(value) -> Optional[List[str]]:
+    """Normalize globs to a list of pattern strings.
+
+    Accepts a comma-separated string or a list of strings.
+    Returns None if the type is unsupported.
+    """
+    if isinstance(value, str):
+        return [p.strip() for p in value.split(",")]
+    if isinstance(value, list):
+        if all(isinstance(item, str) for item in value):
+            return [item.strip() for item in value]
+        return None
+    return None
+
+
 class CursorMdcValidRule(Rule):
     """Validate .cursor/rules/*.mdc files: valid frontmatter, known keys, correct types"""
 
@@ -126,6 +141,7 @@ class CursorMdcValidRule(Rule):
             self._check_description(file_path, frontmatter, violations)
             self._check_globs(file_path, frontmatter, violations)
             self._check_always_apply(file_path, frontmatter, violations)
+            self._check_activation(file_path, content, frontmatter, violations)
 
         return violations
 
@@ -191,18 +207,18 @@ class CursorMdcValidRule(Rule):
         globs = frontmatter["globs"]
         line = frontmatter_key_line(file_path, "globs")
 
-        if not isinstance(globs, str):
+        patterns = _normalize_globs(globs)
+        if patterns is None:
             violations.append(
                 self.violation(
-                    f"'globs' must be a string (comma-separated patterns), "
-                    f"got {type(globs).__name__}",
+                    f"'globs' must be a string or list of strings, " f"got {type(globs).__name__}",
                     file_path=file_path,
                     line=line,
                 )
             )
             return
 
-        if not globs.strip():
+        if not patterns:
             violations.append(
                 self.violation(
                     "'globs' is empty",
@@ -213,12 +229,11 @@ class CursorMdcValidRule(Rule):
             )
             return
 
-        patterns = [p.strip() for p in globs.split(",")]
         for pattern in patterns:
             if not pattern:
                 violations.append(
                     self.violation(
-                        "Empty glob pattern in comma-separated 'globs' value",
+                        "Empty glob pattern in 'globs' value",
                         file_path=file_path,
                         line=line,
                         severity=Severity.WARNING,
@@ -245,6 +260,43 @@ class CursorMdcValidRule(Rule):
                     line=line,
                 )
             )
+
+    def _check_activation(
+        self,
+        file_path: Path,
+        content: str,
+        frontmatter: dict,
+        violations: List[RuleViolation],
+    ) -> None:
+        always_apply = frontmatter.get("alwaysApply")
+        desc = frontmatter.get("description")
+        globs = frontmatter.get("globs")
+
+        is_always = always_apply is True
+        has_desc = isinstance(desc, str) and desc.strip()
+        has_globs = globs is not None and _normalize_globs(globs)
+
+        if not is_always and not has_desc and not has_globs:
+            violations.append(
+                self.violation(
+                    "Rule has no activation method "
+                    "(set alwaysApply: true, add a description, or add globs)",
+                    file_path=file_path,
+                    severity=Severity.WARNING,
+                )
+            )
+
+        fm_end = _FRONTMATTER_RE.match(content)
+        if fm_end:
+            body = content[fm_end.end() :]
+            if not body.strip():
+                violations.append(
+                    self.violation(
+                        "Rule has frontmatter but no content body",
+                        file_path=file_path,
+                        severity=Severity.WARNING,
+                    )
+                )
 
 
 class CursorRulesDeprecatedRule(Rule):
