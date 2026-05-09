@@ -83,6 +83,17 @@ from .apm import (
     ApmCompilationValidRule,
 )
 
+from .claude_deep import (
+    ClaudeMdQualityRule,
+    ClaudeMdHookMigrationRule,
+    ClaudeSkillQualityRule,
+    ClaudeMcpSecurityRule,
+    ClaudePluginSizeRule,
+    ClaudeRulesOverlapRule,
+    ClaudeAgentDelegationRule,
+    ClaudeContextBudgetRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -136,6 +147,15 @@ BUILTIN_RULES = [
     ApmTypeValidRule,
     ApmDependenciesValidRule,
     ApmCompilationValidRule,
+    # Deep Claude Code rules
+    ClaudeMdQualityRule,
+    ClaudeMdHookMigrationRule,
+    ClaudeSkillQualityRule,
+    ClaudeMcpSecurityRule,
+    ClaudePluginSizeRule,
+    ClaudeRulesOverlapRule,
+    ClaudeAgentDelegationRule,
+    ClaudeContextBudgetRule,
 ]
 
 
@@ -178,4 +198,12 @@ __all__ = [
     "ApmTypeValidRule",
     "ApmDependenciesValidRule",
     "ApmCompilationValidRule",
+    "ClaudeMdQualityRule",
+    "ClaudeMdHookMigrationRule",
+    "ClaudeSkillQualityRule",
+    "ClaudeMcpSecurityRule",
+    "ClaudePluginSizeRule",
+    "ClaudeRulesOverlapRule",
+    "ClaudeAgentDelegationRule",
+    "ClaudeContextBudgetRule",
 ]

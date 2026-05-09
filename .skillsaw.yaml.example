@@ -187,6 +187,46 @@ rules:
     enabled: auto
     severity: warning
 
+  # CLAUDE.md should contain clear, actionable instructions without weak language or tautologies
+  claude-md-quality:
+    enabled: auto
+    severity: warning
+
+  # Detect instructions in CLAUDE.md that would be more reliable as hooks.json entries
+  claude-md-hook-migration:
+    enabled: auto
+    severity: info
+
+  # SKILL.md files should have a clear purpose, examples, and reasonable size
+  claude-skill-quality:
+    enabled: auto
+    severity: warning
+
+  # Check MCP server configurations for security issues
+  claude-mcp-security:
+    enabled: auto
+    severity: warning
+
+  # Warn when total plugin content exceeds reasonable context budget limits
+  claude-plugin-size:
+    enabled: auto
+    severity: warning
+
+  # Check for overlapping path globs in .claude/rules/ frontmatter
+  claude-rules-overlap:
+    enabled: auto
+    severity: warning
+
+  # Check AGENTS.md for vague descriptions and missing tool/scope definitions
+  claude-agent-delegation:
+    enabled: auto
+    severity: warning
+
+  # Check total context budget across all Claude Code configuration files
+  claude-context-budget-total:
+    enabled: auto
+    severity: warning
+
 # Load custom rules from these files
 custom-rules: []
 

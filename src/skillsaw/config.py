@@ -108,6 +108,15 @@ class LinterConfig:
                 "apm-type-valid": {"enabled": "auto", "severity": "error"},
                 "apm-dependencies-valid": {"enabled": "auto", "severity": "error"},
                 "apm-compilation-valid": {"enabled": "auto", "severity": "warning"},
+                # Deep Claude Code rules (auto-enabled for .claude repos)
+                "claude-md-quality": {"enabled": "auto", "severity": "warning"},
+                "claude-md-hook-migration": {"enabled": "auto", "severity": "info"},
+                "claude-skill-quality": {"enabled": "auto", "severity": "warning"},
+                "claude-mcp-security": {"enabled": "auto", "severity": "warning"},
+                "claude-plugin-size": {"enabled": "auto", "severity": "warning"},
+                "claude-rules-overlap": {"enabled": "auto", "severity": "warning"},
+                "claude-agent-delegation": {"enabled": "auto", "severity": "warning"},
+                "claude-context-budget-total": {"enabled": "auto", "severity": "warning"},
             }
         )
 
