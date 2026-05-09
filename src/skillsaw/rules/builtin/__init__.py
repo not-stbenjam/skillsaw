@@ -151,6 +151,17 @@ from .content_rules import (
     ContentCrossFileConsistencyRule,
 )
 
+from .claude_deep import (
+    ClaudeMdQualityRule,
+    ClaudeMdHookMigrationRule,
+    ClaudeSkillQualityRule,
+    ClaudeMcpSecurityRule,
+    ClaudePluginSizeRule,
+    ClaudeRulesOverlapRule,
+    ClaudeAgentDelegationRule,
+    ClaudeContextBudgetRule,
+)
+
 # All builtin rules
 BUILTIN_RULES = [
     # Plugin structure
@@ -265,6 +276,15 @@ BUILTIN_RULES = [
     ApmNameConflictRule,
     ApmFieldTypesRule,
     ApmDeprecatedFieldsRule,
+    # Deep Claude Code rules
+    ClaudeMdQualityRule,
+    ClaudeMdHookMigrationRule,
+    ClaudeSkillQualityRule,
+    ClaudeMcpSecurityRule,
+    ClaudePluginSizeRule,
+    ClaudeRulesOverlapRule,
+    ClaudeAgentDelegationRule,
+    ClaudeContextBudgetRule,
 ]
 
 
@@ -356,4 +376,12 @@ __all__ = [
     "GeminiWeakLanguageRule",
     "GeminiTautologicalRule",
     "GeminiCriticalPositionRule",
+    "ClaudeMdQualityRule",
+    "ClaudeMdHookMigrationRule",
+    "ClaudeSkillQualityRule",
+    "ClaudeMcpSecurityRule",
+    "ClaudePluginSizeRule",
+    "ClaudeRulesOverlapRule",
+    "ClaudeAgentDelegationRule",
+    "ClaudeContextBudgetRule",
 ]
