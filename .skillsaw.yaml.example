@@ -222,6 +222,11 @@ rules:
     enabled: true
     severity: warning
 
+  # Kiro steering files must have valid frontmatter with known inclusion mode and correct types
+  kiro-steering-valid:
+    enabled: true
+    severity: error
+
   # apm.yml must exist with required name and version fields
   apm-manifest-valid:
     enabled: auto

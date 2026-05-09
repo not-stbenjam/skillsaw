@@ -112,6 +112,13 @@ RULE_GROUPS = [
         "Checks frontmatter structure, key types, and glob patterns. "
         "Disabled by default.",
     ),
+    (
+        "Kiro Steering",
+        ["kiro-steering-valid"],
+        "Validates Kiro IDE `.kiro/steering/*.md` files (YAML frontmatter with "
+        "inclusion modes, fileMatchPattern globs, and auto-mode metadata). "
+        "Disabled by default.",
+    ),
 ]
 
 

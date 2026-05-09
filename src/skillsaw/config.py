@@ -115,6 +115,8 @@ class LinterConfig:
                 # Cursor rules
                 "cursor-mdc-valid": {"enabled": False, "severity": "error"},
                 "cursor-rules-deprecated": {"enabled": False, "severity": "warning"},
+                # Kiro steering
+                "kiro-steering-valid": {"enabled": False, "severity": "error"},
                 # APM manifest rules (auto-enabled for APM repos)
                 "apm-manifest-valid": {"enabled": "auto", "severity": "error"},
                 "apm-target-valid": {"enabled": "auto", "severity": "error"},
@@ -133,6 +135,7 @@ class LinterConfig:
         "context-budget": {"enabled": True},
         "cursor-mdc-valid": {"enabled": True},
         "cursor-rules-deprecated": {"enabled": True},
+        "kiro-steering-valid": {"enabled": True},
     }
 
     @classmethod

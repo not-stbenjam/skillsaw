@@ -90,6 +90,10 @@ from .cursor import (
     CursorRulesDeprecatedRule,
 )
 
+from .kiro import (
+    KiroSteeringValidRule,
+)
+
 from .apm import (
     ApmManifestValidRule,
     ApmTargetValidRule,
@@ -158,6 +162,8 @@ BUILTIN_RULES = [
     # Cursor rules
     CursorMdcValidRule,
     CursorRulesDeprecatedRule,
+    # Kiro steering
+    KiroSteeringValidRule,
     # APM
     ApmManifestValidRule,
     ApmTargetValidRule,
@@ -213,6 +219,7 @@ __all__ = [
     "ContextBudgetRule",
     "CursorMdcValidRule",
     "CursorRulesDeprecatedRule",
+    "KiroSteeringValidRule",
     "ApmManifestValidRule",
     "ApmTargetValidRule",
     "ApmTypeValidRule",
