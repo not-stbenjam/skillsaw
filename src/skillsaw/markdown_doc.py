@@ -854,6 +854,7 @@ def _find_code_span_source(
 
 
 def _is_indented_fence_like_code_span(source: str, start: int, end: int, markup: str) -> bool:
+    # markdown-it parses 4+ space indented backtick fences as inline code.
     if "\n" not in source[start:end] or len(markup) < 3:
         return False
     opening_line_start = source.rfind("\n", 0, start) + 1
