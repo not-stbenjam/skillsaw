@@ -12,7 +12,6 @@ from skillsaw.markdown_doc import (
     splice,
 )
 
-
 # ------------------------------------------------------------------
 # links — accessor basics
 # ------------------------------------------------------------------
@@ -468,9 +467,7 @@ class TestRegressions:
 
         (tmp_path / "docs").mkdir()
         (tmp_path / "docs" / "setup.md").write_text("# Setup\n")
-        (tmp_path / "CLAUDE.md").write_text(
-            "Backup docs/setup.md.bak and docs/setup.md too.\n"
-        )
+        (tmp_path / "CLAUDE.md").write_text("Backup docs/setup.md.bak and docs/setup.md too.\n")
 
         context = RepositoryContext(tmp_path)
         rule = ContentUnlinkedInternalReferenceRule()

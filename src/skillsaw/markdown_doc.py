@@ -537,15 +537,30 @@ class MarkdownDoc:
     def _blanked_source_lines(self) -> List[str]:
         lines = list(self._source_lines)
 
-        def blank_span(span: SourceSpan) -> None:
-            body_line = self._body_line_from_file_line(span.file_line)
-            if body_line is None or body_line < 1 or body_line > len(lines):
+        def blank_range(
+            start_file_line: int,
+            start_col: int,
+            end_file_line: int,
+            end_col: int,
+        ) -> None:
+            start_body_line = self._body_line_from_file_line(start_file_line)
+            end_body_line = self._body_line_from_file_line(end_file_line)
+            if (
+                start_body_line is None
+                or end_body_line is None
+                or start_body_line < 1
+                or end_body_line < start_body_line
+                or end_body_line > len(lines)
+            ):
                 return
-            idx = body_line - 1
-            line = lines[idx]
-            start = max(0, min(span.col_start, len(line)))
-            end = max(start, min(span.col_end, len(line)))
-            lines[idx] = line[:start] + (" " * (end - start)) + line[end:]
+            for body_line in range(start_body_line, end_body_line + 1):
+                idx = body_line - 1
+                line = lines[idx]
+                start = start_col if body_line == start_body_line else 0
+                end = end_col if body_line == end_body_line else len(line)
+                start = max(0, min(start, len(line)))
+                end = max(start, min(end, len(line)))
+                lines[idx] = line[:start] + (" " * (end - start)) + line[end:]
 
         for token in self._tokens:
             if token.type in {"fence", "code_block"} and token.map:
@@ -553,8 +568,21 @@ class MarkdownDoc:
                     if 0 <= line_idx < len(lines):
                         lines[line_idx] = " " * len(lines[line_idx])
 
-        for span in self.code_spans:
-            blank_span(span.source_span)
+        for inline in self._inline_tokens():
+            mapping = self._inline_mapping(inline)
+            cursor = 0
+            for child in inline.children or []:
+                if child.type != "code_inline":
+                    continue
+                match = _find_code_span_source(inline.content, cursor, child.content, child.markup)
+                if match is None:
+                    continue
+                start, end, _, _ = match
+                source_start = mapping.position(start)
+                source_end = mapping.position(end)
+                if source_start is not None and source_end is not None:
+                    blank_range(source_start[0], source_start[1], source_end[0], source_end[1])
+                cursor = end
 
         for comment in self.html_comments:
             for file_line in range(comment.file_line, comment.file_line_end + 1):
