@@ -581,3 +581,38 @@ def test_unknown_hyphenated_directive_not_treated_as_bare_disable():
     smap = build_suppression_map(content)
     assert not smap.is_suppressed("content-weak-language", 3)
     assert not smap.is_suppressed("any-rule", 3)
+
+
+def test_directive_inside_fenced_code_block_ignored():
+    """A directive inside a fenced code block must NOT suppress later violations."""
+    from skillsaw.markdown_doc import MarkdownDoc
+
+    content = (
+        "# Guide\n"
+        "\n"
+        "```markdown\n"
+        "<!-- skillsaw-disable content-weak-language -->\n"
+        "```\n"
+        "\n"
+        "Try to handle errors.\n"
+    )
+    md = MarkdownDoc(content)
+    smap = build_suppression_map(content, md=md)
+    assert not smap.is_suppressed("content-weak-language", 7)
+
+
+def test_directive_inside_fenced_code_block_ignored_via_file(temp_dir):
+    """build_suppression_map_for_file also excludes directives inside fences."""
+    fpath = temp_dir / "CLAUDE.md"
+    fpath.write_text(
+        "# Guide\n"
+        "\n"
+        "```\n"
+        "<!-- skillsaw-disable some-rule -->\n"
+        "```\n"
+        "\n"
+        "This line should not be suppressed.\n"
+    )
+    smap = build_suppression_map_for_file(fpath)
+    assert smap is not None
+    assert not smap.is_suppressed("some-rule", 7)

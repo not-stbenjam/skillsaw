@@ -36,82 +36,6 @@ from skillsaw.rules.builtin.utils import (
     yaml_nth_list_item_key_line as _yaml_nth_list_item_key_line_util,
 )
 
-_OPENING_FENCE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})")
-_CLOSING_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*$")
-
-_INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
-
-_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
-
-
-def _strip_fenced_code_blocks(text: str) -> str:
-    """Replace content inside fenced code blocks with blank lines to preserve line numbers."""
-    lines = text.split("\n")
-    result: list[str] = []
-    fence_char: str | None = None
-    fence_len = 0
-    in_fence = False
-
-    for line in lines:
-        if not in_fence:
-            m = _OPENING_FENCE_RE.match(line)
-            if m:
-                fence_char = m.group(2)[0]
-                fence_len = len(m.group(2))
-                in_fence = True
-                result.append("")
-            else:
-                result.append(line)
-        else:
-            cm = _CLOSING_FENCE_RE.match(line)
-            if cm and cm.group(1)[0] == fence_char and len(cm.group(1)) >= fence_len:
-                in_fence = False
-                fence_char = None
-                fence_len = 0
-            result.append("")
-
-    return "\n".join(result)
-
-
-def _strip_html_comments(text: str) -> str:
-    """Replace content inside HTML comments with spaces, preserving line numbers."""
-
-    def _blank_preserving_newlines(m: re.Match) -> str:
-        return re.sub(r"[^\n]", " ", m.group(0))
-
-    return _HTML_COMMENT_RE.sub(_blank_preserving_newlines, text)
-
-
-def is_inside_inline_code(line: str, match_start: int, match_end: int) -> bool:
-    """Check if a character range falls inside an inline code span (backticks).
-
-    Returns True only when the code span contains more than just the matched text
-    (e.g. a variable prefix like ``${VAR}/path``). When the entire code span content
-    equals the matched text, the path is a plain reference that should still be
-    linkable, so this returns False.
-    """
-    for m in _INLINE_CODE_RE.finditer(line):
-        code_start = m.start() + len(m.group(1))
-        code_end = m.end() - len(m.group(1))
-        if code_start <= match_start and match_end <= code_end:
-            if code_start == match_start and code_end == match_end:
-                return False
-            return True
-    return False
-
-
-def inline_code_span_bounds(
-    line: str, match_start: int, match_end: int
-) -> Optional[Tuple[int, int]]:
-    """Return (span_start, span_end) of the enclosing backtick span if the match
-    is exactly its content, else None.  The bounds include the backtick delimiters."""
-    for m in _INLINE_CODE_RE.finditer(line):
-        code_start = m.start() + len(m.group(1))
-        code_end = m.end() - len(m.group(1))
-        if code_start == match_start and code_end == match_end:
-            return (m.start(), m.end())
-    return None
-
 
 @dataclass
 class WeakLanguageMatch:
@@ -261,6 +185,23 @@ class ContentBlock(LintTarget):
             self._resolved_path = self.path.resolve()
         return self._resolved_path
 
+    @property
+    def markdown(self):
+        """Lazy-cached MarkdownDoc for this block's body."""
+        if not hasattr(self, "_markdown_doc") or self._markdown_doc is None:
+            raw_body = self.read_body(strip_code_blocks=False)
+            if raw_body is not None:
+                from skillsaw.markdown_doc import MarkdownDoc
+
+                self._markdown_doc = MarkdownDoc(
+                    raw_body,
+                    line_offset=self.line_offset,
+                    line_map=self._line_map,
+                )
+            else:
+                self._markdown_doc = None
+        return self._markdown_doc
+
     def __eq__(self, other):
         if not isinstance(other, ContentBlock):
             return NotImplemented
@@ -283,8 +224,9 @@ class FileContentBlock(ContentBlock):
                 return None
             body = content
         if strip_code_blocks:
-            body = _strip_fenced_code_blocks(body)
-            body = _strip_html_comments(body)
+            md = self.markdown
+            if md is not None:
+                return md.stripped_body()
         return body
 
     def write_body(self, new_body: str) -> None:
@@ -300,8 +242,9 @@ class CodeRabbitContentBlock(ContentBlock):
     def read_body(self, *, strip_code_blocks: bool = True) -> Optional[str]:
         body = self.body if self.body is not None else ""
         if strip_code_blocks:
-            body = _strip_fenced_code_blocks(body)
-            body = _strip_html_comments(body)
+            md = self.markdown
+            if md is not None:
+                return md.stripped_body()
         return body
 
     def write_body(self, new_body: str) -> None:
@@ -506,8 +449,9 @@ class PromptfooPromptBlock(ContentBlock):
     def read_body(self, *, strip_code_blocks: bool = True) -> Optional[str]:
         body = self.body if self.body is not None else ""
         if strip_code_blocks:
-            body = _strip_fenced_code_blocks(body)
-            body = _strip_html_comments(body)
+            md = self.markdown
+            if md is not None:
+                return md.stripped_body()
         return body
 
     def write_body(self, new_body: str) -> None:
@@ -676,8 +620,9 @@ class BodyContent(ContentBlock):
             return None
         body = self.body
         if strip_code_blocks:
-            body = _strip_fenced_code_blocks(body)
-            body = _strip_html_comments(body)
+            md = self.markdown
+            if md is not None:
+                return md.stripped_body()
         return body
 
     def write_body(self, new_body: str) -> None:

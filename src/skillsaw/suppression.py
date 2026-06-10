@@ -40,7 +40,10 @@ import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, FrozenSet, List, Optional, Set
+
+if TYPE_CHECKING:
+    from .markdown_doc import MarkdownDoc
 
 # Directive patterns applied to the *text inside* an HTML comment.
 # These match the full comment body, allowing arbitrary whitespace/newlines.
@@ -76,6 +79,7 @@ class _Directive:
     rule_ids: List[str]  # empty list means "all rules"
     line: int  # 1-based line number where the comment starts (``<!--`` or ``#``)
     is_yaml: bool = False  # True for ``#`` comments (always single-line)
+    end_line: Optional[int] = None  # end line for multi-line HTML comments (from AST)
 
 
 class _CommentParser(HTMLParser):
@@ -124,6 +128,55 @@ def _extract_html_directives(content: str) -> List[_Directive]:
     return parser.directives
 
 
+def _extract_html_directives_from_md(md: "MarkdownDoc") -> List[_Directive]:
+    """Extract skillsaw directives from HTML comments via MarkdownDoc AST.
+
+    Unlike the HTMLParser approach, this correctly excludes comments inside
+    fenced code blocks.
+    """
+    directives: List[_Directive] = []
+    for comment in md.html_comments():
+        text = " ".join(comment.text.split())
+        line = comment.file_line_start
+
+        m = _DISABLE_NEXT_LINE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "disable-next-line",
+                    _parse_rule_ids(m.group(1) or ""),
+                    line,
+                    end_line=comment.file_line_end,
+                )
+            )
+            continue
+
+        m = _DISABLE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "disable",
+                    _parse_rule_ids(m.group(1).strip()),
+                    line,
+                    end_line=comment.file_line_end,
+                )
+            )
+            continue
+
+        m = _ENABLE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "enable",
+                    _parse_rule_ids(m.group(1).strip()),
+                    line,
+                    end_line=comment.file_line_end,
+                )
+            )
+
+    return directives
+
+
 def _extract_yaml_directives(content: str) -> List[_Directive]:
     """Extract skillsaw directives from YAML ``#`` comments.
 
@@ -165,13 +218,19 @@ def _extract_yaml_directives(content: str) -> List[_Directive]:
     return directives
 
 
-def _extract_directives(content: str) -> List[_Directive]:
+def _extract_directives(content: str, md: "Optional[MarkdownDoc]" = None) -> List[_Directive]:
     """Extract all skillsaw directives from *content*.
 
     Scans both HTML ``<!-- -->`` comments and YAML ``#`` comments.  The two
     syntaxes don't overlap so results are simply merged by line number.
+
+    When *md* is provided, HTML comments are extracted via the MarkdownDoc AST
+    which correctly excludes comments inside fenced code blocks.
     """
-    html = _extract_html_directives(content)
+    if md is not None:
+        html = _extract_html_directives_from_md(md)
+    else:
+        html = _extract_html_directives(content)
     yaml = _extract_yaml_directives(content)
     return sorted(html + yaml, key=lambda d: d.line)
 
@@ -200,13 +259,17 @@ class SuppressionMap:
         return False
 
 
-def build_suppression_map(content: str, line_offset: int = 0) -> SuppressionMap:
+def build_suppression_map(
+    content: str, line_offset: int = 0, md: "Optional[MarkdownDoc]" = None
+) -> SuppressionMap:
     """Parse suppression directives from file content.
 
     Args:
         content: Full file content (including frontmatter etc.)
         line_offset: Offset to add to body-relative line numbers to get file lines.
                      For files without frontmatter this is 0.
+        md: Optional MarkdownDoc for AST-aware HTML comment extraction.
+            When provided, directives inside fenced code blocks are excluded.
 
     Returns:
         SuppressionMap that can check if a rule is suppressed at a given line.
@@ -217,7 +280,7 @@ def build_suppression_map(content: str, line_offset: int = 0) -> SuppressionMap:
         total_lines = content.count("\n") + 1
 
     # --- Step 1: extract directives (handles multi-line comments) ----------
-    directives = _extract_directives(content)
+    directives = _extract_directives(content, md=md)
 
     # Build a map of line -> list of directives that start on that line.
     # ``_Directive.line`` is 1-based from HTMLParser.getpos().
@@ -234,6 +297,9 @@ def build_suppression_map(content: str, line_offset: int = 0) -> SuppressionMap:
     for d in directives:
         if d.is_yaml:
             directive_comment_lines.add(d.line)
+        elif d.end_line is not None:
+            for ln in range(d.line, d.end_line + 1):
+                directive_comment_lines.add(ln)
         else:
             _mark_comment_lines(content, d.line, directive_comment_lines)
 
@@ -330,4 +396,7 @@ def build_suppression_map_for_file(file_path: Path) -> Optional[SuppressionMap]:
     except (OSError, UnicodeDecodeError):
         return None
 
-    return build_suppression_map(content)
+    from .markdown_doc import MarkdownDoc
+
+    md = MarkdownDoc(content)
+    return build_suppression_map(content, md=md)

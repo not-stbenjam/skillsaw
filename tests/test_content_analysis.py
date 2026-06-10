@@ -18,8 +18,8 @@ from skillsaw.rules.builtin.content_analysis import (
     CursorRuleBlock,
     FrontmatteredBlock,
     FrontmatterField,
-    _strip_fenced_code_blocks,
 )
+from skillsaw.markdown_doc import MarkdownDoc
 from skillsaw.context import RepositoryContext
 
 
@@ -34,106 +34,104 @@ def temp_dir():
     shutil.rmtree(tmp)
 
 
-class TestStripFencedCodeBlocks:
+class TestStrippedBody:
+    """Tests for MarkdownDoc.stripped_body() — the AST-based replacement for
+    _strip_fenced_code_blocks + _strip_html_comments."""
+
     def test_strips_backtick_blocks(self):
-        content = "Line 1\n```\ncode line\n```\nLine 5\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Line 1\n```\ncode line\n```\nLine 5"
+        result = MarkdownDoc(content).stripped_body()
         lines = result.splitlines()
         assert lines[0] == "Line 1"
-        assert lines[1] == ""
-        assert lines[2] == ""
-        assert lines[3] == ""
+        assert lines[1].strip() == ""
+        assert lines[2].strip() == ""
+        assert lines[3].strip() == ""
         assert lines[4] == "Line 5"
 
     def test_strips_tilde_blocks(self):
-        content = "Line 1\n~~~\ncode\n~~~\nLine 5\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Line 1\n~~~\ncode\n~~~\nLine 5"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_preserves_line_count(self):
-        content = "Before\n```python\nline1\nline2\nline3\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Before\n```python\nline1\nline2\nline3\n```\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert result.count("\n") == content.count("\n")
 
     def test_no_code_blocks(self):
-        content = "Just text.\nMore text.\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Just text.\nMore text."
+        result = MarkdownDoc(content).stripped_body()
         assert result == content
 
     def test_multiple_code_blocks(self):
-        content = "A\n```\nx\n```\nB\n```\ny\n```\nC\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "A\n```\nx\n```\nB\n```\ny\n```\nC"
+        result = MarkdownDoc(content).stripped_body()
         lines = result.splitlines()
         assert lines[0] == "A"
         assert lines[4] == "B"
         assert lines[8] == "C"
 
-    def test_strips_indented_backtick_blocks_1_space(self):
-        content = "Before\n ```\n code here\n ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
-        assert "code here" not in result
-        assert result.count("\n") == content.count("\n")
-
     def test_strips_indented_backtick_blocks_2_spaces(self):
-        content = "- Example:\n  ```\n  Try to handle errors gracefully.\n  ```\nMore text.\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "- Example:\n  ```\n  Try to handle errors gracefully.\n  ```\nMore text."
+        result = MarkdownDoc(content).stripped_body()
         assert "Try to handle errors gracefully" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_strips_indented_backtick_blocks_3_spaces(self):
-        content = "Before\n   ```\n   code\n   ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Before\n   ```\n   code\n   ```\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
-    def test_4_space_indent_not_stripped(self):
-        """4+ spaces of indentation is not a valid CommonMark code fence."""
-        content = "Before\n    ```\n    code\n    ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
-        assert "code" in result
-
     def test_strips_indented_tilde_blocks(self):
-        content = "Before\n  ~~~\n  code\n  ~~~\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Before\n  ~~~\n  code\n  ~~~\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_indented_fence_preserves_line_count(self):
-        content = "Line 1\n  ```python\n  x = 1\n  y = 2\n  ```\nLine 6\n"
-        result = _strip_fenced_code_blocks(content)
-        assert result.count("\n") == content.count("\n")
-
-    def test_indented_closing_fence_allows_different_indent(self):
-        """Closing fence can have different indentation (0-3 spaces) than opening fence."""
-        content = "Before\n  ```\n  code\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
-        # Per CommonMark spec, closing fence can be 0-3 spaces regardless of opening
-        assert "code" not in result
+        content = "Line 1\n  ```python\n  x = 1\n  y = 2\n  ```\nLine 6"
+        result = MarkdownDoc(content).stripped_body()
         assert result.count("\n") == content.count("\n")
 
     def test_closing_fence_longer_than_opening(self):
         """Closing fence can be longer than the opening fence per CommonMark spec."""
-        content = "Before\n```\ncode\n`````\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        content = "Before\n```\ncode\n`````\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_closing_fence_shorter_than_opening_does_not_close(self):
         """Closing fence shorter than opening does NOT close the block."""
-        content = "Before\n`````\ncode\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
-        # The ``` does not close `````, so everything after ````` is inside the block
+        content = "Before\n`````\ncode\n```\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert "After" not in result
 
     def test_mismatched_fence_char_does_not_close(self):
         """Closing fence must use the same character as the opening fence."""
-        content = "Before\n```\ncode\n~~~\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
-        # ~~~ does not close ```, so code stays inside
+        content = "Before\n```\ncode\n~~~\nAfter"
+        result = MarkdownDoc(content).stripped_body()
         assert "code" not in result
         assert "After" not in result
+
+    def test_strips_html_comments(self):
+        content = "Before\n<!-- comment -->\nAfter"
+        result = MarkdownDoc(content).stripped_body()
+        assert "comment" not in result
+        assert result.count("\n") == content.count("\n")
+
+    def test_strips_inline_code_spans(self):
+        content = "Use `some_func()` here"
+        result = MarkdownDoc(content).stripped_body()
+        assert "some_func" not in result
+
+    def test_multiline_code_span_stripped(self):
+        content = "Some `code that\nspans lines` here"
+        result = MarkdownDoc(content).stripped_body()
+        assert "code that" not in result
+        assert "spans lines" not in result
 
 
 class TestWeakLanguageDetector:

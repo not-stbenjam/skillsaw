@@ -6,11 +6,11 @@ from typing import List
 
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext, ALL_INSTRUCTION_FORMATS
+from skillsaw.markdown_doc import MarkdownDoc
 from skillsaw.rules.builtin.content_analysis import (
     AgentsMdBlock,
     ClaudeMdBlock,
     GeminiMdBlock,
-    _strip_fenced_code_blocks,
 )
 from skillsaw.rules.builtin.utils import read_text
 
@@ -47,9 +47,10 @@ class InstructionImportsValidRule(Rule):
             if content is None:
                 continue
 
-            content = _strip_fenced_code_blocks(content)
+            md = MarkdownDoc(content)
+            stripped = md.stripped_body()
 
-            for line_num, line in enumerate(content.splitlines(), 1):
+            for line_num, line in enumerate(stripped.splitlines(), 1):
                 match = _IMPORT_RE.match(line)
                 if not match:
                     continue
