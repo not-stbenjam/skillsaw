@@ -72,8 +72,8 @@ class ContentSectionLengthRule(Rule):
             section_start = 0
 
             for heading in cf.markdown.headings:
-                heading_line = _body_line_for_file_line(cf, heading.file_line)
-                heading_end_line = _body_line_for_file_line(cf, heading.file_line_end)
+                heading_line = cf.markdown.body_line(heading.file_line)
+                heading_end_line = cf.markdown.body_line(heading.file_line_end)
                 if heading_line is None or heading_end_line is None:
                     continue
                 heading_index = heading_line - 1
@@ -102,11 +102,3 @@ class ContentSectionLengthRule(Rule):
                         )
                     )
         return violations
-
-
-def _body_line_for_file_line(block, file_line: int):
-    body = block.read_body(strip_code_blocks=False) or ""
-    for body_line in range(1, len(body.splitlines()) + 1):
-        if block.file_line(body_line) == file_line:
-            return body_line
-    return None

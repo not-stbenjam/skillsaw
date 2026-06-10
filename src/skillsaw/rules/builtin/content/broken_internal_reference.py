@@ -64,7 +64,7 @@ class ContentBrokenInternalReferenceRule(Rule):
                         self.violation(
                             f"Broken internal link: [{link.text}]({target}) — target is outside repository",
                             block=cf,
-                            line=self._body_line_for_file_line(cf, link.file_line),
+                            line=cf.markdown.body_line(link.file_line),
                         )
                     )
                     continue
@@ -77,18 +77,10 @@ class ContentBrokenInternalReferenceRule(Rule):
                         self.violation(
                             msg,
                             block=cf,
-                            line=self._body_line_for_file_line(cf, link.file_line),
+                            line=cf.markdown.body_line(link.file_line),
                         )
                     )
         return violations
-
-    @staticmethod
-    def _body_line_for_file_line(block, file_line: int) -> Optional[int]:
-        body = block.read_body(strip_code_blocks=False) or ""
-        for body_line in range(1, len(body.splitlines()) + 1):
-            if block.file_line(body_line) == file_line:
-                return body_line
-        return None
 
     @staticmethod
     def _split_anchor(target: str) -> tuple[str, str]:

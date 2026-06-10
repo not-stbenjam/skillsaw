@@ -67,12 +67,12 @@ class ContentActionabilityScoreRule(Rule):
             if len(line_pairs) < 5:
                 continue
             code_lines = {
-                _body_line_for_file_line(cf, span.file_line)
+                cf.markdown.body_line(span.file_line)
                 for span in cf.markdown.code_spans
                 if span.content.strip()
             }
             code_path_lines = {
-                _body_line_for_file_line(cf, span.file_line)
+                cf.markdown.body_line(span.file_line)
                 for span in cf.markdown.code_spans
                 if self._PATH_RE.search(span.content)
             }
@@ -104,11 +104,3 @@ class ContentActionabilityScoreRule(Rule):
                     )
                 )
         return violations
-
-
-def _body_line_for_file_line(block, file_line: int):
-    body = block.read_body(strip_code_blocks=False) or ""
-    for body_line in range(1, len(body.splitlines()) + 1):
-        if block.file_line(body_line) == file_line:
-            return body_line
-    return None

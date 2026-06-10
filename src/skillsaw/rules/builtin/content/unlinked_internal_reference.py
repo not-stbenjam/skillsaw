@@ -86,7 +86,7 @@ class ContentUnlinkedInternalReferenceRule(Rule):
                     self.violation(
                         msg,
                         block=cf,
-                        line=self._body_line_for_file_line(cf, candidate.span.file_line),
+                        line=cf.markdown.body_line(candidate.span.file_line),
                     )
                 )
         return violations
@@ -138,14 +138,6 @@ class ContentUnlinkedInternalReferenceRule(Rule):
                     )
                 )
         return candidates
-
-    @staticmethod
-    def _body_line_for_file_line(block, file_line: int) -> Optional[int]:
-        body = block.read_body(strip_code_blocks=False) or ""
-        for body_line in range(1, len(body.splitlines()) + 1):
-            if block.file_line(body_line) == file_line:
-                return body_line
-        return None
 
     def fix(
         self, context: RepositoryContext, violations: List[RuleViolation], **kwargs: object

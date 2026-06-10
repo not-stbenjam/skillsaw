@@ -128,6 +128,10 @@ class MarkdownDoc:
             return self._line_map(body_line)
         return body_line + self.line_offset
 
+    def body_line(self, file_line: int) -> Optional[int]:
+        """Translate a file-absolute line number back to a body line number."""
+        return self._body_line_from_file_line(file_line)
+
     @property
     def tokens(self) -> Sequence[Token]:
         return self._tokens
