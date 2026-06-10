@@ -578,6 +578,9 @@ class MarkdownDoc:
                 if match is None:
                     continue
                 start, end, _, _ = match
+                if _is_indented_fence_like_code_span(inline.content, start, end, child.markup):
+                    cursor = end
+                    continue
                 source_start = mapping.position(start)
                 source_end = mapping.position(end)
                 if source_start is not None and source_end is not None:
@@ -850,6 +853,17 @@ def _find_code_span_source(
     return None
 
 
+def _is_indented_fence_like_code_span(source: str, start: int, end: int, markup: str) -> bool:
+    if "\n" not in source[start:end] or len(markup) < 3:
+        return False
+    opening_line_start = source.rfind("\n", 0, start) + 1
+    opening_prefix = source[opening_line_start:start]
+    closing_start = end - len(markup)
+    closing_line_start = source.rfind("\n", 0, closing_start) + 1
+    closing_prefix = source[closing_line_start:closing_start]
+    return _indent_width(opening_prefix) >= 4 and _indent_width(closing_prefix) >= 4
+
+
 def _child_source_text(child: Token) -> str:
     if child.type == "code_inline":
         markup = child.markup or "`"
@@ -877,6 +891,18 @@ def _best_effort_column(raw: str, inline_line: str) -> int:
         if loc >= 0:
             return loc - (len(inline_line) - len(stripped))
     return 0
+
+
+def _indent_width(prefix: str) -> int:
+    width = 0
+    for char in prefix:
+        if char == " ":
+            width += 1
+        elif char == "\t":
+            width += 4 - (width % 4)
+        else:
+            return 0
+    return width
 
 
 def _split_line_endings(text: str) -> List[str]:
