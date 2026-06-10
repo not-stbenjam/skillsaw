@@ -2,13 +2,13 @@
 
 import difflib
 import os
-import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from skillsaw.rule import AutofixConfidence, AutofixResult, Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext
+from skillsaw.markdown_doc import MarkdownEdit, SourceSpan, splice
 from skillsaw.rules.builtin.content_analysis import (
     gather_all_content_blocks,
 )
@@ -23,8 +23,6 @@ class ContentBrokenInternalReferenceRule(Rule):
     since = "0.9.0"
     repo_types = None
 
-    _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
-    _INLINE_CODE_RE = re.compile(r"(`+).+?\1", re.DOTALL)
     _TEMPLATE_DIR_NAMES = {"template", "templates", "_template"}
 
     @property
@@ -51,44 +49,53 @@ class ContentBrokenInternalReferenceRule(Rule):
         for cf in gather_all_content_blocks(context):
             if self._is_in_template_dir(cf.path):
                 continue
-            body = cf.read_body(strip_code_blocks=True)
-            if not body:
-                continue
-            body = self._INLINE_CODE_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), body)
-            for line_num, line in enumerate(body.splitlines(), 1):
-                for match in self._LINK_RE.finditer(line):
-                    target = match.group(2).strip()
-                    # Strip optional title text: [text](path "title")
-                    if " " in target:
-                        target = target.split(" ")[0]
-                    # Skip URLs, anchors, and mailto
-                    if target.startswith(("http://", "https://", "#", "mailto:")):
-                        continue
-                    # Strip anchor from path (e.g., "file.md#section")
-                    target_path = target.split("#")[0]
-                    if not target_path:
-                        continue
-                    # Resolve relative to the file containing the link
-                    resolved = (cf.path.parent / target_path).resolve()
-                    # Ensure the resolved path is within the repo root
-                    try:
-                        resolved.relative_to(root)
-                    except ValueError:
-                        violations.append(
-                            self.violation(
-                                f"Broken internal link: [{match.group(1)}]({target}) — target is outside repository",
-                                block=cf,
-                                line=line_num,
-                            )
+            for link in cf.markdown.links:
+                target = link.href.strip()
+                if target.startswith(("http://", "https://", "#", "mailto:")):
+                    continue
+                target_path, _anchor = self._split_anchor(target)
+                if not target_path:
+                    continue
+                resolved = (cf.path.parent / target_path).resolve()
+                try:
+                    resolved.relative_to(root)
+                except ValueError:
+                    violations.append(
+                        self.violation(
+                            f"Broken internal link: [{link.text}]({target}) — target is outside repository",
+                            block=cf,
+                            line=self._body_line_for_file_line(cf, link.file_line),
                         )
-                        continue
-                    if not resolved.exists():
-                        suggestion = self._find_similar(root, cf.path.parent, target_path)
-                        msg = f"Broken internal link: [{match.group(1)}]({target}) — target does not exist"
-                        if suggestion:
-                            msg += f" (did you mean '{suggestion}'?)"
-                        violations.append(self.violation(msg, block=cf, line=line_num))
+                    )
+                    continue
+                if not resolved.exists():
+                    suggestion = self._find_similar(root, cf.path.parent, target_path)
+                    msg = f"Broken internal link: [{link.text}]({target}) — target does not exist"
+                    if suggestion:
+                        msg += f" (did you mean '{suggestion}'?)"
+                    violations.append(
+                        self.violation(
+                            msg,
+                            block=cf,
+                            line=self._body_line_for_file_line(cf, link.file_line),
+                        )
+                    )
         return violations
+
+    @staticmethod
+    def _body_line_for_file_line(block, file_line: int) -> Optional[int]:
+        body = block.read_body(strip_code_blocks=False) or ""
+        for body_line in range(1, len(body.splitlines()) + 1):
+            if block.file_line(body_line) == file_line:
+                return body_line
+        return None
+
+    @staticmethod
+    def _split_anchor(target: str) -> tuple[str, str]:
+        if "#" not in target:
+            return target, ""
+        path, anchor = target.split("#", 1)
+        return path, f"#{anchor}"
 
     def _collect_repo_paths(self, root: Path) -> List[str]:
         """Collect all file paths in the repo, relative to root."""
@@ -132,8 +139,7 @@ class ContentBrokenInternalReferenceRule(Rule):
     def fix(
         self, context: RepositoryContext, violations: List[RuleViolation], **kwargs: object
     ) -> List[AutofixResult]:
-        root = context.root_path.resolve()
-        fixes_by_file: Dict[Path, List[tuple]] = defaultdict(list)
+        fixes_by_file: Dict[Path, List[tuple[str, str, RuleViolation]]] = defaultdict(list)
         for v in violations:
             if not v.file_path or "did you mean" not in v.message:
                 continue
@@ -147,21 +153,36 @@ class ContentBrokenInternalReferenceRule(Rule):
                 content = fpath.read_text(encoding="utf-8")
             except OSError:
                 continue
-            lines = content.splitlines(True)
             violations_fixed = []
+            edits: List[MarkdownEdit] = []
+            seen_edits: set[tuple[int, int, int, str]] = set()
+            links_by_target_and_line: Dict[tuple[str, Optional[int]], List[SourceSpan]] = (
+                defaultdict(list)
+            )
+            from skillsaw.rules.builtin.content_analysis import FileContentBlock
+
+            block = FileContentBlock(path=fpath, category="file", body=content)
+            for link in block.markdown.links:
+                links_by_target_and_line[(link.href, link.file_line)].append(link.destination)
+
             for old_target, suggestion, v in replacements:
                 fl = v.file_line
                 if fl is None:
                     continue
-                idx = fl - 1
-                if idx < 0 or idx >= len(lines):
+                spans = links_by_target_and_line.get((old_target, fl), [])
+                if not spans:
                     continue
-                old_frag = f"]({old_target})"
-                new_frag = f"]({suggestion})"
-                if old_frag in lines[idx]:
-                    lines[idx] = lines[idx].replace(old_frag, new_frag, 1)
-                    violations_fixed.append(v)
-            fixed = "".join(lines)
+                _old_path, anchor = self._split_anchor(old_target)
+                replacement = f"{suggestion}{anchor}"
+                span = spans.pop(0)
+                edit_key = (span.file_line, span.col_start, span.col_end, replacement)
+                if edit_key not in seen_edits:
+                    edits.append(
+                        MarkdownEdit(span.file_line, span.col_start, span.col_end, replacement)
+                    )
+                    seen_edits.add(edit_key)
+                violations_fixed.append(v)
+            fixed = splice(content, edits)
             if fixed != content:
                 results.append(
                     AutofixResult(

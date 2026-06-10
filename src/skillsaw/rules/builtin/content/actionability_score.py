@@ -63,13 +63,31 @@ class ContentActionabilityScoreRule(Rule):
             body = cf.read_body()
             if not body:
                 continue
-            lines = [l for l in body.splitlines() if l.strip()]
-            if len(lines) < 5:
+            line_pairs = [(i, line) for i, line in enumerate(body.splitlines(), 1) if line.strip()]
+            if len(line_pairs) < 5:
                 continue
-            total = len(lines)
-            verb_lines = sum(1 for l in lines if self._VERB_RE.search(l))
-            cmd_lines = sum(1 for l in lines if self._COMMAND_RE.search(l))
-            path_lines = sum(1 for l in lines if self._PATH_RE.search(l))
+            code_lines = {
+                _body_line_for_file_line(cf, span.file_line)
+                for span in cf.markdown.code_spans
+                if span.content.strip()
+            }
+            code_path_lines = {
+                _body_line_for_file_line(cf, span.file_line)
+                for span in cf.markdown.code_spans
+                if self._PATH_RE.search(span.content)
+            }
+            total = len(line_pairs)
+            verb_lines = sum(1 for _line_num, line in line_pairs if self._VERB_RE.search(line))
+            cmd_lines = sum(
+                1
+                for line_num, line in line_pairs
+                if self._COMMAND_RE.search(line) or line_num in code_lines
+            )
+            path_lines = sum(
+                1
+                for line_num, line in line_pairs
+                if self._PATH_RE.search(line) or line_num in code_path_lines
+            )
 
             verb_ratio = verb_lines / total
             cmd_ratio = cmd_lines / total
@@ -86,3 +104,11 @@ class ContentActionabilityScoreRule(Rule):
                     )
                 )
         return violations
+
+
+def _body_line_for_file_line(block, file_line: int):
+    body = block.read_body(strip_code_blocks=False) or ""
+    for body_line in range(1, len(body.splitlines()) + 1):
+        if block.file_line(body_line) == file_line:
+            return body_line
+    return None

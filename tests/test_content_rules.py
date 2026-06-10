@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
+from skillsaw.rules.builtin.utils import invalidate_read_caches
 from skillsaw.context import RepositoryContext
 from skillsaw.rule import AutofixConfidence, Severity
 from skillsaw.rules.builtin.content_rules import (
@@ -67,6 +68,15 @@ class TestContentWeakLanguageRule:
 
     def test_code_blocks_not_scanned(self, temp_dir):
         content = "# Rules\n```\nTry to handle errors gracefully if possible.\n```\n"
+        (temp_dir / "CLAUDE.md").write_text(content)
+        context = RepositoryContext(temp_dir)
+        violations = ContentWeakLanguageRule().check(context)
+        assert len(violations) == 0
+
+    def test_indented_code_blocks_not_scanned(self, temp_dir):
+        content = (
+            "# Rules\n\n    Try to handle errors gracefully if possible.\n\nUse exact steps.\n"
+        )
         (temp_dir / "CLAUDE.md").write_text(content)
         context = RepositoryContext(temp_dir)
         violations = ContentWeakLanguageRule().check(context)
@@ -396,6 +406,18 @@ class TestContentSectionLengthRule:
         assert len(violations) >= 1
         assert violations[0].line == 1
 
+    def test_setext_heading_starts_section(self, temp_dir):
+        content = "Long Section\n============\n" + "\n".join(
+            f"Configure the application setting number {i} to the recommended production value."
+            for i in range(60)
+        )
+        (temp_dir / "CLAUDE.md").write_text(content + "\n")
+        context = RepositoryContext(temp_dir)
+        violations = ContentSectionLengthRule({"max-tokens": 20}).check(context)
+        assert len(violations) >= 1
+        assert "Long Section" in violations[0].message
+        assert violations[0].line == 1
+
 
 class TestContentContradictionRule:
     def test_rule_metadata(self):
@@ -531,6 +553,14 @@ class TestContentCognitiveChunksRule:
 
     def test_single_heading_warned(self, temp_dir):
         lines = ["# Everything"] + [f"Instruction {i}." for i in range(40)]
+        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
+        context = RepositoryContext(temp_dir)
+        violations = ContentCognitiveChunksRule().check(context)
+        assert len(violations) >= 1
+        assert "single heading" in violations[0].message.lower()
+
+    def test_setext_heading_counts_as_heading(self, temp_dir):
+        lines = ["Everything", "=========="] + [f"Instruction {i}." for i in range(40)]
         (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
         context = RepositoryContext(temp_dir)
         violations = ContentCognitiveChunksRule().check(context)
@@ -879,6 +909,39 @@ class TestContentBrokenInternalReferenceRule:
         violations = ContentBrokenInternalReferenceRule().check(context)
         assert len(violations) == 0
 
+    def test_cross_paragraph_stray_backticks_do_not_hide_broken_links(self, temp_dir):
+        (temp_dir / "CLAUDE.md").write_text(
+            "A paragraph with a stray ` mark.\n\n"
+            "See [missing](docs/nope.md) for details.\n\n"
+            "Another paragraph with a stray ` mark.\n"
+        )
+        context = RepositoryContext(temp_dir)
+        violations = ContentBrokenInternalReferenceRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].line == 3
+
+    def test_fix_preserves_anchor(self, temp_dir):
+        (temp_dir / "gone.md").write_text("# Gone\n")
+        (temp_dir / "CLAUDE.md").write_text("See [section](docs/gone.md#sec).\n")
+        context = RepositoryContext(temp_dir)
+        rule = ContentBrokenInternalReferenceRule()
+        violations = rule.check(context)
+        fixes = rule.fix(context, violations)
+
+        assert len(fixes) == 1
+        assert fixes[0].fixed_content == "See [section](gone.md#sec).\n"
+
+    def test_fix_preserves_link_title(self, temp_dir):
+        (temp_dir / "setup.md").write_text("# Setup\n")
+        (temp_dir / "CLAUDE.md").write_text('See [setup](docs/setupp.md "My Title").\n')
+        context = RepositoryContext(temp_dir)
+        rule = ContentBrokenInternalReferenceRule()
+        violations = rule.check(context)
+        fixes = rule.fix(context, violations)
+
+        assert len(fixes) == 1
+        assert fixes[0].fixed_content == 'See [setup](setup.md "My Title").\n'
+
 
 class TestContentUnlinkedInternalReferenceRule:
     def test_rule_metadata(self):
@@ -1038,6 +1101,31 @@ class TestContentUnlinkedInternalReferenceRule:
         context = RepositoryContext(temp_dir)
         violations = ContentUnlinkedInternalReferenceRule().check(context)
         assert len(violations) == 0
+
+    def test_fix_uses_matched_span_not_first_substring(self, temp_dir):
+        docs = temp_dir / "docs"
+        docs.mkdir()
+        (docs / "setup.md").write_text("# Setup\n")
+        (temp_dir / "CLAUDE.md").write_text(
+            "# Agents\n\nBackup docs/setup.md.bak and docs/setup.md too.\n"
+        )
+        context = RepositoryContext(temp_dir)
+        rule = ContentUnlinkedInternalReferenceRule()
+        violations = rule.check(context)
+        fixes = rule.fix(context, violations)
+
+        assert len(fixes) == 1
+        fixed = fixes[0].fixed_content
+        assert (
+            fixed
+            == "# Agents\n\nBackup docs/setup.md.bak and [docs/setup.md](docs/setup.md) too.\n"
+        )
+
+        (temp_dir / "CLAUDE.md").write_text(fixed)
+        invalidate_read_caches(temp_dir / "CLAUDE.md")
+        context = RepositoryContext(temp_dir)
+        second = rule.fix(context, rule.check(context))
+        assert second == []
 
 
 class TestContentPlaceholderTextRule:

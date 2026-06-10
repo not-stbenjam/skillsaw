@@ -18,9 +18,10 @@ from skillsaw.rules.builtin.content_analysis import (
     CursorRuleBlock,
     FrontmatteredBlock,
     FrontmatterField,
-    _strip_fenced_code_blocks,
 )
+from skillsaw.markdown_doc import MarkdownDoc
 from skillsaw.context import RepositoryContext
+from skillsaw.rules.builtin.utils import invalidate_read_caches
 
 
 def _cf(path: Path, category: str = "instruction") -> ContentFile:
@@ -34,36 +35,64 @@ def temp_dir():
     shutil.rmtree(tmp)
 
 
+def test_markdown_cache_invalidated_with_read_caches(temp_dir):
+    path = temp_dir / "CLAUDE.md"
+    path.write_text("See [old](old.md).\n")
+    block = _cf(path)
+    assert block.markdown.links[0].href == "old.md"
+
+    path.write_text("See [new](new.md).\n")
+    invalidate_read_caches(path)
+
+    assert block.markdown.links[0].href == "new.md"
+
+
+def test_markdown_cache_invalidates_equal_blocks_for_same_file(temp_dir):
+    path = temp_dir / "CLAUDE.md"
+    path.write_text("See [old](old.md).\n")
+    first = _cf(path)
+    second = _cf(path)
+    assert first == second
+    assert first.markdown.links[0].href == "old.md"
+    assert second.markdown.links[0].href == "old.md"
+
+    path.write_text("See [new](new.md).\n")
+    invalidate_read_caches(path)
+
+    assert first.markdown.links[0].href == "new.md"
+    assert second.markdown.links[0].href == "new.md"
+
+
 class TestStripFencedCodeBlocks:
     def test_strips_backtick_blocks(self):
         content = "Line 1\n```\ncode line\n```\nLine 5\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         lines = result.splitlines()
         assert lines[0] == "Line 1"
-        assert lines[1] == ""
-        assert lines[2] == ""
-        assert lines[3] == ""
+        assert lines[1].strip() == ""
+        assert lines[2].strip() == ""
+        assert lines[3].strip() == ""
         assert lines[4] == "Line 5"
 
     def test_strips_tilde_blocks(self):
         content = "Line 1\n~~~\ncode\n~~~\nLine 5\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_preserves_line_count(self):
         content = "Before\n```python\nline1\nline2\nline3\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert result.count("\n") == content.count("\n")
 
     def test_no_code_blocks(self):
         content = "Just text.\nMore text.\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert result == content
 
     def test_multiple_code_blocks(self):
         content = "A\n```\nx\n```\nB\n```\ny\n```\nC\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         lines = result.splitlines()
         assert lines[0] == "A"
         assert lines[4] == "B"
@@ -71,43 +100,43 @@ class TestStripFencedCodeBlocks:
 
     def test_strips_indented_backtick_blocks_1_space(self):
         content = "Before\n ```\n code here\n ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code here" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_strips_indented_backtick_blocks_2_spaces(self):
         content = "- Example:\n  ```\n  Try to handle errors gracefully.\n  ```\nMore text.\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "Try to handle errors gracefully" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_strips_indented_backtick_blocks_3_spaces(self):
         content = "Before\n   ```\n   code\n   ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_4_space_indent_not_stripped(self):
         """4+ spaces of indentation is not a valid CommonMark code fence."""
         content = "Before\n    ```\n    code\n    ```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code" in result
 
     def test_strips_indented_tilde_blocks(self):
         content = "Before\n  ~~~\n  code\n  ~~~\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_indented_fence_preserves_line_count(self):
         content = "Line 1\n  ```python\n  x = 1\n  y = 2\n  ```\nLine 6\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert result.count("\n") == content.count("\n")
 
     def test_indented_closing_fence_allows_different_indent(self):
         """Closing fence can have different indentation (0-3 spaces) than opening fence."""
         content = "Before\n  ```\n  code\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         # Per CommonMark spec, closing fence can be 0-3 spaces regardless of opening
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
@@ -115,14 +144,14 @@ class TestStripFencedCodeBlocks:
     def test_closing_fence_longer_than_opening(self):
         """Closing fence can be longer than the opening fence per CommonMark spec."""
         content = "Before\n```\ncode\n`````\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         assert "code" not in result
         assert result.count("\n") == content.count("\n")
 
     def test_closing_fence_shorter_than_opening_does_not_close(self):
         """Closing fence shorter than opening does NOT close the block."""
         content = "Before\n`````\ncode\n```\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         # The ``` does not close `````, so everything after ````` is inside the block
         assert "code" not in result
         assert "After" not in result
@@ -130,7 +159,7 @@ class TestStripFencedCodeBlocks:
     def test_mismatched_fence_char_does_not_close(self):
         """Closing fence must use the same character as the opening fence."""
         content = "Before\n```\ncode\n~~~\nAfter\n"
-        result = _strip_fenced_code_blocks(content)
+        result = MarkdownDoc(content).prose_text()
         # ~~~ does not close ```, so code stays inside
         assert "code" not in result
         assert "After" not in result

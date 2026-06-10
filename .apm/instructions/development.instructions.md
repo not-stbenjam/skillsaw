@@ -55,6 +55,9 @@ valid feedback that comes in.
 - **Declare `repo_types`** to control when `enabled: auto` fires.
 - **Declare `config_schema`** when the rule accepts parameters.
 - **EVERYTHING MUST BE PART OF THE PARSE TREE**
+- Markdown structure must come from `MarkdownDoc` (`markdown-it-py`) on each
+  `ContentBlock`; use the AST/span accessors for reading and `splice()` for
+  writing targeted autofixes. Never re-render Markdown from the AST.
 
 JSON files are exempt from line number requirements — the `json` module does
 not preserve them. File-level reporting is acceptable for JSON rules.

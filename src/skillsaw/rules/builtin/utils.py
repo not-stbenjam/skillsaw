@@ -226,7 +226,21 @@ def frontmatter_key_line(file_path: Path, key: str) -> Optional[int]:
     return yaml_key_line(fm_text, key, top_level=True, line_offset=offset)
 
 
-_FRONTMATTER_RE = re.compile(r"^---[ \t]*\n(.*?\n)---[ \t]*(?:\n|\Z)", re.DOTALL)
+_FRONTMATTER_OPEN_RE = re.compile(r"^---[ \t]*(?:\r?\n|\Z)")
+_FRONTMATTER_CLOSE_RE = re.compile(r"^---[ \t]*(?:\r?\n)?\Z")
+
+
+def _frontmatter_parts(content: str) -> Optional[Tuple[str, str, int]]:
+    """Return ``(yaml_text, body, yaml_line_offset)`` for a frontmatter block."""
+    lines = content.splitlines(True)
+    if not lines or not _FRONTMATTER_OPEN_RE.match(lines[0]):
+        return None
+    for idx in range(1, len(lines)):
+        if _FRONTMATTER_CLOSE_RE.match(lines[idx]):
+            yaml_text = "".join(lines[1:idx])
+            body = "".join(lines[idx + 1 :])
+            return yaml_text, body, 1
+    return None
 
 
 def parse_frontmatter(content: str) -> Tuple[Optional[Dict[str, Any]], str, Optional[int]]:
@@ -236,19 +250,19 @@ def parse_frontmatter(content: str) -> Tuple[Optional[Dict[str, Any]], str, Opti
     ``error_line`` is set (1-indexed, relative to file) only on YAML parse errors.
     If no valid frontmatter is found, returns (None, original_content, error_line).
     """
-    m = _FRONTMATTER_RE.match(content)
-    if not m:
+    parts = _frontmatter_parts(content)
+    if parts is None:
         return None, content, None
+    yaml_text, body, _offset = parts
     try:
-        data = yaml.safe_load(m.group(1))
+        data = yaml.safe_load(yaml_text) if yaml_text.strip() else {}
     except yaml.YAMLError as e:
         error_line = None
         if hasattr(e, "problem_mark") and e.problem_mark is not None:
             error_line = e.problem_mark.line + 2  # +1 for 0-indexed, +1 for opening ---
         return None, content, error_line
     if not isinstance(data, dict):
-        return None, content, None
-    body = content[m.end() :]
+        return None, body, None
     return data, body, None
 
 
@@ -289,11 +303,11 @@ def _extract_frontmatter_text(content: str) -> Tuple[Optional[str], int]:
     before the YAML content (i.e. the ``---`` line itself, so typically 1).
     Returns ``(None, 0)`` when no frontmatter is found.
     """
-    m = _FRONTMATTER_RE.match(content)
-    if not m:
+    parts = _frontmatter_parts(content)
+    if parts is None:
         return None, 0
     # The opening --- is on line 1, so the YAML content starts at line 2.
-    return m.group(1), 1
+    return parts[0], parts[2]
 
 
 def _ruamel_load(text: str) -> Any:

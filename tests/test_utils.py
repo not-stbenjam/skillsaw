@@ -365,6 +365,14 @@ def test_parse_frontmatter_valid():
     assert error_line is None
 
 
+def test_parse_frontmatter_crlf():
+    content = "---\r\nname: test\r\ndescription: hello\r\n---\r\n# Body\r\n"
+    fm, body, error_line = parse_frontmatter(content)
+    assert fm == {"name": "test", "description": "hello"}
+    assert body == "# Body\r\n"
+    assert error_line is None
+
+
 def test_parse_frontmatter_malformed_yaml_reports_error_line():
     content = "---\nname: test\nversion: 1.0\nbad_yaml: [unclosed\n---\n"
     fm, body, error_line = parse_frontmatter(content)

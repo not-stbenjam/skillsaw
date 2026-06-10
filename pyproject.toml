@@ -28,6 +28,7 @@ classifiers = [
 keywords = ["agentskills", "claude", "claude-code", "linter", "plugin", "skills", "validation", "skillsaw"]
 requires-python = ">=3.9"
 dependencies = [
+    "markdown-it-py>=3",
     "PyYAML>=6.0",
     "ruamel.yaml>=0.18",
 ]

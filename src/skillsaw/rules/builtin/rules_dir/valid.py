@@ -2,15 +2,17 @@
 Rule for validating .claude/rules/ directory structure and content
 """
 
-import re
 from pathlib import Path
 from typing import List
 
-import yaml
-
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext, RepositoryType
-from skillsaw.rules.builtin.utils import read_text, frontmatter_key_line
+from skillsaw.rules.builtin.utils import (
+    _extract_frontmatter_text,
+    frontmatter_key_line,
+    parse_frontmatter,
+    read_text,
+)
 
 
 def _parse_frontmatter(content: str):
@@ -19,24 +21,21 @@ def _parse_frontmatter(content: str):
     Returns (frontmatter_dict, error_message). If no frontmatter is present,
     returns (None, None). If parsing fails, returns (None, error_string).
     """
-    if not content.startswith("---"):
+    first_line = content.splitlines()[0] if content else ""
+    if first_line.strip() != "---":
         return None, None
 
-    match = re.match(r"^---[ \t]*\n(.*?\n)?---[ \t]*(?:\n|$)", content, re.DOTALL)
-    if not match:
+    data, _body, error_line = parse_frontmatter(content)
+    if data is not None:
+        return data, None
+    if error_line is not None:
+        return None, f"Invalid YAML in frontmatter at line {error_line}"
+    raw, _offset = _extract_frontmatter_text(content)
+    if raw is None:
         return None, "Unterminated frontmatter (missing closing '---')"
-
-    raw = (match.group(1) or "").rstrip("\n")
-    try:
-        data = yaml.safe_load(raw) if raw else None
-    except yaml.YAMLError as e:
-        return None, f"Invalid YAML in frontmatter: {e}"
-
-    if data is None:
-        return {}, None
-    if not isinstance(data, dict):
+    if raw.strip():
         return None, "Frontmatter must be a YAML mapping"
-    return data, None
+    return {}, None
 
 
 _VALID_FRONTMATTER_KEYS = {"paths"}

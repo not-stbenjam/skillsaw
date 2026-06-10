@@ -581,3 +581,15 @@ def test_unknown_hyphenated_directive_not_treated_as_bare_disable():
     smap = build_suppression_map(content)
     assert not smap.is_suppressed("content-weak-language", 3)
     assert not smap.is_suppressed("any-rule", 3)
+
+
+def test_markdown_suppression_directive_inside_fence_is_ignored():
+    content = (
+        "```markdown\n"
+        "<!-- skillsaw-disable content-weak-language -->\n"
+        "```\n"
+        "Try to handle errors gracefully.\n"
+    )
+    smap = build_suppression_map(content)
+    assert not smap.is_suppressed("content-weak-language", 4)
+    assert not smap.is_suppressed("any-rule", 4)

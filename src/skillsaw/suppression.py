@@ -38,9 +38,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Set
+
+from skillsaw.markdown_doc import MarkdownDoc
 
 # Directive patterns applied to the *text inside* an HTML comment.
 # These match the full comment body, allowing arbitrary whitespace/newlines.
@@ -64,7 +65,7 @@ def _parse_rule_ids(raw: str) -> List[str]:
 
 
 # ------------------------------------------------------------------
-# Directive extraction via HTMLParser
+# Directive extraction from Markdown/YAML comments
 # ------------------------------------------------------------------
 
 
@@ -75,43 +76,8 @@ class _Directive:
     kind: str  # "disable", "enable", or "disable-next-line"
     rule_ids: List[str]  # empty list means "all rules"
     line: int  # 1-based line number where the comment starts (``<!--`` or ``#``)
+    end_line: int = 0  # 1-based line number where the directive comment ends
     is_yaml: bool = False  # True for ``#`` comments (always single-line)
-
-
-class _CommentParser(HTMLParser):
-    """HTMLParser subclass that extracts skillsaw directives from HTML comments.
-
-    Using HTMLParser instead of hand-rolled regex gives us correct handling of
-    multi-line comments, comments with extra whitespace, and other edge cases.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.directives: List[_Directive] = []
-
-    def handle_comment(self, data: str) -> None:
-        line, _col = self.getpos()
-        # Normalise the comment text: collapse whitespace so that multi-line
-        # comments like ``<!--\n  skillsaw-enable\n  some-rule -->`` become a
-        # single logical string we can match against.
-        text = " ".join(data.split())
-
-        m = _DISABLE_NEXT_LINE_DIR.search(text)
-        if m:
-            self.directives.append(
-                _Directive("disable-next-line", _parse_rule_ids(m.group(1) or ""), line)
-            )
-            return
-
-        m = _DISABLE_DIR.search(text)
-        if m:
-            self.directives.append(_Directive("disable", _parse_rule_ids(m.group(1).strip()), line))
-            return
-
-        m = _ENABLE_DIR.search(text)
-        if m:
-            self.directives.append(_Directive("enable", _parse_rule_ids(m.group(1).strip()), line))
-            return
 
 
 _YAML_COMMENT_RE = re.compile(r"^\s*#\s*(.*)", re.MULTILINE)
@@ -119,9 +85,46 @@ _YAML_COMMENT_RE = re.compile(r"^\s*#\s*(.*)", re.MULTILINE)
 
 def _extract_html_directives(content: str) -> List[_Directive]:
     """Extract skillsaw directives from HTML ``<!-- -->`` comments."""
-    parser = _CommentParser()
-    parser.feed(content)
-    return parser.directives
+    directives: List[_Directive] = []
+    for comment in MarkdownDoc(content).html_comments:
+        text = " ".join(comment.content.split())
+
+        m = _DISABLE_NEXT_LINE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "disable-next-line",
+                    _parse_rule_ids(m.group(1) or ""),
+                    comment.file_line,
+                    comment.file_line_end,
+                )
+            )
+            continue
+
+        m = _DISABLE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "disable",
+                    _parse_rule_ids(m.group(1).strip()),
+                    comment.file_line,
+                    comment.file_line_end,
+                )
+            )
+            continue
+
+        m = _ENABLE_DIR.search(text)
+        if m:
+            directives.append(
+                _Directive(
+                    "enable",
+                    _parse_rule_ids(m.group(1).strip()),
+                    comment.file_line,
+                    comment.file_line_end,
+                )
+            )
+            continue
+    return directives
 
 
 def _extract_yaml_directives(content: str) -> List[_Directive]:
@@ -143,7 +146,11 @@ def _extract_yaml_directives(content: str) -> List[_Directive]:
         if m2:
             directives.append(
                 _Directive(
-                    "disable-next-line", _parse_rule_ids(m2.group(1) or ""), line, is_yaml=True
+                    "disable-next-line",
+                    _parse_rule_ids(m2.group(1) or ""),
+                    line,
+                    line,
+                    is_yaml=True,
                 )
             )
             continue
@@ -151,14 +158,26 @@ def _extract_yaml_directives(content: str) -> List[_Directive]:
         m2 = _DISABLE_DIR.search(text)
         if m2:
             directives.append(
-                _Directive("disable", _parse_rule_ids(m2.group(1).strip()), line, is_yaml=True)
+                _Directive(
+                    "disable",
+                    _parse_rule_ids(m2.group(1).strip()),
+                    line,
+                    line,
+                    is_yaml=True,
+                )
             )
             continue
 
         m2 = _ENABLE_DIR.search(text)
         if m2:
             directives.append(
-                _Directive("enable", _parse_rule_ids(m2.group(1).strip()), line, is_yaml=True)
+                _Directive(
+                    "enable",
+                    _parse_rule_ids(m2.group(1).strip()),
+                    line,
+                    line,
+                    is_yaml=True,
+                )
             )
             continue
 
@@ -220,7 +239,7 @@ def build_suppression_map(content: str, line_offset: int = 0) -> SuppressionMap:
     directives = _extract_directives(content)
 
     # Build a map of line -> list of directives that start on that line.
-    # ``_Directive.line`` is 1-based from HTMLParser.getpos().
+    # ``_Directive.line`` is 1-based within the parsed content.
     directive_at: Dict[int, List[_Directive]] = {}
     for d in directives:
         directive_at.setdefault(d.line, []).append(d)
@@ -232,10 +251,7 @@ def build_suppression_map(content: str, line_offset: int = 0) -> SuppressionMap:
     # We need the raw comment spans to know which lines are directive lines.
     directive_comment_lines: Set[int] = set()
     for d in directives:
-        if d.is_yaml:
-            directive_comment_lines.add(d.line)
-        else:
-            _mark_comment_lines(content, d.line, directive_comment_lines)
+        directive_comment_lines.update(range(d.line, (d.end_line or d.line) + 1))
 
     # --- Step 2: walk lines and apply suppressions -------------------------
     disabled: Set[str] = set()
