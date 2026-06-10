@@ -6,18 +6,9 @@ code blocks, html comments, text_segments, splice edge cases, and
 regression exact outputs.
 """
 
-import pytest
-
 from skillsaw.markdown_doc import (
     MarkdownDoc,
     MarkdownEdit,
-    MarkdownLink,
-    MarkdownCodeSpan,
-    MarkdownComment,
-    MarkdownFence,
-    MarkdownHeading,
-    MarkdownTextSegment,
-    SourceSpan,
     splice,
 )
 
@@ -181,9 +172,10 @@ class TestFences:
 
     def test_indented_code_block_in_fences(self):
         doc = MarkdownDoc("Text\n\n    indented code\n    more code\n\nAfter")
-        assert len(doc.fences) >= 1
-        found = any("indented" in (f.info or "") or True for f in doc.fences)
-        assert found
+        assert len(doc.fences) == 1
+        assert doc.fences[0].info == ""
+        assert doc.fences[0].file_line_start == 3
+        assert doc.fences[0].file_line_end == 4
 
 
 # ------------------------------------------------------------------
@@ -510,3 +502,35 @@ class TestRegressions:
         doc = MarkdownDoc("<div>Try to handle errors gracefully.</div>")
         result = doc.prose_text()
         assert "Try to handle" in result
+
+    def test_broken_reference_fix_preserves_multiline_link_text(self, tmp_path):
+        from skillsaw.context import RepositoryContext
+        from skillsaw.rules.builtin.content.broken_internal_reference import (
+            ContentBrokenInternalReferenceRule,
+        )
+
+        (tmp_path / "real.md").write_text("# Real\n")
+        (tmp_path / "CLAUDE.md").write_text("See [guide\ntext](docs/reel.md).\n")
+        context = RepositoryContext(tmp_path)
+        rule = ContentBrokenInternalReferenceRule()
+
+        fixes = rule.fix(context, rule.check(context))
+
+        assert len(fixes) == 1
+        assert fixes[0].fixed_content == "See [guide\ntext](real.md).\n"
+
+    def test_broken_reference_fix_updates_reference_definition(self, tmp_path):
+        from skillsaw.context import RepositoryContext
+        from skillsaw.rules.builtin.content.broken_internal_reference import (
+            ContentBrokenInternalReferenceRule,
+        )
+
+        (tmp_path / "guide.md").write_text("# Guide\n")
+        (tmp_path / "CLAUDE.md").write_text("[guide][g]\n\n[g]: docs/guide.md\n")
+        context = RepositoryContext(tmp_path)
+        rule = ContentBrokenInternalReferenceRule()
+
+        fixes = rule.fix(context, rule.check(context))
+
+        assert len(fixes) == 1
+        assert fixes[0].fixed_content == "[guide][g]\n\n[g]: guide.md\n"
