@@ -289,6 +289,13 @@ class TestProseText:
         result = doc.prose_text()
         assert "indented code" not in result
 
+    def test_multiline_inline_code_span_blanked(self):
+        doc = MarkdownDoc("Some `code that\nspans lines` here")
+        result = doc.prose_text()
+        assert "code that" not in result
+        assert "spans lines" not in result
+        assert result.count("\n") == 1
+
 
 # ------------------------------------------------------------------
 # span_is_exact_code_content
