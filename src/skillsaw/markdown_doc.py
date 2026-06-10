@@ -167,7 +167,10 @@ class MarkdownDoc:
                 href = child.attrGet("href") or ""
                 title = child.attrGet("title") or ""
                 link_text, close_idx = self._link_text(children, idx)
-                match = self._find_link_source(inline.content, cursor, href, title)
+                if child.markup == "autolink":
+                    match = _find_autolink_source(inline.content, cursor, href)
+                else:
+                    match = self._find_link_source(inline.content, cursor, href, title)
                 if match is None:
                     idx = close_idx + 1
                     continue
@@ -779,6 +782,20 @@ def _parse_inline_link_destination(
         href=source[dest_start:dest_end],
         title=title,
     )
+
+
+def _find_autolink_source(
+    source: str, cursor: int, href: str
+) -> Optional[Tuple[int, int, int, int, Optional[str]]]:
+    candidates = [href]
+    if href.startswith("mailto:"):
+        candidates.append(href.removeprefix("mailto:"))
+    for target in candidates:
+        raw = f"<{target}>"
+        start = source.find(raw, cursor)
+        if start >= 0:
+            return start, start + len(raw), start + 1, start + 1 + len(target), None
+    return None
 
 
 def _find_code_span_source(

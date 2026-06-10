@@ -1,4 +1,4 @@
-from skillsaw.markdown_doc import MarkdownDoc, MarkdownEdit, splice
+from skillsaw.markdown_doc import MarkdownDoc, MarkdownEdit, SourceSpan, splice
 
 
 def test_inline_link_on_wrapped_paragraph_reports_actual_line():
@@ -30,6 +30,19 @@ def test_inline_link_in_list_continuation_readds_indent_columns():
 
     assert link.file_line == 2
     assert link.destination.col_start == 23
+
+
+def test_autolink_reports_source_and_destination_spans():
+    doc = MarkdownDoc("Visit <https://example.com>.\n")
+
+    link = doc.links[0]
+
+    assert link.text == "https://example.com"
+    assert link.href == "https://example.com"
+    assert link.file_line == 1
+    assert link.col_start == 6
+    assert link.col_end == 27
+    assert link.destination == SourceSpan(1, 7, 26)
 
 
 def test_reference_style_link_uses_definition_destination_span():
