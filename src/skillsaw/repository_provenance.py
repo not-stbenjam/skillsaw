@@ -17,7 +17,7 @@ from .discovery.antigravity import (
 )
 from .formats.codex import codex_manifest_is_contained, codex_marker_escapes
 from .formats.grok import grok_manifest_is_contained, grok_marker_escapes
-from .paths import safe_exists, safe_resolve
+from .paths import safe_exists, safe_is_file, safe_is_symlink, safe_resolve
 
 if TYPE_CHECKING:
     from .lint_target import LintTarget
@@ -176,8 +176,9 @@ class RepositoryProvenanceMixin:
         predicate below is a view over this record. Evidence, in declaration
         strength order:
 
-        * ``claude`` — a ``.claude-plugin`` marker, or a listing in the Claude
-          marketplace (``marketplace_entries``).
+        * ``claude`` — a ``.claude-plugin`` marker that is not just a
+          marketplace catalog, or a listing in the Claude marketplace
+          (``marketplace_entries``).
         * ``codex`` — a contained ``.codex-plugin/plugin.json``, or a local
           source listing in any Codex catalog.
         * ``agent-plugin`` — a contained package carrying an Agent Plugins
@@ -211,7 +212,18 @@ class RepositoryProvenanceMixin:
         # attribute absent and must fall back to "no marketplace listing".
         # Those early records are discarded by the unconditional cache clear
         # at the end of ``apply_excludes``; see the ordering comment there.
-        if safe_exists(plugin_dir / ".claude-plugin") or (
+        claude_marker = plugin_dir / ".claude-plugin"
+        claude_manifest = claude_marker / "plugin.json"
+        # A catalog publishes its entries, not the directory hosting it.
+        # Otherwise a root Codex plugin beside a Claude marketplace becomes
+        # a Claude plugin too. Keep empty markers and malformed manifests
+        # as declarations so their missing/invalid-manifest checks survive.
+        claude_plugin_marker = safe_exists(claude_marker) and (
+            safe_exists(claude_manifest)
+            or safe_is_symlink(claude_manifest)
+            or not safe_is_file(claude_marker / "marketplace.json")
+        )
+        if claude_plugin_marker or (
             resolved is not None and resolved in getattr(self, "marketplace_entries", {})
         ):
             ecosystems.add("claude")
@@ -270,7 +282,7 @@ class RepositoryProvenanceMixin:
         return record
 
     def is_codex_only_plugin(self, plugin_dir: Path) -> bool:
-        """Codex-claimed with no ``.claude-plugin`` marker.
+        """Codex-claimed with no Claude plugin declaration.
 
         The provenance line the Claude-format rules gate on: a Codex-only
         directory is exempt from Claude manifest, frontmatter, and naming

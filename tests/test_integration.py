@@ -9944,3 +9944,53 @@ def test_cli_scope_severity_uses_explicit_config_and_exit_threshold(
     assert len(found) == 1 and found[0]["rule_id"] == rule_id
     assert found[0]["severity"] == expected
     assert result["rc"] == (0 if expected == "info" else 1), result
+
+
+@pytest.mark.integration
+class TestCodexRootWithClaudeMarketplace:
+    """Catalog ownership must not become a Claude plugin claim or autofix."""
+
+    def test_lint_and_suggest_fix_leave_codex_root_unregistered(self, tmp_path):
+        repo = copy_fixture("codex/root-plugin-claude-marketplace", tmp_path)
+        catalog = repo / ".claude-plugin/marketplace.json"
+        original = catalog.read_bytes()
+        rules = [
+            "--rule",
+            "claude-marketplace-registration",
+            "--rule",
+            "claude-plugin-json-required",
+        ]
+
+        result = run_cli(["lint", repo, "--format", "json", *rules])
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["violations"] == []
+
+        for _ in range(2):
+            result = run_cli(["fix", repo, "--suggest", *rules])
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert catalog.read_bytes() == original
+            assert not (repo / ".claude-plugin/plugin.json").exists()
+
+        result = run_cli(["lint", repo, "--format", "json", *rules])
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["violations"] == []
+
+    def test_missing_manifest_in_claude_entry_is_still_reported(self, tmp_path):
+        repo = copy_fixture("codex/root-plugin-claude-marketplace", tmp_path)
+        (repo / "plugins/claude-helper/.claude-plugin/plugin.json").unlink()
+
+        result = run_cli(
+            [
+                "lint",
+                repo,
+                "--format",
+                "json",
+                "--rule",
+                "claude-plugin-json-required",
+            ]
+        )
+        assert result.returncode == 1, result.stdout + result.stderr
+        findings = json.loads(result.stdout)["violations"]
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == "claude-plugin-json-required"
+        assert findings[0]["file_path"] == "plugins/claude-helper/.claude-plugin/plugin.json"

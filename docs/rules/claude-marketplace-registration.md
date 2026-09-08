@@ -21,6 +21,11 @@ A plugin that exists in the repository but is not registered in
 `marketplace.json` is invisible to marketplace tooling — users
 cannot discover or install it through the standard workflow.
 
+This requirement applies to Claude plugins. Hosting a Claude marketplace
+beside a root Codex plugin does not require registering that Codex plugin
+in the Claude catalog. The catalog declares its entries as Claude plugins,
+not its parent directory.
+
 ## Examples
 
 **Bad:**

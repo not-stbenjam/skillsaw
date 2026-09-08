@@ -22,7 +22,8 @@ class PluginJsonRequiredRule(Rule):
     # carry — one report per ecosystem. Two things take a plugin back out
     # of the exemption, both of them the author declaring it a Claude
     # plugin: the Claude marketplace listing it, or the directory carrying
-    # a ``.claude-plugin/`` of its own (provenance reads the marker, so a
+    # a ``.claude-plugin/`` that is not just a marketplace catalog
+    # (provenance reads the marker, so a
     # deleted or never-added manifest inside it is precisely the defect
     # this rule reports, with `strict: false` as the designed opt-out).
     provenance_scope = "claude"
