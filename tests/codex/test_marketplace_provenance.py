@@ -34,7 +34,7 @@ def test_catalog_does_not_claim_its_codex_parent(tmp_path, repo_types):
 
 
 def test_claude_marketplace_without_codex_does_not_discover_root(tmp_path):
-    """The ai-helpers layout never adds the root to the plugin union."""
+    """A standalone Claude marketplace does not add its root to the plugin union."""
     repo = copy_fixture(FIXTURE, tmp_path)
     (repo / ".codex-plugin/plugin.json").unlink()
     (repo / ".codex-plugin").rmdir()
