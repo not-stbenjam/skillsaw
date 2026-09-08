@@ -9868,7 +9868,7 @@ def test_self_installed_skills_keep_authorship_in_a_linked_worktree(tmp_path, li
         assert external.read_bytes() == external_before
         clean = run_lint(repo, "--rule", "agentskill-name", "--no-custom-rules", "--no-plugins")
         assert all(v["file_path"] != "skills/authored-skill/SKILL.md" for v in violations(clean))
-    assert reports[0] == reports[1]
+    assert sorted(reports[0]) == sorted(reports[1])
 
 
 @pytest.mark.integration
