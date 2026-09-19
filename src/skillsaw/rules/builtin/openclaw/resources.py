@@ -8,7 +8,7 @@ from skillsaw.paths import contained_resolve, safe_resolve, safe_is_dir, safe_is
 from skillsaw.repository_types import RepositoryType
 from skillsaw.rule import Rule, RuleViolation, Severity
 from typing import List
-from skillsaw.formats.openclaw import read_package
+from skillsaw.formats.openclaw import read_package, runtime_extensions
 
 
 class OpenClawResourcesRule(Rule):
@@ -55,45 +55,54 @@ class OpenClawResourcesRule(Rule):
                 continue
             if package:
                 metadata = data.get("openclaw")
-                values = metadata.get("extensions") if isinstance(metadata, dict) else None
-                field = "openclaw.extensions"
+                if not isinstance(metadata, dict):
+                    continue
+                runtime, runtime_error = runtime_extensions(metadata)
+                declarations = [
+                    (
+                        "openclaw.extensions",
+                        metadata.get("extensions"),
+                        check_entries and not runtime and not runtime_error,
+                    ),
+                    ("openclaw.runtimeExtensions", runtime, check_entries and not runtime_error),
+                ]
             else:
-                values = data.get("skills")
-                field = "skills"
-            if values is None:
-                continue
-            if not isinstance(values, list):
-                if not package:
+                declarations = [("skills", data.get("skills"), check_skills)]
+            for field, values, check_exists in declarations:
+                if values is None:
+                    continue
+                if not isinstance(values, list):
+                    if not package:
+                        violations.append(
+                            self.violation(
+                                "'skills' must be an array of non-empty paths; OpenClaw ignores this value",
+                                file_path=node.path,
+                            )
+                        )
+                    continue
+                problems = []
+                for raw in values:
+                    if not isinstance(raw, str) or not raw.strip():
+                        if not package:
+                            problems.append("non-string or empty path is ignored")
+                        continue
+                    target = contained_resolve(node.plugin_dir / raw.strip(), root)
+                    if target is None:
+                        problems.append(f"{safe_display(raw)!r} escapes the plugin directory")
+                    elif not package and check_exists and not safe_is_dir(target):
+                        problems.append(
+                            f"{safe_display(raw)!r} is not an existing skill directory; install dependencies if provided by a package"
+                        )
+                    elif package and check_exists and not safe_is_file(target):
+                        problems.append(
+                            f"{safe_display(raw)!r} is not an existing runtime file; build the package first"
+                        )
+                if field == "openclaw.extensions" and values == []:
+                    problems.append("empty extension list disables entrypoint discovery")
+                if problems:
                     violations.append(
                         self.violation(
-                            "'skills' must be an array of non-empty paths; OpenClaw ignores this value",
-                            file_path=node.path,
+                            f"'{field}': " + "; ".join(dict.fromkeys(problems)), file_path=node.path
                         )
                     )
-                continue
-            problems = []
-            for raw in values:
-                if not isinstance(raw, str) or not raw.strip():
-                    if not package:
-                        problems.append("non-string or empty path is ignored")
-                    continue
-                target = contained_resolve(node.plugin_dir / raw.strip(), root)
-                if target is None:
-                    problems.append(f"{safe_display(raw)!r} escapes the plugin directory")
-                elif not package and check_skills and not safe_is_dir(target):
-                    problems.append(
-                        f"{safe_display(raw)!r} is not an existing skill directory; install dependencies if provided by a package"
-                    )
-                elif package and check_entries and not safe_is_file(target):
-                    problems.append(
-                        f"{safe_display(raw)!r} is not an existing runtime file; build the package first"
-                    )
-            if package and values == []:
-                problems.append("empty extension list disables entrypoint discovery")
-            if problems:
-                violations.append(
-                    self.violation(
-                        f"'{field}': " + "; ".join(dict.fromkeys(problems)), file_path=node.path
-                    )
-                )
         return violations

@@ -99,6 +99,36 @@ def contained_file(root: Path, name: str) -> bool:
     )
 
 
+def runtime_extensions(metadata: dict) -> tuple[list[str], str | None]:
+    """Read explicit runtime paths using package-entry-resolution.ts's contract.
+
+    On malformed mappings, retain valid paths for containment checks only;
+    callers must not use them for runtime selection when an error is returned.
+    """
+    sources = metadata.get("extensions")
+    # The loader reads runtime mappings only for explicit source entries.
+    # Conventional fallback ignores this metadata; source shape errors belong
+    # to the package validator.
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(not isinstance(source, str) or not source.strip() for source in sources)
+    ):
+        return [], None
+    values = metadata.get("runtimeExtensions")
+    if not isinstance(values, list) or not values:
+        return [], None
+    entries = [value.strip() for value in values if isinstance(value, str) and value.strip()]
+    if len(entries) != len(values):
+        return entries, "'openclaw.runtimeExtensions' must contain only non-empty strings"
+    if len(entries) != len(sources):
+        return (
+            entries,
+            "'openclaw.runtimeExtensions' must have the same length as 'openclaw.extensions'",
+        )
+    return entries, None
+
+
 def skill_roots(plugin: Path) -> list[Path]:
     """Only explicitly declared skill roots load; there is no skills/ fallback."""
     if not contained_file(plugin, MANIFEST):

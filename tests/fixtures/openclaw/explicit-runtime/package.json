@@ -1,0 +1,7 @@
+{
+  "name": "@example/weather",
+  "openclaw": {
+    "extensions": ["./src/index.ts"],
+    "runtimeExtensions": ["./lib/index.js"]
+  }
+}

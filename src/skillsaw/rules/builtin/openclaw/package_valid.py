@@ -5,7 +5,7 @@ from skillsaw.lint_target import OpenClawPackageConfigNode
 from skillsaw.repository_types import RepositoryType
 from skillsaw.rule import Rule, RuleViolation, Severity
 from typing import List
-from skillsaw.formats.openclaw import read_package
+from skillsaw.formats.openclaw import read_package, runtime_extensions
 
 
 class OpenClawPackageValidRule(Rule):
@@ -44,6 +44,8 @@ class OpenClawPackageValidRule(Rule):
                         or any(not isinstance(entry, str) or not entry.strip() for entry in entries)
                     ):
                         message = "'openclaw.extensions' must be an array of non-empty strings"
+                    else:
+                        _, message = runtime_extensions(metadata)
             if message:
                 violations.append(self.violation(message, file_path=node.path))
         return violations

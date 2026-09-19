@@ -1,0 +1,5 @@
+version: "0.21.0"
+rules:
+  openclaw-resources:
+    enabled: true
+    check-entrypoints-exist: true
