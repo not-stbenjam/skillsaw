@@ -1,0 +1,7 @@
+version: "99.0.0"
+strict: true
+rules:
+  "terminal\u001b[2J\u001b[H\u0007\u202e\nspoof":
+    enabled: false
+  skill-frontmatter:
+    enabled: false

@@ -10210,3 +10210,18 @@ class TestCursorNativePlugins:
             "cursor-marketplace-json-valid",
             "hooks-dangerous",
         } <= rules
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("flags", [[], ["--dry-run"]])
+def test_fix_unknown_rule_advisories_neutralize_terminal_controls(tmp_path, flags):
+    repo = copy_fixture("config/unknown-rule-terminal-controls", tmp_path)
+    config = repo / ".skillsaw.yaml"
+    original = config.read_bytes()
+    result = run_cli(["fix", str(repo), "--no-custom-rules", "--no-color", *flags])
+    assert result.returncode == 0, result.stderr
+    assert "Unknown rule 'terminal�[2J�[H���spoof'" in result.stdout
+    assert "Unknown rule 'skill-frontmatter'" in result.stdout
+    assert "No auto-fixable violations found." in result.stdout
+    assert not any((control in result.stdout for control in ("\x1b", "\x07", "\u202e")))
+    assert config.read_bytes() == original

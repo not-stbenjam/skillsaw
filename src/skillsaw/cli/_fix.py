@@ -6,6 +6,7 @@ import difflib
 import sys
 
 from ..context import RepositoryContext
+from ..diagnostics import terminal_safe
 from ..linter import Linter
 from ..rule import AutofixConfidence
 from ._config import load_config, resolve_fix_level
@@ -137,7 +138,7 @@ def _run_fix(args):
     c = _ansi_colors(color_enabled(sys.stdout, args.color))
 
     for message in advisory_messages:
-        print(f"{c['yellow']}⚠ {message}{c['reset']}")
+        print(f"{c['yellow']}⚠ {terminal_safe(message)}{c['reset']}")
     if advisory_messages:
         print()
 
