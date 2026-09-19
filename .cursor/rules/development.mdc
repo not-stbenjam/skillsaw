@@ -301,22 +301,21 @@ branch in the rule: `McpShapeDeferral` carries the gating repository type,
 whether the dialect-neutral checks survive, and which rule owns the syntax
 failure.
 
-**Adding an ecosystem** (Codex and Agent Plugins are the worked examples):
-put its discovery leg — the state-free plugin/manifest walks, catalog
-enumeration, local-source resolution and install-location helpers — in a new
+**Adding an ecosystem** (see Codex and Agent Plugins):
+put state-free discovery, catalog enumeration, source resolution and install
+helpers in
 `src/skillsaw/discovery/<ecosystem>.py`; add its evidence probe to
 `provenance()` in `repository_provenance.py`, and its
-context wrappers (caching, `--type` gating) in `context.py`, or a
-`repository_<ecosystem>.py` mixin when its line cap bites (Grok's);
+cached, type-gated wrappers in `context.py` or a
+`repository_<ecosystem>.py` mixin;
 a `RepositoryType` member per packaging claim, in `SKILL_REPO_TYPES` when
 its plugins carry skills — which turns the `agentskill-*` rules on but
 discovers none until `discover_skills` and `context._discover_skills` gain
 a leg — and in `_TYPE_PRIORITY`, or `repo_type` reads `unknown`; its marker in
-`PLUGIN_MARKER_DIR_NAMES` (`discovery/detect.py`), so one walk finds a
-package's plugin or catalog, never a second traversal; for a root-file marker,
-collect it in the same walk instead (`openclaw_manifest_files` is the example); its config-file
-cluster in the single plugin pass in `build_lint_tree` (through a contained
-helper);
+`PLUGIN_MARKER_DIR_NAMES` (`discovery/detect.py`) for directory markers;
+collect file markers in the same walk (see `openclaw_manifest_files`);
+attach its config files in the single plugin pass in `build_lint_tree`
+through a contained helper;
 teach `in_format_scope` nothing — it already reads the
 provenance claim set, so every `provenance_scope`-declaring rule honors
 the new claim the moment the evidence probe lands; give the new ecosystem's
