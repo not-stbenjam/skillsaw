@@ -275,3 +275,41 @@ def test_cli_native_skill_error_and_content_checks(tmp_path):
         v["rule_id"] == "content-broken-internal-reference"
         for v in json.loads(result.stdout)["violations"]
     )
+
+
+def test_nested_other_consumers_keep_portable_skills(tmp_path):
+    root = copy_fixture("package", tmp_path)
+    for prefix in (".agents/skills", "plugins/child/skills"):
+        skill = root / prefix / "portable"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: portable\ndescription: Use when reviewing an API change.\n---\nReview the request contract.\n"
+        )
+    marker = root / "plugins/child/.claude-plugin"
+    marker.mkdir()
+    (marker / "plugin.json").write_text('{"name":"child"}')
+    ctx = RepositoryContext(root)
+    assert {".agents/skills/portable/SKILL.md", "plugins/child/skills/portable/SKILL.md"} <= paths(
+        ctx, SkillBlock
+    )
+
+
+def test_installed_package_stores_are_not_authored_packages(tmp_path):
+    pi = tmp_path / ".pi"
+    pi.mkdir()
+    (pi / "settings.json").write_text('{"packages":["git:github.com/example/package"]}')
+    shutil.copytree(FIXTURES / "package", pi / "git/example/package")
+    ctx = RepositoryContext(tmp_path)
+    assert not ctx.pi_package_roots()
+    assert not paths(ctx, PiPackageBlock)
+
+
+def test_excludes_refresh_package_identity(tmp_path):
+    root = copy_fixture("package", tmp_path)
+    ctx = RepositoryContext(root)
+    assert ctx.provenance(root).pi
+    ctx.exclude_patterns.append("package.json")
+    ctx.apply_excludes()
+    assert not ctx.pi_package_roots()
+    assert not ctx.provenance(root).pi
+    assert RepositoryType.PI_PACKAGE not in ctx.repo_types

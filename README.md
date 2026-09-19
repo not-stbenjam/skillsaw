@@ -36,22 +36,6 @@ automatically; everything else comes with precise, agent-friendly guidance.
 **[Browse the rules](https://skillsaw.org/rules/)** |
 **[Read the documentation](https://skillsaw.org/)**
 
-### Pi packages and project resources
-
-skillsaw detects `package.json` files with a `pi` key or `pi-package` keyword,
-including packages in monorepos, and project resources under `.pi/`. It reads
-manifest resource arrays, globs and exclusions, conventional package directories,
-and repository-local paths declared in `.pi/settings.json`. Package paths are
-relative to the package root; project settings paths are relative to `.pi/`.
-
-Pi prompt templates and native skills (including flat Markdown skills) receive
-content and security checks. Pi's optional skill names and directory-independent
-names are preserved. Extensions and themes appear as non-prose tree nodes;
-extensions are never executed and remote packages are never installed.
-`pi-config-valid` and `pi-skill-valid` check the native metadata; enable
-`pi-resource-paths` explicitly to check literal paths after building or installing
-bundled resources. See [Pi configuration checks](https://skillsaw.org/rules/pi-config-valid/).
-
 ## See it work
 
 [Watch an AI agent grade, fix, and configure a repository from
@@ -107,6 +91,22 @@ INFO findings too. A configured `fail-on: info` includes them automatically.
 skillsaw detects repository types automatically and lints multiple formats in the same project. See [supported repository types](https://skillsaw.org/repo-types/) and the [complete rule reference](https://skillsaw.org/rules/) for details.
 
 
+
+### Pi packages and project resources
+
+skillsaw detects `package.json` files with a `pi` key or `pi-package` keyword,
+including packages in monorepos, and project resources under `.pi/`. It reads
+manifest resource arrays, globs and exclusions, conventional package directories,
+and repository-local paths declared in `.pi/settings.json`. Package paths are
+relative to the package root; project settings paths are relative to `.pi/`.
+
+Pi prompt templates and native skills (including flat Markdown skills) receive
+content and security checks. Pi's optional skill names and directory-independent
+names are preserved. Extensions and themes appear as non-prose tree nodes;
+extensions are never executed and remote packages are never installed.
+`pi-config-valid` and `pi-skill-valid` check the native metadata; enable
+`pi-resource-paths` explicitly to check literal paths after building or installing
+bundled resources. See [Pi configuration checks](https://skillsaw.org/rules/pi-config-valid/).
 
 ## Built for real workflows
 

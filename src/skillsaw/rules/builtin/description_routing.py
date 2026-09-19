@@ -94,7 +94,7 @@ class DescriptionRoutingRule(Rule):
     """Check whether descriptions provide useful routing or purpose signals."""
 
     since = "0.18.0"
-    surface_dependencies = ("copilot-agent-valid",)
+    surface_dependencies = ("copilot-agent-valid", "pi-skill-valid")
     repo_types = {
         RepositoryType.PI,
         RepositoryType.PI_PACKAGE,

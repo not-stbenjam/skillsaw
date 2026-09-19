@@ -7,7 +7,7 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
-from .repository_types import RepositoryType
+from .repository_types import RepositoryType, TOOL_REPO_TYPES
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
@@ -31,8 +31,8 @@ class RepositoryScanMixin:
         root_path: Path
         instruction_files: List[Path]
         repo_types: Set[RepositoryType]
+        _overridden_types: Optional[Set[RepositoryType]]
         exclude_patterns: List[str]
-        _pi_package_forced: bool
         _pi_packages_cache: Tuple[Tuple[str, ...], List[Path]]
         plugins: List[Path]
         codex_plugins: List[Path]
@@ -60,6 +60,18 @@ class RepositoryScanMixin:
         def _contained_plugin_claims_possible(self) -> bool: ...
 
         def _is_containment_plugin(self, path: Path) -> bool: ...
+
+    @property
+    def skill_count(self) -> int:
+        """Portable directories and Pi's native skills, including flat files."""
+        from .blocks.pi import PiSkillBlock
+
+        return len(self.skills) + len(self.lint_tree.find(PiSkillBlock))
+
+    @property
+    def _pi_package_forced(self) -> bool:
+        """A forced type selects resources without changing provenance."""
+        return RepositoryType.PI_PACKAGE in (getattr(self, "_overridden_types", None) or ())
 
     def pi_discovery_roots(self) -> List[Path]:
         """Declared packages plus an explicitly selected conventional root."""
@@ -134,6 +146,39 @@ class RepositoryScanMixin:
     def promptfoo_eval_files(self, evals_dir: Path) -> List[Path]:
         """YAML candidates beneath one lexical ``evals/`` directory."""
         return list(self._repository_scan().promptfoo_eval_files.get(evals_dir, ()))
+
+    def _refresh_tool_types(self) -> None:
+        """Fold committed tool configuration into the detected types.
+
+        Runs at the end of ``__init__`` — tool evidence includes AGENTS.md
+        and friends, which are not discovered when the packaging types are
+        worked out — and again whenever a caller mutates
+        ``exclude_patterns``, so an exclude added after construction takes
+        that tool's rules with it.
+
+        An explicit ``--type`` is the operator's answer to how the content is
+        *packaged*, and it stays authoritative for that: every forced type
+        survives, including a tool type the checkout has no marker for, so
+        ``--type muse`` runs the Muse rules on a repository that has yet to
+        commit ``.muse/hooks.json``. It is not an answer to which tools the
+        checkout configures, so the detected tool types are unioned in rather
+        than replaced — otherwise ``--type marketplace`` would quietly switch
+        off every tool-gated rule and leave rules that read
+        ``RepositoryType.X in context.repo_types`` reading a stale set.
+        """
+        detected = {RepositoryType(value) for value in self._detect_tool_type_values()}
+        if self._overridden_types is not None:
+            self.repo_types = set(self._overridden_types) | detected
+        else:
+            self.repo_types = (self.repo_types - TOOL_REPO_TYPES) | detected
+            if self.pi_package_roots():
+                self.repo_types.add(RepositoryType.PI_PACKAGE)
+            else:
+                self.repo_types.discard(RepositoryType.PI_PACKAGE)
+        if len(self.repo_types) > 1:
+            self.repo_types.discard(RepositoryType.UNKNOWN)
+        elif not self.repo_types:
+            self.repo_types.add(RepositoryType.UNKNOWN)
 
     def _detect_tool_type_values(self) -> set[str]:
         """``RepositoryType`` values for the tools this repository configures.

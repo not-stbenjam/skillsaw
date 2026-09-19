@@ -162,7 +162,6 @@ class RepositoryContext(
         self._excluded_cache_patterns: Tuple[str, ...] = ()
         self.has_apm = detect_discovery.has_apm(self.root_path)
         self._scan: Optional[detect_discovery.RepositoryScan] = None
-        self._pi_package_forced = repo_types is not None and RepositoryType.PI_PACKAGE in repo_types
         self._apm_compiled_roots: Optional[Set[Path]] = None
         self._apm_targets: Any = _UNSET  # frozenset once read; None = unknown
         self._codex_marketplace_paths: Optional[List[Path]] = None
@@ -282,13 +281,6 @@ class RepositoryContext(
             if t in self.repo_types:
                 return t
         return RepositoryType.UNKNOWN
-
-    @property
-    def skill_count(self) -> int:
-        """Portable directories and Pi's native skills, including flat files."""
-        from .blocks.pi import PiSkillBlock
-
-        return len(self.skills) + len(self.lint_tree.find(PiSkillBlock))
 
     def repo_type_names(self, include_unknown: bool = True) -> List[str]:
         """Sorted names of all detected repository types, builtin and plugin.
@@ -483,35 +475,6 @@ class RepositoryContext(
         self.reset_external_content_provenance()
         self._refresh_tool_types()
         self._lint_tree = None
-
-    def _refresh_tool_types(self) -> None:
-        """Fold committed tool configuration into the detected types.
-
-        Runs at the end of ``__init__`` — tool evidence includes AGENTS.md
-        and friends, which are not discovered when the packaging types are
-        worked out — and again whenever a caller mutates
-        ``exclude_patterns``, so an exclude added after construction takes
-        that tool's rules with it.
-
-        An explicit ``--type`` is the operator's answer to how the content is
-        *packaged*, and it stays authoritative for that: every forced type
-        survives, including a tool type the checkout has no marker for, so
-        ``--type muse`` runs the Muse rules on a repository that has yet to
-        commit ``.muse/hooks.json``. It is not an answer to which tools the
-        checkout configures, so the detected tool types are unioned in rather
-        than replaced — otherwise ``--type marketplace`` would quietly switch
-        off every tool-gated rule and leave rules that read
-        ``RepositoryType.X in context.repo_types`` reading a stale set.
-        """
-        detected = {RepositoryType(value) for value in self._detect_tool_type_values()}
-        if self._overridden_types is not None:
-            self.repo_types = set(self._overridden_types) | detected
-        else:
-            self.repo_types = (self.repo_types - TOOL_REPO_TYPES) | detected
-        if len(self.repo_types) > 1:
-            self.repo_types.discard(RepositoryType.UNKNOWN)
-        elif not self.repo_types:
-            self.repo_types.add(RepositoryType.UNKNOWN)
 
     def _detect_types(self) -> Set[RepositoryType]:
         """Detect all applicable repository types.
