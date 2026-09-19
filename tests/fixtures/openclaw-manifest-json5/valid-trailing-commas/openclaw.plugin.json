@@ -1,0 +1,11 @@
+{
+  // Configure the weather forecast provider.
+  "id": "weather",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "units": {"enum": ["celsius", "fahrenheit",]},
+    },
+  },
+  "future": [],
+}

@@ -1,0 +1,6 @@
+{
+  // Examples are ordinary strings, even with a trailing comma.
+  "id": "weather",
+  "configSchema": {},
+  "description": "Literal examples: {, and [,",
+}

@@ -1,0 +1,6 @@
+{
+  "id": "weather",
+  "configSchema": { // No configuration is required.
+    ,
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "weather",
+  "configSchema": {},
+  "future": [ // No capabilities are registered.
+    // A second comment still leaves the array empty.
+    ,
+  ]
+}

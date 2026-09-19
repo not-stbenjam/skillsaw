@@ -10269,3 +10269,80 @@ def test_pi_user_only_skills_can_opt_into_routing_checks(tmp_path):
     assert "does not say when to use this skill" in manual[0]["message"]
     assert manual[0]["line"] == 2
     assert [finding for finding in configured if finding not in manual] == defaults
+
+
+def _lint_openclaw_json5_fixture(repo):
+    return run_cli(
+        [
+            "lint",
+            str(repo),
+            "--no-custom-rules",
+            "--rule",
+            "openclaw-manifest-valid",
+            "--format",
+            "json",
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        "empty-object-comma",
+        "nested-empty-array-comma",
+        "empty-object-comment-comma",
+        "empty-array-comment-comma",
+    ],
+)
+def test_empty_container_comma_is_invalid_json5(fixture, tmp_path):
+    result = _lint_openclaw_json5_fixture(
+        copy_fixture("openclaw-manifest-json5/" + fixture, tmp_path)
+    )
+    assert result.returncode == 1, result.stderr
+    violations = json.loads(result.stdout)["violations"]
+    assert len(violations) == 1
+    assert violations[0]["rule_id"] == "openclaw-manifest-valid"
+    assert "Cannot parse JSON5" in violations[0]["message"]
+
+
+@pytest.mark.parametrize("fixture", ["valid-trailing-commas", "valid-empty-containers"])
+def test_ordinary_jsonc_preserves_fast_path(fixture, tmp_path, monkeypatch):
+    from skillsaw.formats import openclaw
+
+    def unexpected_json5(*args, **kwargs):
+        pytest.fail("ordinary JSONC should not require the slower JSON5 parser")
+
+    monkeypatch.setattr(openclaw.json5, "loads", unexpected_json5)
+    result = _lint_openclaw_json5_fixture(
+        copy_fixture("openclaw-manifest-json5/" + fixture, tmp_path)
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["violations"] == []
+
+
+def test_comma_in_string_remains_valid_json5(tmp_path):
+    result = _lint_openclaw_json5_fixture(
+        copy_fixture("openclaw-manifest-json5/valid-comma-in-string", tmp_path)
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["violations"] == []
+
+
+def test_comment_like_string_scanning_is_bounded(tmp_path, monkeypatch):
+    import time
+    from skillsaw.formats import openclaw
+
+    repo = copy_fixture("openclaw-manifest-json5/valid-comment-like-string", tmp_path)
+    manifest = repo / "openclaw.plugin.json"
+    manifest.write_text(manifest.read_text().replace("[//", "[//" * 80000))
+
+    def unexpected_json5(*args, **kwargs):
+        pytest.fail("a valid JSONC string must keep the fast parser path")
+
+    monkeypatch.setattr(openclaw.json5, "loads", unexpected_json5)
+    started = time.perf_counter()
+    data, error = openclaw.read_manifest(manifest)
+    elapsed = time.perf_counter() - started
+    assert error is None
+    assert data["future"] == "[//" * 80000
+    assert elapsed < 1.0, f"manifest scan took {elapsed:.2f}s; likely superlinear"

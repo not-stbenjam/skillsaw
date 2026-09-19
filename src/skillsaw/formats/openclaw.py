@@ -7,6 +7,7 @@ Native manifests are JSON5; package.json remains ordinary JSON.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,33 @@ MANIFEST = "openclaw.plugin.json"
 MAX_MANIFEST_BYTES = 256 * 1024
 # DEFAULT_PLUGIN_METADATA_MAX_BYTES in plugin-cache-files.ts; packages use it.
 MAX_PACKAGE_BYTES = 16 * 1024 * 1024
+_JSONC_TOKEN = re.compile(r"//|\S")
+
+
+def _needs_json5_comma_check(content: str) -> bool:
+    """Find leading commas in one pass, skipping strings and line comments."""
+    position = 0
+    previous = ""
+    while match := _JSONC_TOKEN.search(content, position):
+        token = match.group()
+        position = match.end()
+        if token == '"':
+            try:
+                _, position = json.decoder.scanstring(content, position)
+            except ValueError:
+                # JSON5 strings may require syntax the JSON scanner rejects.
+                return True
+            previous = '"'
+        elif token == "//":
+            newline = content.find("\n", position)
+            if newline == -1:
+                return False
+            position = newline + 1
+        else:
+            if token == "," and previous in ("{", "["):
+                return True
+            previous = token
+    return False
 
 
 @cached_file_read
@@ -45,8 +73,11 @@ def read_manifest(path: Path) -> tuple[object | None, str | None]:
     except ValueError:
         pass
     # The JSONC scanner tolerates unfinished block comments and only treats
-    # LF as a line-comment terminator. Other forms need the native parser.
-    if not any(marker in content for marker in ("/*", "\r", "\u2028", "\u2029")):
+    # LF as a line-comment terminator. It also removes commas in empty
+    # containers, which JSON5 rejects. These forms need the native parser.
+    if not any(marker in content for marker in ("/*", "\r", "\u2028", "\u2029")) and not (
+        "," in content and _needs_json5_comma_check(content)
+    ):
         try:
             return json.loads(strip_jsonc(content)), None
         except RecursionError:

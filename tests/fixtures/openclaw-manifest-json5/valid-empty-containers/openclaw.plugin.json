@@ -1,0 +1,6 @@
+{
+  // This plugin does not need additional configuration.
+  "id": "weather",
+  "configSchema": {},
+  "future": [],
+}
