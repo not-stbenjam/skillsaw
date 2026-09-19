@@ -3,14 +3,14 @@
 
 # cursor-hooks-valid
 
-.cursor/hooks.json must declare version 1 and known hook events with commands
+Cursor hooks must use known events and valid commands; project hooks require version 1
 
 | | |
 |---|---|
 | **Severity** | error (auto) |
 | **Autofix** | - |
 | **Since** | v0.19.0 |
-| **Repo Types** | cursor |
+| **Repo Types** | cursor, cursor-marketplace, cursor-plugin |
 | **Category** | [Cursor](cursor.md) |
 
 ## Why
@@ -42,8 +42,8 @@ the same path they use for Claude Code hooks and settings.
 
 ## Severity
 
-Structural defects that stop a hook running are errors: a missing or
-non-integer `version`, a missing `hooks` object, an event whose value is not
+Structural defects that stop a hook running are errors: a missing project-hook `version` or
+a non-integer `version`, a missing `hooks` object, an event whose value is not
 an array, an entry that is not an object, an unknown `type`, a missing or
 empty `command`/`prompt`, a non-string `matcher`, and a `timeout` that is
 not a finite number.
@@ -102,8 +102,15 @@ event whose array is empty and so configures nothing.
   relative to the project root, or a shell snippet. For a script stored
   beside the manifest, use `.cursor/hooks/script.sh`, not
   `./hooks/script.sh`. Give every prompt hook a non-empty `prompt`.
-- Set `"version": 1` — it is required, and `1` is the only value Cursor
-  accepts today. Write it unquoted; `"1"` is a string.
+- Set `"version": 1` in project hooks — it is required there. Plugin hooks
+  may omit it; when present, `1` is the only accepted value. Write it unquoted; `"1"` is a string.
+
+## Plugin hooks
+
+Native Cursor plugins also load hooks from `hooks/hooks.json`, a declared
+file, or an inline `hooks` object in their manifest or marketplace entry.
+The same event and handler checks apply. Unlike project `.cursor/hooks.json`,
+plugin hooks may omit `version`; an explicit version is still validated.
 
 ## Configuration
 

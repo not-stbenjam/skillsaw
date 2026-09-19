@@ -1,0 +1,4 @@
+---
+description: Run application checks before publishing changes.
+---
+Run the project test suite and summarize any failing checks.

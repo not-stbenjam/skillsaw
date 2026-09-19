@@ -18,6 +18,7 @@ from skillsaw.rules.builtin.content_analysis import (
 )
 from skillsaw.blocks import DevinSkillBlock
 from skillsaw.blocks.pi import PiPromptBlock, PiSkillBlock
+from skillsaw.blocks.cursor import CursorAgentBlock
 from skillsaw.rules.builtin.utils import read_frontmatter_commented
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -99,6 +100,9 @@ class DescriptionRoutingRule(Rule):
         RepositoryType.PI,
         RepositoryType.PI_PACKAGE,
         RepositoryType.AGENTSKILLS,
+        RepositoryType.CURSOR,
+        RepositoryType.CURSOR_PLUGIN,
+        RepositoryType.CURSOR_MARKETPLACE,
         RepositoryType.SINGLE_PLUGIN,
         RepositoryType.MARKETPLACE,
         RepositoryType.DOT_CLAUDE,
@@ -205,6 +209,7 @@ class DescriptionRoutingRule(Rule):
             CopilotAgentBlock,
             OpenCodeAgentBlock,
             GrokAgentBlock,
+            CursorAgentBlock,
             CommandBlock,
             OpenCodeCommandBlock,
             GrokCommandBlock,

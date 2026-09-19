@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING, Tuple
 from .diagnostics import safe_display
 
 from .blocks import (
+    ContentBlock,
+    FrontmatteredBlock,
     AgentBlock,
     AgentMemoryBlock,
     AgentMemoryIndexBlock,
@@ -80,6 +82,7 @@ from .blocks import (
     VsCodeMcpBlock,
 )
 from .formats.codex import (
+    inline_documents,
     CODEX_CONFIG_FILENAME,
     CODEX_DIR_NAME,
     CODEX_HOOKS_FILENAME,
@@ -95,7 +98,18 @@ from .discovery.excludes import is_root_or_ancestor_excluded
 from .discovery.opencode import contained_instruction_globs
 from .blocks.pi import PiPackageNode, PiPackageBlock
 from .pi_tree import attach_pi_resources, attach_pi_projects
-from .formats import antigravity, devin, grok, muse
+from .formats import antigravity, devin, grok, muse, cursor
+from .blocks.cursor import (
+    CursorAgentBlock,
+    CursorPluginNode,
+    CursorMarketplaceBlock,
+    CursorPluginBlock,
+    CursorPluginHooksBlock,
+    CursorInlineHooksBlock,
+    CursorRuleValidationBlock,
+    CursorInlineMcpBlock,
+    CursorPluginMcpBlock,
+)
 from .utils import has_apm_generated_header, read_text
 from .paths import (
     contained_resolve,
@@ -151,6 +165,7 @@ _CLINE_EXCLUDED_DIRS = frozenset({"workflows", "hooks", "skills"})
 _EDITOR_GLOBS = (
     (".cursor", "rules", "**/*.mdc", "CursorRuleBlock"),
     (".cursor", "commands", "**/*.md", "CursorCommandBlock"),
+    (".cursor", "agents", "**/*.md", "CursorAgentBlock"),
     (".github", "agents", "**/*.md", "CopilotAgentBlock"),
     (".github", "prompts", "**/*.prompt.md", "CopilotPromptBlock"),
     (".github", "chatmodes", "**/*.chatmode.md", "CopilotAgentBlock"),
@@ -587,6 +602,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         root.set_parents()
         return root
     state = _TreeBuildState(context=context, root=root, repo_root=repo_root)
+    cursor_prose = []
 
     _is_excluded = context.is_path_excluded
     _is_in_compiled_dir = context.in_apm_compiled_dir
@@ -953,6 +969,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         state.add_block(root, legacy_cursor, InstructionBlock)
 
     for cursor_dir in context.agent_tool_dirs(".cursor"):
+        _add_glob(root, cursor_dir / "agents", "**/*.md", CursorAgentBlock)
         # APM's cursor target compiles ``.apm/instructions/`` into
         # ``.cursor/rules/`` only (docs/repo-types.md) — not commands, mcp.json
         # or hooks.json, which are authored even in an APM repo. So the compiled
@@ -1355,7 +1372,11 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                     )
         root.children.append(catalog_node)
 
+    for catalog in context.cursor_marketplace_paths():
+        root.children.append(CursorMarketplaceBlock(path=catalog))
+
     # --- Plugins (build first so skills can nest inside them) ---
+    cursor_plugin_nodes = {}
     plugin_nodes: dict[Path, PluginNode] = {}
     codex_plugin_nodes: dict[Path, CodexPluginNode] = {}
     grok_plugin_nodes: dict[Path, GrokPluginNode] = {}
@@ -1383,6 +1404,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         *context.plugins,
         *context.codex_plugins,
         *context.grok_plugins,
+        *context.cursor_plugin_roots(),
         *context.antigravity_plugins,
         *context.agent_plugins,
         *context.pi_discovery_roots(),
@@ -1416,7 +1438,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # customization root, so without the second half an authored
         # ``.agents/plugins/<name>/`` would be discarded as generated output
         # in every APM repository with a Codex target.
-        if _is_in_compiled_dir(plugin_path) and not (prov.codex or prov.grok or prov.antigravity):
+        if _is_in_compiled_dir(plugin_path) and not (
+            prov.codex or prov.grok or prov.antigravity or prov.cursor
+        ):
             continue
         resolved_plugin = safe_resolve(plugin_path)
         if resolved_plugin is None:
@@ -1435,12 +1459,15 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             container = PluginNode(path=plugin_path)
             plugin_nodes[resolved_plugin] = container
         elif resolved_plugin == root.resolved_path and (
-            prov.codex or prov.grok or prov.antigravity or is_pi or is_agent_plugin
+            prov.codex or prov.grok or prov.antigravity or prov.cursor or is_pi or is_agent_plugin
         ):
             container = root
         elif prov.codex:
             container = CodexPluginNode(path=plugin_path)
             codex_plugin_nodes[resolved_plugin] = container
+        elif prov.cursor:
+            container = CursorPluginNode(path=plugin_path)
+            cursor_plugin_nodes[resolved_plugin] = container
         elif prov.grok:
             container = GrokPluginNode(path=plugin_path)
             grok_plugin_nodes[resolved_plugin] = container
@@ -1487,7 +1514,74 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        _add_plugin_prose(container, plugin_path, resolved_plugin)
+        cursor_components = [
+            (
+                origin,
+                data,
+                {
+                    field: cursor.component_files(plugin_path, data, field, _is_excluded)
+                    for field in ("rules", "commands", "agents")
+                },
+            )
+            for origin, data in (context.cursor_views(resolved_plugin) if prov.cursor else [])
+        ]
+        # Cursor overrides replace conventional directories. Attaching generic
+        # prose here would lint unloaded defaults and assign Claude block types.
+        # Mixed packages still retain the other ecosystems' conventional prose.
+        if prov.ecosystems != frozenset({"cursor"}):
+            _add_plugin_prose(container, plugin_path, resolved_plugin)
+        elif _inside_plugin(plugin_path / "README.md", resolved_plugin):
+            state.add_block(
+                container, plugin_path / "README.md", ReadmeBlock, owner=resolved_plugin
+            )
+        if prov.cursor:
+            for origin, data, components in cursor_components:
+                manifest_path = plugin_path / cursor.MARKER / "plugin.json"
+                config = CursorPluginBlock(
+                    path=manifest_path if safe_exists(manifest_path) else origin,
+                    plugin_dir=plugin_path,
+                    effective_data=data,
+                )
+                native, _ = cursor.read_manifest(manifest_path)
+                config.component_sources = {
+                    field: manifest_path if isinstance(native, dict) and field in native else origin
+                    for field in data
+                }
+                container.children.append(config)
+                for field, cls in (
+                    ("rules", CursorRuleBlock),
+                    ("commands", CursorCommandBlock),
+                    ("agents", CursorAgentBlock),
+                ):
+                    for path in components[field]:
+                        if _inside_plugin(path, resolved_plugin):
+                            cursor_prose.append((container, path, cls, resolved_plugin))
+                for field, cls in (
+                    ("hooks", CursorPluginHooksBlock),
+                    ("mcpServers", CursorPluginMcpBlock),
+                ):
+                    for path in cursor.component_paths(plugin_path, data, field):
+                        if not is_root_or_ancestor_excluded(
+                            path, plugin_path, _is_excluded
+                        ) and _inside_plugin(path, resolved_plugin):
+                            state.add_parser_block(config, path, cls, owner=resolved_plugin)
+                    value = data.get(field)
+                    values = (
+                        inline_documents(value, field)
+                        if field == "mcpServers"
+                        else value if isinstance(value, list) else [value]
+                    )
+                    for inline in values:
+                        if isinstance(inline, dict):
+                            inline_cls = (
+                                CursorInlineHooksBlock if field == "hooks" else CursorInlineMcpBlock
+                            )
+                            block = inline_cls(
+                                path=config.component_sources.get(field, config.path),
+                                inline_data=inline,
+                            )
+                            block.plugin_owner = resolved_plugin
+                            config.children.append(block)
         if is_pi:
             state.add_parser_block(
                 container, plugin_path / "package.json", PiPackageBlock, owner=resolved_plugin
@@ -1798,7 +1892,8 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         resolved_skill = safe_resolve(skill_path) or skill_path
         for candidate in (resolved_skill, *resolved_skill.parents):
             node = (
-                plugin_nodes.get(candidate)
+                cursor_plugin_nodes.get(candidate)
+                or plugin_nodes.get(candidate)
                 or codex_plugin_nodes.get(candidate)
                 or grok_plugin_nodes.get(candidate)
                 or antigravity_plugin_nodes.get(candidate)
@@ -1918,6 +2013,30 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             continue
 
     attach_pi_projects(state, root)
+    # Explicit Cursor paths may name skills or another host's prose. Wait
+    # until those semantic owners attach, then add Cursor's independent rule
+    # parser without replacing their interpretation or counting the body twice.
+    if cursor_prose:
+        prose_paths = set()
+        cursor_rule_paths = set()
+        for block in root.walk():
+            if isinstance(block, (ContentBlock, FrontmatteredBlock)):
+                prose_paths.add(block.resolved_path)
+            if isinstance(block, CursorRuleBlock):
+                cursor_rule_paths.add(block.resolved_path)
+        for parent, path, cls, owner in cursor_prose:
+            if cls is not CursorRuleBlock:
+                state.add_block(parent, path, cls, owner=owner)
+                prose_paths.add(safe_resolve(path))
+                continue
+            resolved = safe_resolve(path)
+            if resolved is None or resolved in cursor_rule_paths:
+                continue
+            role = CursorRuleValidationBlock if resolved in prose_paths else CursorRuleBlock
+            if state.add_parser_block(parent, path, role, owner=owner):
+                state.seen.add(resolved)
+                prose_paths.add(resolved)
+                cursor_rule_paths.add(resolved)
 
     # Configured OpenCode instructions are ambient prose, but their
     # original semantic owner wins when a path is also a skill, command,

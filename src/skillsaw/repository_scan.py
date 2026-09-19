@@ -272,7 +272,7 @@ class RepositoryScanMixin:
             is_excluded=self.is_path_excluded,
         )
 
-        return self._filter_pi_skills(skills)
+        return self._filter_pi_skills(self._filter_cursor_skills(skills))
 
     def _filter_pi_skills(self, skills: List[Path]) -> List[Path]:
         """Assign native roles while retaining portable candidates for exclusions."""

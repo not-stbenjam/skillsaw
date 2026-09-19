@@ -84,7 +84,14 @@ def inline_documents(declared: Any, key: str) -> List[Dict[str, Any]]:
         # legitimately hold a server or event named the same as the wrapper,
         # and unwrapping on its presence alone would silently discard every
         # sibling — including ones the security rules need to see.
-        wrapped = isinstance(nested, dict) and len(item) == 1
+        # A sole MCP server can itself be named mcpServers. A connection
+        # inside that object identifies a server config, not a wrapped map.
+        server_config = (
+            key == "mcpServers"
+            and isinstance(nested, dict)
+            and any(isinstance(nested.get(connection), str) for connection in ("command", "url"))
+        )
+        wrapped = isinstance(nested, dict) and len(item) == 1 and not server_config
         documents.append({key: nested if wrapped else item})
     return documents
 

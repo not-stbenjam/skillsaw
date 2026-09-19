@@ -5863,6 +5863,7 @@ class TestAssertDirectives:
 BROKEN_FIXTURES = [
     "pi/invalid",
     "pi/invalid-skill",
+    "cursor-plugins/broken",
     "single-plugin/broken",
     "single-plugin/with-secrets",
     "single-plugin/content-violations",
@@ -5915,6 +5916,7 @@ BROKEN_FIXTURES = [
 CLEAN_FIXTURES = [
     "pi/conventional",
     "pi/project",
+    "cursor-plugins/clean",
     "single-plugin/clean",
     "marketplace/clean",
     "marketplace/archive-source",
@@ -10206,3 +10208,22 @@ def test_muse_newly_documented_events_have_no_advisories(tmp_path):
     result = run_lint(repo, "--rule", "muse-hooks-valid", "-v")
     assert result["rc"] == 0
     assert violations(result) == []
+
+
+@pytest.mark.integration
+class TestCursorNativePlugins:
+    def test_clean_plugin_passes(self, tmp_path):
+        repo = copy_fixture("cursor-plugins/clean", tmp_path)
+        result = run_lint(repo)
+        assert result["rc"] == 0, result
+
+    def test_broken_components_and_security(self, tmp_path):
+        repo = copy_fixture("cursor-plugins/broken", tmp_path)
+        result = run_lint(repo)
+        assert result["rc"] == 1, result
+        rules = {v["rule_id"] for v in result["out"]["violations"]}
+        assert {
+            "cursor-plugin-json-valid",
+            "cursor-marketplace-json-valid",
+            "hooks-dangerous",
+        } <= rules

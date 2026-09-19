@@ -186,16 +186,19 @@ RULE_GROUPS = [
     (
         "Cursor",
         "cursor",
-        ["cursor-rules-valid", "cursor-hooks-valid"],
-        "Validates Cursor's repository-shipped configuration under every `.cursor/` "
+        ["cursor-rules-valid", "cursor-hooks-valid", "cursor-plugin-json-valid", "cursor-marketplace-json-valid"],
+        "Validates native `.cursor-plugin` manifests, marketplaces and component "
+        "paths. It also validates Cursor configuration under every `.cursor/` "
         "directory in the repository, the root one and any in a monorepo "
         "subpackage: `rules/**/*.mdc` "
         "frontmatter (the fields that decide whether a rule ever activates) and "
         "`.cursor/hooks.json` structure. Cursor reads AGENTS.md for portable "
         "instructions, so no Cursor-specific instruction format is validated. "
-        "Enabled automatically wherever a `.cursorrules` file exists, or a "
+        "Packaging rules activate on `.cursor-plugin/plugin.json` or "
+        "`.cursor-plugin/marketplace.json`. Project rules activate wherever a "
+        "`.cursorrules` file exists, or a "
         "`.cursor/` directory holds Cursor content — `rules/`, `commands/`, "
-        "`skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only "
+        "`agents/`, `skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only "
         "unrelated files does not activate them.",
     ),
     (

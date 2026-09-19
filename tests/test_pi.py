@@ -557,3 +557,41 @@ def test_dual_package_retains_claude_hooks_security(tmp_path):
     assert paths(ctx, HooksBlock) == {"hooks/hooks.json"}
     violations = HooksDangerousRule().check(ctx)
     assert any(v.file_path == ctx.root_path / "hooks/hooks.json" for v in violations)
+
+
+def test_late_cursor_exclusion_preserves_pi_portable_skills(tmp_path):
+    root = copy_fixture("dual-cursor", tmp_path)
+    ctx = RepositoryContext(root)
+    assert ctx.provenance(root).ecosystems == frozenset({"pi", "cursor"})
+    ctx.exclude_patterns.append(".cursor-plugin/plugin.json")
+    ctx.apply_excludes()
+    fresh = RepositoryContext(root, exclude_patterns=[".cursor-plugin/plugin.json"])
+    assert paths(ctx, SkillBlock) == paths(fresh, SkillBlock) == {"skills/check/SKILL.md"}
+    assert ctx.provenance(root).ecosystems == frozenset({"pi"})
+
+
+@pytest.mark.parametrize(
+    "host,marker,forced",
+    [
+        ("grok", ".grok/config.toml", None),
+        ("antigravity", ".agents/plugins.json", None),
+        ("codex", ".agents/plugins/marketplace.json", None),
+        (
+            "agent",
+            ".agents/plugins/marketplace.json",
+            {RepositoryType.AGENT_PLUGIN, RepositoryType.AGENTSKILLS},
+        ),
+    ],
+)
+def test_late_catalog_exclusion_preserves_surviving_pi_skills(host, marker, forced, tmp_path):
+    root = copy_fixture("dual-" + host, tmp_path)
+    ctx = RepositoryContext(root, repo_types=forced)
+    expected = {"packages/demo/skills/check/SKILL.md"}
+    assert paths(ctx, SkillBlock) == expected
+    ctx.exclude_patterns.append(marker)
+    ctx.apply_excludes()
+    fresh = RepositoryContext(root, exclude_patterns=[marker], repo_types=forced)
+    assert paths(ctx, SkillBlock) == paths(fresh, SkillBlock) == expected
+    ctx.exclude_patterns.append("packages/demo/skills/**")
+    ctx.apply_excludes()
+    assert not paths(ctx, SkillBlock)

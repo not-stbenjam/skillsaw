@@ -44,6 +44,8 @@ class RepositoryAntigravityMixin:
         @staticmethod
         def _under_any(path: Path, roots: Set[Path]) -> bool: ...
 
+        def pi_discovery_roots(self) -> List[Path]: ...
+
     def _init_antigravity(self, repo_types: Optional[Iterable[RepositoryType]]) -> None:
         """Initialize caches and discover declared or explicitly requested plugins."""
         self._antigravity_plugin_forced = (
@@ -213,6 +215,7 @@ class RepositoryAntigravityMixin:
                 *self.agent_plugins,
                 *self.grok_plugin_roots(),
                 *self.antigravity_plugin_roots(),
+                *self.pi_discovery_roots(),
             )
             if (r := safe_resolve(p)) is not None
         }

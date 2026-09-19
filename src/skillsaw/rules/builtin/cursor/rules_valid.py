@@ -138,7 +138,9 @@ class CursorRulesValidRule(Rule):
 
     since = "0.19.0"
 
-    repo_types = frozenset({RepositoryType.CURSOR})
+    repo_types = frozenset(
+        {RepositoryType.CURSOR, RepositoryType.CURSOR_PLUGIN, RepositoryType.CURSOR_MARKETPLACE}
+    )
 
     autofix_confidence = AutofixConfidence.SAFE
 

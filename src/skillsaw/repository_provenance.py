@@ -20,7 +20,7 @@ from .discovery import codex as codex_discovery
 from .formats.codex import codex_manifest_is_contained, codex_marker_escapes
 from .formats.codex_manifest import declares_openai_extension
 from .formats.grok import grok_manifest_is_contained, grok_marker_escapes
-from .paths import safe_exists, safe_is_file, safe_is_symlink, safe_resolve
+from .paths import safe_is_dir, safe_exists, safe_is_file, safe_is_symlink, safe_resolve
 
 if TYPE_CHECKING:
     from .lint_target import LintTarget
@@ -81,6 +81,15 @@ class PluginProvenance:
     @property
     def agent_plugin(self) -> bool:
         return "agent-plugin" in self.ecosystems
+
+    @property
+    def cursor(self) -> bool:
+        return "cursor" in self.ecosystems
+
+    @property
+    def cursor_only(self) -> bool:
+        """Cursor claims the directory and Claude does not."""
+        return self.cursor and not self.claude
 
     @property
     def grok(self) -> bool:
@@ -176,6 +185,51 @@ class RepositoryProvenanceMixin:
         def grok_plugin_root_set(self) -> Set[Path]: ...
 
         def is_codex_installed_plugin(self, plugin_dir: Path) -> bool: ...
+
+    def _plugins_dir_suggests_claude_marketplace(self) -> bool:
+        """Whether ``plugins/`` is marketplace evidence once non-Claude claims
+        are subtracted.
+
+        A bare ``plugins/`` directory has always inferred MARKETPLACE. A
+        Codex catalog explains the children it claims, so only a child it
+        does not claim (or a dual-marker child) keeps that inference. A
+        repository with no Codex evidence keeps its historical type exactly.
+        """
+        plugins_dir = self.root_path / "plugins"
+        if not safe_is_dir(plugins_dir):
+            return False
+        try:
+            children = [
+                item
+                for item in plugins_dir.iterdir()
+                if item.is_dir() and not item.name.startswith(".")
+            ]
+        except OSError:
+            return False
+        if not children:
+            # An empty plugins/ keeps its historical meaning unless another
+            # ecosystem has positive evidence explaining the directory. A
+            # portable Agent Plugins claim counts only when it lives under
+            # plugins/ itself — a package declared at the repository root
+            # says nothing about why plugins/ exists. Grok's catalog is asked
+            # of the root for the same reason, and Codex's is root-anchored
+            # already: a package's own catalog at
+            # ``packages/foo/.grok-plugin/marketplace.json`` explains that
+            # package's directory, not the repository's.
+            resolved_plugins = safe_resolve(plugins_dir)
+            agent_plugin_claims_plugins_dir = resolved_plugins is not None and any(
+                claim.is_relative_to(resolved_plugins) for claim in self._agent_plugin_claim_set()
+            )
+            return (
+                not self.codex_catalog_exists()
+                and not self.grok_root_catalog_exists()
+                and not any(p.parent.parent == self.root_path for p in self._cursor_evidence()[0])
+                and not agent_plugin_claims_plugins_dir
+            )
+        return any(
+            not (provenance := self.provenance(item)).ecosystems or provenance.claude
+            for item in children
+        )
 
     def _agent_plugin_claim_set(self) -> Set[Path]:
         """Filesystem-declared portable plugin roots, independent of ``--type``."""
@@ -318,6 +372,8 @@ class RepositoryProvenanceMixin:
             and not antigravity_marker_escapes(plugin_dir)
         ):
             ecosystems.add("antigravity")
+        if resolved is not None and resolved in self._cursor_claim_set():
+            ecosystems.add("cursor")
         record = PluginProvenance(
             ecosystems=frozenset(ecosystems),
             installed=self.is_codex_installed_plugin(plugin_dir),
@@ -435,7 +491,8 @@ class RepositoryProvenanceMixin:
         """
         if self._contained_plugin_roots is None:
             self._contained_plugin_roots = (
-                set(self.codex_plugin_roots())
+                {root for root in self.cursor_plugin_roots() if self.provenance(root).cursor_only}
+                | set(self.codex_plugin_roots())
                 | set(self._agent_plugin_root_set())
                 | {root for root in self.grok_plugin_roots() if self.provenance(root).grok_only}
                 | {
@@ -479,7 +536,8 @@ class RepositoryProvenanceMixin:
     def _contained_plugin_claims_possible(self) -> bool:
         """Whether a skill walk can encounter a package containment boundary."""
         return (
-            self._codex_claims_possible()
+            bool(self.cursor_plugin_roots())
+            or self._codex_claims_possible()
             or bool(self._agent_plugin_root_set())
             or bool(self.grok_plugin_roots())
             or bool(self.antigravity_plugin_roots())
@@ -501,4 +559,6 @@ class RepositoryProvenanceMixin:
         containment contract.
         """
         record = self.provenance(path)
-        return record.codex_only or record.grok_only or record.antigravity_only
+        return (
+            record.codex_only or record.grok_only or record.antigravity_only or record.cursor_only
+        )

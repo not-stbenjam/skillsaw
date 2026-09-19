@@ -1,0 +1,1 @@
+{"name": "cat", "plugins": [{"name": "demo", "source": {"source": "local", "path": "./packages/demo"}}]}
