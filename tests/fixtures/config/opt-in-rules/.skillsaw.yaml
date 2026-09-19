@@ -30,3 +30,5 @@ rules:
     enabled: true
   muse-hooks-valid:
     enabled: true
+  pi-resource-paths:
+    enabled: true

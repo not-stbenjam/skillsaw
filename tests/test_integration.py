@@ -5861,6 +5861,8 @@ class TestAssertDirectives:
 
 
 BROKEN_FIXTURES = [
+    "pi/invalid",
+    "pi/invalid-skill",
     "cursor-plugins/broken",
     "single-plugin/broken",
     "single-plugin/with-secrets",
@@ -5912,6 +5914,8 @@ BROKEN_FIXTURES = [
 ]
 
 CLEAN_FIXTURES = [
+    "pi/conventional",
+    "pi/project",
     "cursor-plugins/clean",
     "single-plugin/clean",
     "marketplace/clean",
@@ -5953,6 +5957,7 @@ CLEAN_FIXTURES = [
 ]
 
 OPT_IN_RULES = {
+    "pi-resource-paths",
     "claude-command-sections",
     "claude-command-name-format",
     "mcp-prohibited",

@@ -148,6 +148,7 @@ nav:
     - OpenAI Codex: rules/codex.md
     - OpenClaw: rules/openclaw.md
     - OpenCode: rules/opencode.md
+    - Pi: rules/pi.md
     - Promptfoo: rules/promptfoo.md
     - Security: rules/security.md
     - Vercel: rules/vercel.md

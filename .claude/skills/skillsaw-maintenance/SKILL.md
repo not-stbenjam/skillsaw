@@ -41,6 +41,7 @@ to check, the rules that map, and sync notes (hand-copied values that can drift)
 | Model Context Protocol and MCP Registry | [references/mcp.md](references/mcp.md) | `mcp/`, `mcp_registry/` |
 | CodeRabbit (`.coderabbit.yaml`) | [references/coderabbit.md](references/coderabbit.md) | `coderabbit/` |
 | APM (`.apm/`) | [references/apm.md](references/apm.md) | `apm/` |
+| Pi (packages and project resources) | [references/pi.md](references/pi.md) | `pi/`, `formats/pi.py` |
 | Muse Code (hooks) | [references/muse.md](references/muse.md) | `muse/`, `formats/muse.py` |
 | Grok Build (`.grok/` project layer) | [references/grok.md](references/grok.md) | `grok/`, `formats/grok.py` |
 | Google Antigravity (`.agents/` customization roots, plugins) | [references/antigravity.md](references/antigravity.md) | `antigravity/`, `formats/antigravity.py` |

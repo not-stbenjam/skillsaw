@@ -90,6 +90,7 @@ class RepositoryContext(
         RepositoryType.ANTIGRAVITY_PLUGIN,
         RepositoryType.AGENT_PLUGIN,
         RepositoryType.OPENCLAW_PLUGIN,
+        RepositoryType.PI_PACKAGE,
         RepositoryType.AGENTSKILLS,
         RepositoryType.MCP_REGISTRY,
         RepositoryType.CODERABBIT,
@@ -97,6 +98,7 @@ class RepositoryContext(
         # Tool configuration sorts below everything that describes how the
         # repository packages its content, so a marketplace that also ships
         # a `.cursor/` keeps `marketplace` as its primary type.
+        RepositoryType.PI,
         RepositoryType.CODEX_PROJECT,
         RepositoryType.MUSE,
         RepositoryType.GROK_PROJECT,
@@ -167,6 +169,8 @@ class RepositoryContext(
         self._excluded_cache_patterns: Tuple[str, ...] = ()
         self.has_apm = detect_discovery.has_apm(self.root_path)
         self._scan: Optional[detect_discovery.RepositoryScan] = None
+        self._pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path], Set[Path]]] = None
+        self._pi_portable_skills: List[Path] = []
         self._apm_compiled_roots: Optional[Set[Path]] = None
         self._apm_targets: Any = _UNSET  # frozenset once read; None = unknown
         self._codex_marketplace_paths: Optional[List[Path]] = None
@@ -394,6 +398,10 @@ class RepositoryContext(
         after construction must call it again. Filtering only narrows —
         previously excluded paths are not rediscovered.
         """
+        # A removed Pi declaration changes a skill's role, not its visibility.
+        pi_candidates = set(self._pi_portable_skills)
+        self.skills = sorted(set(self.skills) | pi_candidates)
+        self._pi_portable_skills = []
         if self.exclude_patterns:
             codex_before = list(self.codex_plugins)
             agent_plugins_before = list(self.agent_plugins)
@@ -437,13 +445,17 @@ class RepositoryContext(
                 # Prune skills owned by plugins that just left the Codex set;
                 # otherwise they attach as standalone nodes and keep linting
                 # the very content the exclusion removed. Skills of a
-                # dual-host plugin that remains an active Claude plugin still
+                # dual-host plugin that remains an active Claude or Pi package still
                 # have a surviving owner and must not be pruned.
-                claude_roots = {r for r in (safe_resolve(p) for p in self.plugins) if r}
+                surviving_roots = {
+                    r
+                    for p in (*self.plugins, *self.pi_discovery_roots())
+                    if (r := safe_resolve(p)) is not None
+                }
                 self.skills = [
                     sk
                     for sk in self.skills
-                    if not self._under_any(sk, dropped) or self._under_any(sk, claude_roots)
+                    if not self._under_any(sk, dropped) or self._under_any(sk, surviving_roots)
                 ]
             if codex_set_changed:
                 self._codex_roots = None
@@ -451,7 +463,12 @@ class RepositoryContext(
                 self._agent_plugin_roots = None
                 active_roots = {
                     root
-                    for p in (*self.agent_plugin_roots(), *self.codex_plugins, *self.plugins)
+                    for p in (
+                        *self.agent_plugin_roots(),
+                        *self.codex_plugins,
+                        *self.plugins,
+                        *self.pi_discovery_roots(),
+                    )
                     if (root := safe_resolve(p)) is not None
                 }
                 dropped_roots = {
@@ -462,8 +479,6 @@ class RepositoryContext(
                 self.skills = [
                     skill for skill in self.skills if not self._under_any(skill, dropped_roots)
                 ]
-        if not self.skills and self._overridden_types is None:
-            self.repo_types.discard(RepositoryType.AGENTSKILLS)
         # The claim set folds in both plugin roots and catalog sources, and
         # excludes can drop either — always recompute on the next consult.
         # The unconditional clear is also load-bearing for __init__ ordering:
@@ -481,37 +496,14 @@ class RepositoryContext(
         self._provenance_cache.clear()
         self._format_scope_cache.clear()
         self.reset_external_content_provenance()
+        self.skills = self._filter_pi_skills(self.skills)
+        if self._overridden_types is None:
+            if pi_candidates.intersection(self.skills):
+                self.repo_types.add(RepositoryType.AGENTSKILLS)
+            elif not self.skills:
+                self.repo_types.discard(RepositoryType.AGENTSKILLS)
         self._refresh_tool_types()
         self._lint_tree = None
-
-    def _refresh_tool_types(self) -> None:
-        """Fold committed tool configuration into the detected types.
-
-        Runs at the end of ``__init__`` — tool evidence includes AGENTS.md
-        and friends, which are not discovered when the packaging types are
-        worked out — and again whenever a caller mutates
-        ``exclude_patterns``, so an exclude added after construction takes
-        that tool's rules with it.
-
-        An explicit ``--type`` is the operator's answer to how the content is
-        *packaged*, and it stays authoritative for that: every forced type
-        survives, including a tool type the checkout has no marker for, so
-        ``--type muse`` runs the Muse rules on a repository that has yet to
-        commit ``.muse/hooks.json``. It is not an answer to which tools the
-        checkout configures, so the detected tool types are unioned in rather
-        than replaced — otherwise ``--type marketplace`` would quietly switch
-        off every tool-gated rule and leave rules that read
-        ``RepositoryType.X in context.repo_types`` reading a stale set.
-        """
-        detected = {RepositoryType(value) for value in self._detect_tool_type_values()}
-        if self._overridden_types is not None:
-            self.repo_types = set(self._overridden_types) | detected
-        else:
-            self.repo_types = (self.repo_types - TOOL_REPO_TYPES) | detected
-        if len(self.repo_types) > 1:
-            self.repo_types.discard(RepositoryType.UNKNOWN)
-        elif not self.repo_types:
-            self.repo_types.add(RepositoryType.UNKNOWN)
 
     def _detect_types(self) -> Set[RepositoryType]:
         """Detect all applicable repository types.
@@ -564,6 +556,8 @@ class RepositoryContext(
             types.add(RepositoryType.GROK_PLUGIN)
         if self.antigravity_plugin_roots():
             types.add(RepositoryType.ANTIGRAVITY_PLUGIN)
+        if self.pi_package_roots():
+            types.add(RepositoryType.PI_PACKAGE)
         if self.mcp_registry_server_paths():
             types.add(RepositoryType.MCP_REGISTRY)
 
@@ -702,6 +696,7 @@ class RepositoryContext(
             # else. ``merge_plugin_dirs`` dedupes by resolved path.
             self.antigravity_plugins,
             self.antigravity_plugin_roots(),
+            self.pi_discovery_roots(),
         )
 
     def codex_marketplace_paths(self) -> List[Path]:

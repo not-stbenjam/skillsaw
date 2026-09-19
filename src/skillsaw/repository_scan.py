@@ -7,8 +7,10 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
-from .repository_types import RepositoryType
 from .formats.openclaw import MANIFEST
+from .repository_types import RepositoryType, TOOL_REPO_TYPES
+from .utils import read_json
+from .paths import contained_resolve, safe_resolve
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
@@ -32,6 +34,9 @@ class RepositoryScanMixin:
         root_path: Path
         instruction_files: List[Path]
         repo_types: Set[RepositoryType]
+        _overridden_types: Optional[Set[RepositoryType]]
+        exclude_patterns: List[str]
+        _pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path], Set[Path]]]
         plugins: List[Path]
         codex_plugins: List[Path]
 
@@ -60,6 +65,56 @@ class RepositoryScanMixin:
         def _contained_plugin_claims_possible(self) -> bool: ...
 
         def _is_containment_plugin(self, path: Path) -> bool: ...
+
+    @property
+    def skill_paths(self) -> List[Path]:
+        """Display paths for portable directories and native Pi skill files."""
+        from .blocks.pi import PiSkillBlock
+
+        return list(self.skills) + [b.path for b in self.lint_tree.find(PiSkillBlock)]
+
+    @property
+    def skill_count(self) -> int:
+        """Portable directories and Pi's native skills, including flat files."""
+        return len(self.skill_paths)
+
+    @property
+    def _pi_package_forced(self) -> bool:
+        """A forced type selects resources without changing provenance."""
+        return RepositoryType.PI_PACKAGE in (getattr(self, "_overridden_types", None) or ())
+
+    def pi_discovery_roots(self) -> List[Path]:
+        """Declared packages plus an explicitly selected conventional root."""
+        roots = self.pi_package_roots()
+        if self._pi_package_forced and self.root_path not in roots:
+            roots.append(self.root_path)
+        return roots
+
+    def pi_package_roots(self) -> List[Path]:
+        """Cached, declaration-invariant Pi package claims from the shared scan."""
+        from .discovery.pi import package_roots
+
+        key = tuple(self.exclude_patterns)
+        cached = getattr(self, "_pi_packages_cache", None)
+        if cached is None or cached[0] != key:
+            roots = package_roots(
+                self.root_path,
+                self._repository_scan().package_json_files,
+                (p / "settings.json" for p in self.agent_tool_dirs(".pi")),
+                self.is_path_excluded,
+            )
+            self._pi_packages_cache = (
+                key,
+                roots,
+                {r for p in roots if (r := safe_resolve(p)) is not None},
+            )
+        return list(self._pi_packages_cache[1])
+
+    def _pi_claim_set(self) -> Set[Path]:
+        """Canonical identities for provenance; display roots keep their spelling."""
+        self.pi_package_roots()
+        assert self._pi_packages_cache is not None
+        return self._pi_packages_cache[2]
 
     def _discover_instruction_files(self) -> List[Path]:
         """Discover root and nested instruction files read by supported tools.
@@ -112,6 +167,39 @@ class RepositoryScanMixin:
         """YAML candidates beneath one lexical ``evals/`` directory."""
         return list(self._repository_scan().promptfoo_eval_files.get(evals_dir, ()))
 
+    def _refresh_tool_types(self) -> None:
+        """Fold committed tool configuration into the detected types.
+
+        Runs at the end of ``__init__`` — tool evidence includes AGENTS.md
+        and friends, which are not discovered when the packaging types are
+        worked out — and again whenever a caller mutates
+        ``exclude_patterns``, so an exclude added after construction takes
+        that tool's rules with it.
+
+        An explicit ``--type`` is the operator's answer to how the content is
+        *packaged*, and it stays authoritative for that: every forced type
+        survives, including a tool type the checkout has no marker for, so
+        ``--type muse`` runs the Muse rules on a repository that has yet to
+        commit ``.muse/hooks.json``. It is not an answer to which tools the
+        checkout configures, so the detected tool types are unioned in rather
+        than replaced — otherwise ``--type marketplace`` would quietly switch
+        off every tool-gated rule and leave rules that read
+        ``RepositoryType.X in context.repo_types`` reading a stale set.
+        """
+        detected = {RepositoryType(value) for value in self._detect_tool_type_values()}
+        if self._overridden_types is not None:
+            self.repo_types = set(self._overridden_types) | detected
+        else:
+            self.repo_types = (self.repo_types - TOOL_REPO_TYPES) | detected
+            if self.pi_package_roots():
+                self.repo_types.add(RepositoryType.PI_PACKAGE)
+            else:
+                self.repo_types.discard(RepositoryType.PI_PACKAGE)
+        if len(self.repo_types) > 1:
+            self.repo_types.discard(RepositoryType.UNKNOWN)
+        elif not self.repo_types:
+            self.repo_types.add(RepositoryType.UNKNOWN)
+
     def _detect_tool_type_values(self) -> set[str]:
         """``RepositoryType`` values for the tools this repository configures.
 
@@ -142,7 +230,7 @@ class RepositoryScanMixin:
             if (provenance := self.provenance(plugin)).claude
             or (provenance.codex and portable_manifest(plugin) is None)
         ]
-        discovered = claude_discovery.discover_skills(
+        skills = claude_discovery.discover_skills(
             self.root_path,
             agentskills=RepositoryType.AGENTSKILLS in self.repo_types,
             # A plugins/* layout can cause legacy Claude discovery to list an
@@ -196,4 +284,69 @@ class RepositoryScanMixin:
             ),
             is_excluded=self.is_path_excluded,
         )
-        return self._filter_cursor_skills(discovered)
+
+        return self._filter_pi_skills(self._filter_cursor_skills(skills))
+
+    def _filter_pi_skills(self, skills: List[Path]) -> List[Path]:
+        """Assign native roles while retaining portable candidates for exclusions."""
+        # Pi owns selection inside its packages and .pi/skills. A dual package
+        # retains other consumers' discovery as well as Pi's own resources.
+        pi_roots = [
+            p for p in self.pi_discovery_roots() if not (self.provenance(p).ecosystems - {"pi"})
+        ]
+        from .discovery.pi import package_resources, project_resources
+
+        native_skills = set()
+        for directory in self.agent_tool_dirs(".pi"):
+            native_skills.update(
+                project_resources(
+                    directory,
+                    "skills",
+                    self.root_path,
+                    self.is_path_excluded,
+                )
+            )
+
+        # Only selected resources adopt the native dialect; unselected portable
+        # skills remain visible to their other consumers.
+        for directory in self.pi_discovery_roots():
+            manifest = directory / "package.json"
+            data, _ = (
+                read_json(manifest)
+                if contained_resolve(manifest, self.root_path) is not None
+                and not self.is_path_excluded(manifest)
+                else (None, None)
+            )
+            if isinstance(data, dict) and "pi" in data and not isinstance(data["pi"], dict):
+                # Invalid declarations receive config diagnostics, but cannot
+                # take an existing portable skill out of its validation scope.
+                continue
+            native_skills.update(
+                package_resources(
+                    directory,
+                    "skills",
+                    self.root_path,
+                    self.is_path_excluded,
+                )
+            )
+
+        def owned_by_pi(path: Path) -> bool:
+            declared = path / "SKILL.md" in native_skills
+            if not declared:
+                return False
+            # A Pi package does not own another tool's customization root or
+            # an independently declared nested package. Keep those consumers.
+            for ancestor in (path, *path.parents):
+                if ancestor.name.startswith(".") and ancestor.name != ".pi":
+                    return False
+                if self.provenance(ancestor).ecosystems - {"pi"}:
+                    return False
+                if ancestor in pi_roots:
+                    return True
+                if ancestor == self.root_path:
+                    break
+            return declared
+
+        self._pi_portable_skills = [p for p in skills if owned_by_pi(p)]
+        native = set(self._pi_portable_skills)
+        return [p for p in skills if p not in native]

@@ -44,7 +44,7 @@ class CliResult:
 def _reset_process_globals() -> None:
     """Restore the state a freshly spawned CLI process would start with.
 
-    Two globals outlive a single ``main()`` call and would otherwise leak
+    Globals outlive a single ``main()`` call and would otherwise leak
     between runs:
 
     * ``logging.basicConfig`` is a no-op once the root logger has handlers,
@@ -63,6 +63,10 @@ def _reset_process_globals() -> None:
     from skillsaw.rules.builtin.utils import invalidate_read_caches
 
     invalidate_read_caches()
+
+    from skillsaw.pi_patterns import _compile_glob
+
+    _compile_glob.cache_clear()
 
 
 def run_cli(

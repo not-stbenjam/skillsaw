@@ -55,6 +55,8 @@ class RepositoryGrokMixin:
         @staticmethod
         def _under_any(path: Path, roots: Set[Path]) -> bool: ...
 
+        def pi_discovery_roots(self) -> List[Path]: ...
+
     def _init_grok(self, repo_types: Optional[Iterable[RepositoryType]]) -> None:
         """Set up Grok caches and the ``--type`` gate, then discover plugins.
 
@@ -288,6 +290,7 @@ class RepositoryGrokMixin:
                 *self.agent_plugin_roots(),
                 *self._grok_claim_set(),
                 *self.antigravity_plugin_roots(),
+                *self.pi_discovery_roots(),
             )
             if (r := safe_resolve(p)) is not None
         }

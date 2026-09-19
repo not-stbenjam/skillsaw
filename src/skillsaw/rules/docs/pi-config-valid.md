@@ -1,0 +1,75 @@
+## Why
+
+Pi reads resource declarations from `package.json#pi` and project
+`.pi/settings.json`. A string where an array belongs silently drops resources
+in the current package loader. This rule identifies the field and expected type
+before the package is installed.
+
+## Checks
+
+- JSON must parse to an object. Duplicate keys use JavaScript's last-value behavior.
+- The package's `pi` field must be an object when present.
+- `extensions`, `skills`, `prompts`, and `themes` must be arrays of strings.
+- Project `packages` must contain source strings or objects with a nonempty
+  `source`, optional resource filter arrays, and an optional boolean `autoload`.
+
+Unknown npm fields, Pi gallery metadata, and unrelated settings are accepted.
+Empty resource lists are valid. Findings are consolidated by file and default to
+warning: current Pi ignores malformed manifest fields instead of failing startup.
+
+## How to fix
+
+Put paths in arrays, such as `"skills": ["./skills"]`. In project settings,
+use `"packages": [{"source": "npm:my-package", "skills": []}]` to configure
+a package and disable its skills. Keep settings paths relative to the directory
+containing `settings.json`, and package paths relative to `package.json`.
+
+## Examples
+
+Use arrays for resource paths:
+
+```json
+{"pi": {"skills": ["./skills"], "prompts": ["./prompts"]}}
+```
+
+A string such as `"skills": "./skills"` is invalid and drops that resource type.
+
+## Discovery and boundaries
+
+The `pi-package` repository type comes from a `pi` key, the `pi-package` npm
+keyword, or a repository-local directory listed in project `packages`. Ordinary
+npm packages and unmarked conventional directories do not establish Pi ownership.
+A conventional-only package can be selected through project settings. The `pi`
+type comes from `.pi` project resources, including those in monorepo subprojects.
+
+Portable `SKILL.md` files not selected by Pi keep their Agent Skills checks.
+A `pi` object replaces conventional Pi package discovery; omitted resource types
+and empty arrays contribute no resources. Without that object, packages use
+`extensions/`, `skills/`, `prompts/`, and `themes/`. Manifest globs discover visible
+paths; `!` exclusions, `+` exact re-inclusions and `-` exact exclusions filter
+those resources. Project resource lists resolve literal paths and use wildcards
+as filters, matching the native loader. Project prompt and theme autoload is shallow;
+explicit prompt directories and package prompts are recursive.
+
+Locally referenced packages are linted as authored packages, including resources
+that a particular consumer's package filters disable. Package filters are
+validated, but do not suppress diagnostics on the package's authored content.
+Remote sources and paths outside the checkout are not loaded. Glob traversal
+does not descend through symlinked directories; exact contained roots may use
+symlinks. Resource walks read `.gitignore`, `.ignore`, and `.fdignore` at or below each
+resource root, using Pi's directory-relative prefixing.
+
+Pi-only packages receive shared prose checks for README, commands, agents and
+rules. Claude configuration at `hooks/hooks.json` or `settings.json` is checked
+only when the directory also declares Claude ownership.
+
+Extensions are represented as entrypoint nodes. Themes
+are configuration nodes, not prose; theme colors and runtime extension behavior
+are outside this rule. No core Pi MCP schema is assumed.
+
+## Upstream reference
+
+Pinned to Pi commit
+[`36b60d2e`](https://github.com/earendil-works/pi/tree/36b60d2e8985899743c4cf5bd5f8929832a3f05d),
+particularly `packages/coding-agent/src/core/pi-manifest.ts`,
+`package-manager.ts`, and `skills.ts`. See the [Pi package documentation](https://pi.dev/docs/latest/packages).

@@ -2,7 +2,7 @@
 description: You must follow these instructions when developing skillsaw. 
 ---
 
-Follow these rules when developing skillsaw, a configurable, rule-based linter for agentic contextual building blocks.
+Development rules for skillsaw.
 
 ## Pre-push Checklist
 
@@ -328,3 +328,5 @@ already gets it, and no existing rule needs a *scope* visit: scope is
 declared per rule class. A rule keying on an explicit `repo_types` list is
 the exception.
 
+For Pi discovery, read `.apm/skills/skillsaw-maintenance/references/pi.md`
+(relative to the repository root).

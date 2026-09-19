@@ -235,7 +235,7 @@ def format_html(
     </article>
     <article class="stat-card">
       <div class="label">Skills</div>
-      <div class="value">{len(context.skills)}</div>
+      <div class="value">{context.skill_count}</div>
     </article>
     <article class="stat-card">
       <div class="label">Rules Run</div>

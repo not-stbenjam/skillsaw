@@ -656,3 +656,41 @@ def test_declared_skill_stat_errors_become_diagnostics(tmp_path, monkeypatch):
         v["rule_id"] == "openclaw-resources" and "not an existing skill directory" in v["message"]
         for v in violations
     )
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_pi_and_openclaw_preserve_native_and_portable_skill_roles(tmp_path, nested):
+    from skillsaw.blocks import SkillBlock
+    from skillsaw.blocks.pi import PiPackageBlock, PiSkillBlock
+
+    repo = tmp_path / "repo"
+    plugin = repo / "packages" / "weather" if nested else repo
+    shutil.copytree(FIXTURES / "valid", plugin)
+    package = json.loads((plugin / "package.json").read_text())
+    package["pi"] = {"skills": ["guides", "flat.md"]}
+    (plugin / "package.json").write_text(json.dumps(package))
+    (plugin / "flat.md").write_text(
+        "---\nname: forecast\ndescription: Summarize the weather forecast.\n---\nRead the supplied forecast and report expected rain.\n"
+    )
+    context = RepositoryContext(repo)
+    assert context.provenance(plugin).ecosystems == frozenset({"pi", "openclaw"})
+    assert len(context.lint_tree.find(PiPackageBlock)) == 1
+    assert len(context.lint_tree.find(OpenClawPluginConfigNode)) == 1
+    assert plugin / "guides" / "weather-report" / "SKILL.md" in {
+        b.path for b in context.lint_tree.find(SkillBlock)
+    }
+    assert [b.path for b in context.lint_tree.find(PiSkillBlock)] == [plugin / "flat.md"]
+    result = run_cli(
+        [
+            "lint",
+            str(repo),
+            "--format",
+            "json",
+            "--rule",
+            "openclaw-manifest-valid",
+            "--rule",
+            "pi-config-valid",
+        ]
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["violations"] == []

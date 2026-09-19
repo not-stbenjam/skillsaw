@@ -100,20 +100,19 @@ class _MergedContext:
         agent_plugins=(),
         grok_plugins=(),
         antigravity_plugins=(),
-        openclaw_plugins=(),
-        cursor_plugins=(),
+        skill_paths=None,
     ):
         self.root_path = root_path
         self.repo_types = repo_types
         self.plugins = plugins
         self.skills = skills
+        self.skill_paths = list(skills if skill_paths is None else skill_paths)
+        self.skill_count = len(self.skill_paths)
         self.plugin_repo_types = set(plugin_repo_types)
         self.codex_plugins = list(codex_plugins)
         self.agent_plugins = list(agent_plugins)
         self.grok_plugins = list(grok_plugins)
         self.antigravity_plugins = list(antigravity_plugins)
-        self.openclaw_plugins = list(openclaw_plugins)
-        self.cursor_plugins = list(cursor_plugins)
 
     def distinct_plugin_dirs(self):
         """Same contract as :meth:`RepositoryContext.distinct_plugin_dirs`."""
@@ -123,8 +122,6 @@ class _MergedContext:
             self.agent_plugins,
             self.grok_plugins,
             self.antigravity_plugins,
-            self.openclaw_plugins,
-            self.cursor_plugins,
         )
 
     @property
@@ -159,12 +156,10 @@ def _build_merged_context(contexts):
     agent_plugins = []
     grok_plugins = []
     antigravity_plugins = []
-    openclaw_plugins = []
-    cursor_plugins = []
     for ctx in contexts:
         repo_types |= ctx.repo_types
         plugin_repo_types |= ctx.plugin_repo_types
-        plugins.extend(ctx.plugins)
+        plugins.extend(ctx.distinct_plugin_dirs())
         skills.extend(ctx.skills)
         codex_plugins.extend(ctx.codex_plugins)
         agent_plugins.extend(ctx.agent_plugins)
@@ -176,8 +171,6 @@ def _build_merged_context(contexts):
         # resolved path.
         antigravity_plugins.extend(ctx.antigravity_plugins)
         antigravity_plugins.extend(ctx.antigravity_plugin_roots())
-        openclaw_plugins.extend(ctx.openclaw_plugin_roots())
-        cursor_plugins.extend(ctx.cursor_plugin_roots())
     return _MergedContext(
         root_path,
         repo_types,
@@ -188,8 +181,7 @@ def _build_merged_context(contexts):
         agent_plugins,
         grok_plugins,
         antigravity_plugins,
-        openclaw_plugins,
-        cursor_plugins,
+        [path for ctx in contexts for path in ctx.skill_paths],
     )
 
 

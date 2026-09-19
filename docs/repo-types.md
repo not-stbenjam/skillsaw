@@ -64,6 +64,30 @@ historical list form for compatibility. Like Devin skills, nested Windsurf
 skill collections are discovered. A skill under `.agents/skills/` also remains
 a portable Agent Skill even when the repository contains Devin configuration.
 
+## Pi packages and projects
+
+Pi support starts in skillsaw 0.21.0. Upgrading the executable changes selected
+Pi skills to the native metadata contract. If your configuration pins an older
+rules version, advance it to `0.21.0` or explicitly enable `pi-skill-valid` to
+validate those native skills. Unselected portable skills keep Agent Skills
+validation.
+
+`pi-package` detects `package.json#pi`, the `pi-package` npm keyword, and local
+package directories declared in `.pi/settings.json`. `pi` detects project
+resources under `.pi/`, including nested monorepo projects. Use `--type pi-package`
+for conventional-only packages or malformed manifests without an identifying key.
+
+Pi package resource arrays select extensions, skills, prompts and themes.
+Manifest paths and globs are package-relative; settings resource paths and local
+package sources are settings-relative. Flat Markdown skills and directory-form
+skills use Pi's native metadata contract, with optional names. Prompt and skill
+bodies receive shared content checks. See [pi-config-valid](rules/pi-config-valid.md)
+for discovery details and the pinned loader contract.
+
+Lints operate on repository-local authored resources. Remote packages are not
+installed, and extension code is never executed. Consumer package filters are
+validated without hiding the package's authored content from diagnostics.
+
 ## Agent Plugins
 
 Portable plugin packages following the [Agent Plugins v1
@@ -722,6 +746,7 @@ the value `Repo type:` prints, the JSON report lists under `repo_types`, and
 | **Qwen Code** | `qwen` | `QWEN.md`, `.qwen/skills/*/SKILL.md` |
 | **Kiro** | `kiro` | `.kiro/steering/*.md` |
 | **Google Antigravity** | `antigravity` | Inside `.agents/`, `.agent/`, `_agents/` or `_agent/`: `hooks.json`, `mcp_config.json`, the registries `{agents,plugins,skills,workflows}.json`, prose in `rules/**/*.md` and `agents/*.md`, and skills under `skills/`. A `plugins.json` or `agents.json` registry's `entries` are followed, so a plugin or agent directory it names elsewhere in the repository is linted too. Detection is narrower — see [Google Antigravity](#google-antigravity) |
+| **[Pi](#pi-packages-and-projects)** | `pi` | `.pi/`: Native skills, prompts, themes and extensions, `SYSTEM.md`, `APPEND_SYSTEM.md`, resource declarations in `settings.json` |
 | **Muse Code** | `muse` | `.muse/hooks.json` — see [Muse Code](#muse-code) |
 | **Grok Build** | `grok-project` | `.grok/rules/*.md`, `.grok/commands/*.md`, `.grok/agents/*.md`, `.grok/skills/*/SKILL.md`, `.grok/hooks/*.json`, `.grok/config.toml` — see [Grok Build](#grok-build) |
 | **OpenAI Codex** | `codex-project` | `.codex/hooks.json`, `.codex/config.toml` — see [OpenAI Codex project configuration](#openai-codex-project-configuration) |

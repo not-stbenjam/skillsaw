@@ -158,7 +158,7 @@ def format_text(
     repo_types_str = ", ".join(context.repo_type_names(include_unknown=False))
     output.append(f"  Repo type: {repo_types_str or 'unknown'}")
     output.append(f"  Plugins:   {len(context.distinct_plugin_dirs())}")
-    output.append(f"  Skills:    {len(context.skills)}")
+    output.append(f"  Skills:    {context.skill_count}")
     output.append(f"  Rules run: {len(rules)}")
     if duration is not None:
         output.append(f"  Took:      {format_duration(duration)}")

@@ -43,6 +43,7 @@ VENDOR_DIR_NAMES = frozenset(
 # lookup.
 AGENT_TOOL_DIR_NAMES = frozenset(
     {
+        ".pi",
         ".cursor",
         ".clinerules",
         ".github",
@@ -140,6 +141,10 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
         # ``os.path.basename`` rather than ``here.name``: this runs once per
         # directory in the repository, and constructing the pathlib view of
         # every one of them to read a string costs more than the walk.
+        if os.path.basename(dirpath) == ".pi":
+            # Pi's npm/git install stores are dependency checkouts, not authored
+            # project resources. Explicit manifest paths can still select them.
+            dirnames[:] = [name for name in dirnames if name not in {"npm", "git"}]
         if os.path.basename(dirpath) == muse.TOOL_DIR_NAME:
             # Muse's per-agent worktrees are whole checkouts of this
             # repository; walking them would attach every file twice.
@@ -209,6 +214,18 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
 #: configured here, so a repository whose only Cursor artifact is
 #: ``hooks.json`` still activates the Cursor rules.
 _TOOL_EVIDENCE = {
+    "pi": (
+        ".pi",
+        (
+            ("settings.json", False),
+            ("skills", True),
+            ("prompts", True),
+            ("extensions", True),
+            ("themes", True),
+            ("SYSTEM.md", False),
+            ("APPEND_SYSTEM.md", False),
+        ),
+    ),
     "cursor": (
         ".cursor",
         (
@@ -456,6 +473,7 @@ def tool_types(
 
     found: Set[str] = set()
     checks = (
+        ("pi", tool_marker("pi")),
         ("cursor", tool_marker("cursor") or legacy_cursor()),
         (
             "copilot",

@@ -613,6 +613,21 @@ rules:
     severity: error
     # extra-keys: []
 
+  # Pi package and project resource declarations must have valid types
+  pi-config-valid:
+    enabled: auto
+    severity: warning
+
+  # Literal Pi resource paths should exist in the assembled checkout
+  pi-resource-paths:
+    enabled: false
+    severity: warning
+
+  # Pi skills need parseable frontmatter and a nonempty description
+  pi-skill-valid:
+    enabled: auto
+    severity: warning
+
   # Require specific assertion types in all promptfoo eval tests
   promptfoo-assertions:
     enabled: false
