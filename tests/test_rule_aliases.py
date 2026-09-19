@@ -369,7 +369,27 @@ def test_deprecated_builtins_removed():
     removed = {"content-critical-position", "content-actionability-score", "skill-frontmatter"}
     assert removed.isdisjoint(BUILTIN_RULE_REGISTRY)
     assert removed.isdisjoint(LinterConfig.default().rules)
-    assert all(cls.deprecated is None for cls in BUILTIN_RULE_REGISTRY.values())
+
+
+def test_future_builtin_deprecation_remains_supported(plugin_repo, monkeypatch):
+    rule_id = "claude-plugin-readme"
+    monkeypatch.setattr(BUILTIN_RULE_REGISTRY[rule_id], "deprecated", "0.21.0")
+    config = LinterConfig.default()
+    assert rule_id not in config.rules
+    context = RepositoryContext(plugin_repo)
+    automatic = Linter(context, config=config, no_plugins=True)
+    assert rule_id not in {r.rule_id for r in automatic.rules}
+
+    config.rules[rule_id] = {"enabled": True}
+    explicit = Linter(context, config=config, no_plugins=True)
+    assert rule_id in {r.rule_id for r in explicit.rules}
+    results = explicit.run()
+    assert any(v.rule_id == rule_id for v in results)
+    assert any(v.rule_id == "deprecated-rule" and rule_id in v.message for v in results)
+
+    explanation = run_cli(["explain", rule_id])
+    assert explanation.returncode == 0
+    assert "DEPRECATED since 0.21.0" in explanation.stdout
 
 
 def test_deprecated_rule_does_not_run_by_default(plugin_repo, deprecated_config):
