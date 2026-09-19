@@ -634,3 +634,25 @@ def test_multi_root_counts_cursor_and_openclaw_plugins(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["stats"]["plugins"] == 2
+
+
+def test_declared_skill_stat_errors_become_diagnostics(tmp_path, monkeypatch):
+    import errno
+
+    repo = copy_fixture("valid", tmp_path)
+    original = Path.is_dir
+    calls = []
+
+    def is_dir(path):
+        if path == repo / "guides":
+            calls.append(path)
+            raise OSError(errno.ENAMETOOLONG, "File name too long")
+        return original(path)
+
+    monkeypatch.setattr(Path, "is_dir", is_dir)
+    _, violations = lint(repo)
+    assert calls
+    assert any(
+        v["rule_id"] == "openclaw-resources" and "not an existing skill directory" in v["message"]
+        for v in violations
+    )
