@@ -15,14 +15,9 @@ metadata:
 
 Run **7 specialist reviewers + 1 arbiter** to review a skillsaw PR.
 
-**Two execution modes:**
-
-- **Parallel (default)**: Each specialist runs as a dedicated sub-agent
-  concurrently, exploring the codebase through its own lens without bias
-  from the others.
-- **Serial (`--serial`)**: Specialists run inline, one after another.
-  Cheaper — codebase context is derived once and shared — but later
-  specialists see earlier ones' file reads, which can bias them.
+**Parallel (default)** runs independent specialists concurrently.
+**Serial (`--serial`)** shares context inline to reduce cost, but later
+specialists see earlier file reads, which can bias them.
 
 Keep the panel **advisory**. It does not gate merge. It surfaces findings;
 the maintainer and PR author review and decide ship.
@@ -133,6 +128,17 @@ If no issues found, say so and list what was checked.
   correctness issue. Keep this the default for real feedback.
 - `NOTE`: One-line polish, style nits, minor improvements.
 
+#### Proportional review
+
+Every specialist and the arbiter must accept practical rule disabling,
+suppressions, or bulk file exclusions for extreme false-positive cases.
+Avoid complex special-case code and exhaustive tests where likelihood and
+impact do not justify maintenance cost. Before raising an edge case, explain
+the affected use, impact, and why configuration is insufficient. Common false
+positives, broken supported workflows, vulnerabilities, and destructive
+autofixes still warrant findings. Do not reopen accepted mitigations without
+new evidence.
+
 #### Prompt path resolution
 
 Resolve specialist scope files from the skill directory:
@@ -145,12 +151,8 @@ may not share the skill's working directory.
 Launch **all 7 specialist sub-agents in a single message** so they
 run concurrently, using the Agent tool with `run_in_background: false`.
 
-One message makes them concurrent; `run_in_background: false` blocks until
-every sub-agent has finished. Do **not** use `run_in_background: true` — a
-background agent returns at once, so the turn ends mid-review, and headlessly
-that ends the job: the run exits green with no verdict posted. Do not start
-Step 4 while results are still arriving; a specialist that errors is handled
-there, not waited on.
+Do **not** use `run_in_background: true`: it can end a headless run before
+the verdict is posted. Wait for all results before Step 4, which handles errors.
 
 Each sub-agent gets:
 - The specialist role name and a one-line description of its lens
@@ -160,10 +162,9 @@ Each sub-agent gets:
 - The PR number or branch name being reviewed
 - Any prior review findings (if detected in Step 2)
 - The findings format above, and the read-only contract
+- The proportional-review guidance above and instructions to read `REVIEW.md`
 
-Sub-agents have full read access to the checked-out codebase — they read
-files, grep, and run git commands on their own. No specialist sees another's
-output.
+Specialists have full read access; none sees another's output.
 
 Use `subagent_type: "general-purpose"`. Do NOT set the `model`
 parameter.
@@ -180,17 +181,10 @@ for the procedure — it is only needed on this non-default path.
 
 ### Step 4 — Completeness Gate
 
-After all specialists return (sub-agents complete or serial reviews
-finish), verify that every specialist produced findings (or an
-explicit "no issues" with what was checked). A valid empty findings
-list with an explanation of what was checked is success — do **not**
-retry it. If any specialist returned an error or a missing/malformed
-result, re-dispatch it **once**. If the retry also fails, record
-the failure and proceed.
-
-Never end the run here — a panel that stops after dispatching looks
-identical to a clean review. If specialists cannot be recovered, post the
-verdict anyway, naming which failed.
+Verify every specialist returned findings or "no issues" with what was checked.
+Retry errors or missing/malformed results **once**; never retry a valid empty
+result. If recovery fails, record the failure and post the verdict anyway,
+naming failed specialists. Never end the run here without a verdict.
 
 ### Step 5 — Run Panel Arbiter Synthesis
 
@@ -199,9 +193,11 @@ After all specialists complete, review and synthesize directly:
 1. Read all specialist findings.
 2. **Deduplicate** — merge duplicates across specialists, keep strongest evidence.
 3. **Filter noise** — remove false positives, style nitpicks, speculative
-   findings, and issues already addressed in the branch.
+   findings, and issues already addressed in the branch. Apply proportional
+   review to rare cases adequately handled by configuration.
 4. **Resolve conflicts** — corroboration strengthens; when specialists
-   disagree, prefer the more conservative position.
+   disagree, weigh evidence, impact, available mitigations, and maintenance
+   cost. Do not escalate solely because one reviewer imagines a rarer case.
 5. Set a disposition (see below).
 6. Include required actions (blocking) vs optional follow-ups.
 
@@ -262,7 +258,7 @@ Verify a change passes when:
 - [ ] Architecture Reviewer: Verify structure and patterns are sound.
 - [ ] Python Expert: Ensure idiomatic, well-typed, performant Python.
 - [ ] Security & Supply Chain: Check no unmitigated vulnerability or supply chain risk.
-- [ ] QA Engineer: Verify adequate test coverage, edge cases addressed.
+- [ ] QA Engineer: Verify adequate coverage of realistic failures and impactful edge cases.
 - [ ] Technical Writer: Ensure documentation consistent with changes.
 - [ ] Ecosystem Reviewer: Check target tool is in scope for core, or redirect to a plugin with links to skillsaw.org/plugins/.
 - [ ] Slopinator Reviewer: Check comments and docs describe shipped behavior, not the review history; check prose reads as human-written.
