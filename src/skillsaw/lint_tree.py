@@ -100,7 +100,7 @@ from .lint_target import OpenClawPluginNode, OpenClawPluginConfigNode, OpenClawP
 from .blocks.json_config import OpenClawInlineMcpBlock
 from .formats.openclaw import MANIFEST, contained_file, inline_mcp_servers
 from .blocks.pi import PiPackageNode, PiPackageBlock
-from .pi_tree import attach_pi_resources, attach_pi_projects
+from .pi_tree import attach_pi_resources, attach_pi_projects, attach_pi_prompts
 from .formats import antigravity, devin, grok, muse, cursor
 from .blocks.cursor import (
     CursorAgentBlock,
@@ -249,6 +249,7 @@ class _TreeBuildState:
     mcp_paths: Set[Path] = field(default_factory=set)
     openai_seen: Set[Tuple[Path, Path]] = field(default_factory=set)
     opencode_configs: List[OpenCodeConfigBlock] = field(default_factory=list)
+    pi_prompts: List[Tuple[LintTarget, Path, Optional[Path]]] = field(default_factory=list)
 
     def resolve_repo_path(self, path: Path) -> Path | None:
         """Resolve *path* only when repository containment is safe."""
@@ -2081,6 +2082,10 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 state.seen.add(resolved)
                 prose_paths.add(resolved)
                 cursor_rule_paths.add(resolved)
+
+    # Pi prompts can select another host's configured command or skill.
+    # Those semantic owners keep the single body and its parser role.
+    attach_pi_prompts(state)
 
     # Configured OpenCode instructions are ambient prose, but their
     # original semantic owner wins when a path is also a skill, command,

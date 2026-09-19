@@ -1,0 +1,6 @@
+{
+  "name": "review-prompts",
+  "pi": {
+    "prompts": ["skills", "prompts", "packages/native/skills", "packages/native/commands"]
+  }
+}

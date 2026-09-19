@@ -32,6 +32,11 @@ def _attach(
     owner: Optional[Path] = None,
 ) -> None:
     for path in paths:
+        if kind == "prompts":
+            # Configured prompts can also be another package's skill or prose.
+            # Let those semantic owners attach before claiming the shared path.
+            state.pi_prompts.append((parent, path, owner))
+            continue
         if kind == "skills" and path.name == "SKILL.md" and path.parent in state.context.skills:
             # Other consumers retain their portable skill role in dual packages.
             continue
@@ -42,6 +47,12 @@ def _attach(
                 # Pi ignores ordinary Markdown documentation among flat skills.
                 continue
         state.add_block(parent, path, _CLASSES[kind], owner=owner)
+
+
+def attach_pi_prompts(state: _TreeBuildState) -> None:
+    """Attach configured prompt prose after its existing semantic owners."""
+    for parent, path, owner in state.pi_prompts:
+        state.add_block(parent, path, PiPromptBlock, owner=owner)
 
 
 def attach_pi_resources(state: _TreeBuildState, parent: LintTarget, package: Path) -> None:
