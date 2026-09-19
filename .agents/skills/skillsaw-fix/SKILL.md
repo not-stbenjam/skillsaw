@@ -138,14 +138,14 @@ Avoid three syntax traps that make directives silently misfire:
   *outside* the list or paragraph, or keep the flagged text on one line.
 
 **File-level violations (no line number)** — some rules always score the whole file
-and never report a line: e.g. `content-actionability-score` and
+and never report a line: e.g. `content-cognitive-chunks` and
 `content-inconsistent-terminology`. Inline directives **cannot** suppress
 these — a `<!-- skillsaw-disable -->` comment has no effect on them. Use
 config in `.skillsaw.yaml` instead:
 
 ```yaml
 rules:
-  content-actionability-score:
+  content-cognitive-chunks:
     # Scoped per-rule exclude — keeps the rule enforced everywhere else
     exclude: ["**/references/**", "REVIEW.md"]
   content-inconsistent-terminology:
