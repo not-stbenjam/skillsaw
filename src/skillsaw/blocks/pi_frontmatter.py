@@ -7,6 +7,7 @@ meaning. Keep these choices isolated from portable Agent Skills parsing.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, NamedTuple
 
@@ -26,8 +27,28 @@ class _PiLoader(_SAFE_LOADER):
         for key, _value in node.value:
             if isinstance(key, yaml.ScalarNode):
                 value = self.construct_object(key, deep=deep)
-                identity = (type(value), value)
-                if identity in seen:
+                if type(value) in (int, float):
+                    # npm YAML compares numeric keys as JavaScript Numbers:
+                    # integer/float spellings share equality, but NaN never does.
+                    try:
+                        number = float(value)
+                    except OverflowError:
+                        number = math.inf if value > 0 else -math.inf
+                    if math.isnan(number):
+                        continue
+                    identity = (float, number)
+                else:
+                    identity = (type(value), value)
+                try:
+                    duplicate = identity in seen
+                except TypeError as exc:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        "found unhashable key",
+                        key.start_mark,
+                    ) from exc
+                if duplicate:
                     raise yaml.constructor.ConstructorError(
                         "while constructing a mapping",
                         node.start_mark,

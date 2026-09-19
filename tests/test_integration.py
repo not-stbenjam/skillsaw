@@ -10582,3 +10582,14 @@ def test_pi_prompt_keeps_native_checks_under_extra_content_globs(tmp_path, sourc
     ]
     assert not context.lint_tree_errors
 
+
+@pytest.mark.integration
+def test_pi_nan_metadata_retains_declared_and_flat_skills(tmp_path):
+    repo = copy_fixture("pi/numeric-keys", tmp_path)
+    result = run_lint(repo, "--no-custom-rules", "--rule", "pi-skill-valid")
+    assert result["rc"] == 0
+    assert result["out"]["violations"] == []
+    assert {Path(p).relative_to(repo).as_posix() for p in result["out"]["stats"]["skills"]} == {
+        "flat/review.md",
+        "skills/review/SKILL.md",
+    }

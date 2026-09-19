@@ -155,3 +155,39 @@ def test_native_body_write_uses_dialect_preflight(tmp_path):
     )
     assert block.field_value("description") == "no"
     assert block.key_line("description") == 2
+
+
+@pytest.mark.parametrize(
+    "first,second,duplicate",
+    [
+        (".nan", ".nan", False),
+        ("1", "1.0", True),
+        ("0", "-0.0", True),
+        ("9007199254740992", "9007199254740993", True),
+        ("1e400", ".inf", True),
+        ("9" * 400, ".inf", True),
+        ("-" + "9" * 400, "-.inf", True),
+        ("true", "1", False),
+        ('"1"', "1", False),
+    ],
+)
+def test_numeric_key_equality_matches_pi(first, second, duplicate):
+    text = (
+        "---\ndescription: Use when reviewing changes.\nmetadata:\n"
+        f"  {first}: first\n  {second}: second\n---\nReview the changes.\n"
+    )
+    parsed = parse_pi_frontmatter(text)
+    assert bool(parsed.error) is duplicate
+    if duplicate:
+        assert parsed.error_line == 5
+    else:
+        assert parsed.data["description"] == "Use when reviewing changes."
+
+
+@pytest.mark.parametrize("tag", ["set", "seq", "map", "omap", "pairs"])
+def test_malformed_tagged_key_is_a_parse_error(tag):
+    parsed = parse_pi_frontmatter(
+        f"---\n? !!{tag} x\n: value\ndescription: Review changes.\n---\nBody\n"
+    )
+    assert parsed.error == "Invalid YAML frontmatter"
+    assert parsed.error_line == 2
