@@ -272,10 +272,9 @@ jobs:
           assert r['stats']['plugins'] > 0, 'no plugins scanned'
           assert r['stats']['rules_run'] > 0, 'no rules ran'
           assert r['summary']['errors'] == 0, f\"unexpected errors: {r['summary']['errors']}\"
-          # 'deprecated-rule' notices are advisory: they report that the linted
-          # repo's own skillsaw config names a deprecated rule, and they never
-          # affect skillsaw's exit code — so they must not fail this gate either.
-          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] != 'deprecated-rule']
+          # Config advisories never fail skillsaw, so they must not fail this gate.
+          from skillsaw.linter import ADVISORY_RULE_IDS
+          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] not in ADVISORY_RULE_IDS]
           assert not warns, f\"unexpected warnings: {[(v['rule_id'], v['message']) for v in warns]}\"
           print(f\"Scanned {r['stats']['plugins']} plugins, {r['stats']['skills']} skills, {r['stats']['rules_run']} rules\")
           "
@@ -345,10 +344,9 @@ jobs:
           r = json.load(sys.stdin)
           assert r['stats']['rules_run'] > 0, 'no rules ran'
           assert r['summary']['errors'] == 0, f\"unexpected errors: {r['summary']['errors']}\"
-          # 'deprecated-rule' notices are advisory: they report that the linted
-          # repo's own skillsaw config names a deprecated rule, and they never
-          # affect skillsaw's exit code — so they must not fail this gate either.
-          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] != 'deprecated-rule']
+          # Config advisories never fail skillsaw, so they must not fail this gate.
+          from skillsaw.linter import ADVISORY_RULE_IDS
+          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] not in ADVISORY_RULE_IDS]
           assert not warns, f\"unexpected warnings: {[(v['rule_id'], v['message']) for v in warns]}\"
           print(f\"Scanned {r['stats']['plugins']} plugins, {r['stats']['skills']} skills, {r['stats']['rules_run']} rules\")
           "
@@ -362,10 +360,9 @@ jobs:
           r = json.load(sys.stdin)
           assert r['stats']['rules_run'] > 0, 'no rules ran'
           assert r['summary']['errors'] == 0, f\"unexpected errors: {r['summary']['errors']}\"
-          # 'deprecated-rule' notices are advisory: they report that the linted
-          # repo's own skillsaw config names a deprecated rule, and they never
-          # affect skillsaw's exit code — so they must not fail this gate either.
-          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] != 'deprecated-rule']
+          # Config advisories never fail skillsaw, so they must not fail this gate.
+          from skillsaw.linter import ADVISORY_RULE_IDS
+          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] not in ADVISORY_RULE_IDS]
           assert not warns, f\"unexpected warnings: {[(v['rule_id'], v['message']) for v in warns]}\"
           print(f\"Scanned {r['stats']['plugins']} plugins, {r['stats']['skills']} skills, {r['stats']['rules_run']} rules\")
           "
@@ -379,10 +376,9 @@ jobs:
           r = json.load(sys.stdin)
           assert r['stats']['rules_run'] > 0, 'no rules ran'
           assert r['summary']['errors'] == 0, f\"unexpected errors: {r['summary']['errors']}\"
-          # 'deprecated-rule' notices are advisory: they report that the linted
-          # repo's own skillsaw config names a deprecated rule, and they never
-          # affect skillsaw's exit code — so they must not fail this gate either.
-          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] != 'deprecated-rule']
+          # Config advisories never fail skillsaw, so they must not fail this gate.
+          from skillsaw.linter import ADVISORY_RULE_IDS
+          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] not in ADVISORY_RULE_IDS]
           assert not warns, f\"unexpected warnings: {[(v['rule_id'], v['message']) for v in warns]}\"
           print(f\"Scanned {r['stats']['plugins']} plugins, {r['stats']['skills']} skills, {r['stats']['rules_run']} rules\")
           "
@@ -396,10 +392,9 @@ jobs:
           r = json.load(sys.stdin)
           assert r['stats']['rules_run'] > 0, 'no rules ran'
           assert r['summary']['errors'] == 0, f\"unexpected errors: {r['summary']['errors']}\"
-          # 'deprecated-rule' notices are advisory: they report that the linted
-          # repo's own skillsaw config names a deprecated rule, and they never
-          # affect skillsaw's exit code — so they must not fail this gate either.
-          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] != 'deprecated-rule']
+          # Config advisories never fail skillsaw, so they must not fail this gate.
+          from skillsaw.linter import ADVISORY_RULE_IDS
+          warns = [v for v in r['violations'] if v['severity'] == 'warning' and v['rule_id'] not in ADVISORY_RULE_IDS]
           assert not warns, f\"unexpected warnings: {[(v['rule_id'], v['message']) for v in warns]}\"
           print(f\"Scanned {r['stats']['plugins']} plugins, {r['stats']['skills']} skills, {r['stats']['rules_run']} rules\")
           "
