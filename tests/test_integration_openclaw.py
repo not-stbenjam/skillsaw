@@ -589,3 +589,48 @@ def test_package_probe_reads_metadata_after_initial_chunk(tmp_path):
         json.dumps({"padding": "x" * (64 * 1024), "openclaw": {"extensions": ["index.js"]}})
     )
     assert RepositoryContext(repo).provenance(repo).openclaw
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_cursor_and_openclaw_share_plugin_without_losing_configs(tmp_path, nested):
+    from skillsaw.blocks.cursor import CursorPluginBlock
+
+    repo = tmp_path / "repo"
+    plugin = repo / "packages" / "weather" if nested else repo
+    shutil.copytree(FIXTURES / "valid", plugin)
+    marker = plugin / ".cursor-plugin"
+    marker.mkdir()
+    (marker / "plugin.json").write_text(
+        json.dumps(
+            {
+                "name": "weather",
+                "skills": "guides",
+                "mcpServers": {"cursor-weather": {"command": "echo"}},
+            }
+        )
+    )
+    context = RepositoryContext(repo)
+    assert context.provenance(plugin).ecosystems == frozenset({"cursor", "openclaw"})
+    assert len(context.lint_tree.find(CursorPluginBlock)) == 1
+    assert len(context.lint_tree.find(OpenClawPluginConfigNode)) == 1
+    assert len(context.lint_tree.find(McpBlock)) == 2
+    assert plugin / "guides" / "weather-report" in context.skills
+    result = run_cli(["lint", str(repo), "--format", "json", "--rule", "mcp-prohibited"])
+    assert result.returncode == 1, result.stderr
+    assert len(json.loads(result.stdout)["violations"]) == 2
+    context.exclude_patterns.append(marker.relative_to(repo).as_posix() + "/**")
+    context.apply_excludes()
+    assert plugin / "guides" / "weather-report" in context.skills
+    assert len(context.lint_tree.find(OpenClawPluginConfigNode)) == 1
+    assert not context.lint_tree.find(CursorPluginBlock)
+
+
+def test_multi_root_counts_cursor_and_openclaw_plugins(tmp_path):
+    native = copy_fixture("valid", tmp_path)
+    cursor = tmp_path / "cursor"
+    shutil.copytree(FIXTURES.parent / "cursor-plugins" / "clean", cursor)
+    result = run_cli(
+        ["lint", str(native), str(cursor), "--format", "json", "--rule", "openclaw-manifest-valid"]
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["stats"]["plugins"] == 2

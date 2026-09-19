@@ -1,0 +1,8 @@
+---
+description: Apply when writing application tests.
+alwaysApply: false
+globs: "**/*.py"
+---
+# Application tests
+
+Cover observable behavior and error handling. Keep each assertion specific to the failure being investigated.

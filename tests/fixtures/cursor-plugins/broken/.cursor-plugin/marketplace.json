@@ -1,0 +1,17 @@
+{
+  "name": "broken",
+  "plugins": [
+    {
+      "name": "bad",
+      "source": "bad"
+    },
+    {
+      "name": "bad",
+      "source": "../escape"
+    },
+    {
+      "name": "absent",
+      "source": "absent"
+    }
+  ]
+}

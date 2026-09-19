@@ -3,10 +3,12 @@
 
 # Cursor
 
-Validates Cursor's repository-shipped configuration under every `.cursor/` directory in the repository, the root one and any in a monorepo subpackage: `rules/**/*.mdc` frontmatter (the fields that decide whether a rule ever activates) and `.cursor/hooks.json` structure. Cursor reads AGENTS.md for portable instructions, so no Cursor-specific instruction format is validated. Enabled automatically wherever a `.cursorrules` file exists, or a `.cursor/` directory holds Cursor content — `rules/`, `commands/`, `skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only unrelated files does not activate them.
+Validates native `.cursor-plugin` manifests, marketplaces and component paths. It also validates Cursor configuration under every `.cursor/` directory in the repository, the root one and any in a monorepo subpackage: `rules/**/*.mdc` frontmatter (the fields that decide whether a rule ever activates) and `.cursor/hooks.json` structure. Cursor reads AGENTS.md for portable instructions, so no Cursor-specific instruction format is validated. Packaging rules activate on `.cursor-plugin/plugin.json` or `.cursor-plugin/marketplace.json`. Project rules activate wherever a `.cursorrules` file exists, or a `.cursor/` directory holds Cursor content — `rules/`, `commands/`, `agents/`, `skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only unrelated files does not activate them.
 
 | Rule ID | Description | Default Severity | Autofix |
 |---------|-------------|------------------|---------|
 | [`cursor-rules-valid`](cursor-rules-valid.md) | Cursor .mdc rules must have frontmatter that lets the rule activate | error (auto) | auto |
-| [`cursor-hooks-valid`](cursor-hooks-valid.md) | .cursor/hooks.json must declare version 1 and known hook events with commands | error (auto) | - |
+| [`cursor-hooks-valid`](cursor-hooks-valid.md) | Cursor hooks must use known events and valid commands; project hooks require version 1 | error (auto) | - |
+| [`cursor-plugin-json-valid`](cursor-plugin-json-valid.md) | Cursor plugin manifests must declare valid metadata and contained components | error (auto) | - |
+| [`cursor-marketplace-json-valid`](cursor-marketplace-json-valid.md) | Cursor marketplaces must contain valid entries with unique names and resolvable local sources | error (auto) | - |
 

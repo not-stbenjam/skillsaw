@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "local-review": {
+      "command": "review-server",
+      "args": [
+        "--stdio"
+      ]
+    }
+  }
+}

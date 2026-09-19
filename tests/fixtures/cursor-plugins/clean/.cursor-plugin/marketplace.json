@@ -1,0 +1,30 @@
+{
+  "name": "team-tools",
+  "owner": {
+    "name": "Platform Team",
+    "url": "https://example.com/team"
+  },
+  "metadata": {
+    "pluginRoot": "packages"
+  },
+  "plugins": [
+    {
+      "name": "review",
+      "source": {
+        "path": "review"
+      },
+      "description": "Review application changes",
+      "commands": "catalog-commands",
+      "hooks": {
+        "hooks": {
+          "sessionEnd": [
+            {
+              "command": "echo session complete"
+            }
+          ]
+        }
+      },
+      "author": "Platform Team"
+    }
+  ]
+}
