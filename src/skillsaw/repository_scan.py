@@ -260,18 +260,37 @@ class RepositoryScanMixin:
         pi_roots = [
             p for p in self.pi_discovery_roots() if not (self.provenance(p).ecosystems - {"pi"})
         ]
-        from .discovery.pi import project_resources
+        from .discovery.pi import package_resources, project_resources
 
         native_skills = set()
         for directory in self.agent_tool_dirs(".pi"):
             native_skills.update(
-                project_resources(directory, "skills", self.root_path, self.is_path_excluded)
+                project_resources(
+                    directory,
+                    "skills",
+                    self.root_path,
+                    self.is_path_excluded,
+                    include_disabled=True,
+                )
+            )
+
+        # Declarations own their candidates even when Pi filters them out.
+        # Otherwise the generic scan resurrects a disabled native skill as a
+        # portable one. Package declarations can also select a sibling root.
+        for directory in self.pi_discovery_roots():
+            native_skills.update(
+                package_resources(
+                    directory,
+                    "skills",
+                    self.root_path,
+                    self.is_path_excluded,
+                    include_disabled=True,
+                )
             )
 
         def owned_by_pi(path: Path) -> bool:
-            if path / "SKILL.md" in native_skills:
-                return True
-            if not any(path.is_relative_to(root) for root in pi_roots):
+            declared = path / "SKILL.md" in native_skills
+            if not declared and not any(path.is_relative_to(root) for root in pi_roots):
                 return False
             # A Pi package does not own another tool's customization root or
             # an independently declared nested package. Keep those consumers.
@@ -282,6 +301,8 @@ class RepositoryScanMixin:
                     return False
                 if ancestor in pi_roots:
                     return True
-            return False
+                if ancestor == self.root_path:
+                    break
+            return declared
 
         return [p for p in skills if not owned_by_pi(p)]

@@ -313,3 +313,18 @@ def test_excludes_refresh_package_identity(tmp_path):
     assert not ctx.pi_package_roots()
     assert not ctx.provenance(root).pi
     assert RepositoryType.PI_PACKAGE not in ctx.repo_types
+
+
+def test_disabled_settings_skill_is_not_resurrected_as_portable(tmp_path):
+    root = copy_fixture("project-filtered", tmp_path)
+    ctx = RepositoryContext(root)
+    assert not paths(ctx, PiSkillBlock)
+    assert not paths(ctx, SkillBlock)
+    result = run_cli(["lint", str(root), "--rule", "agentskill-name", "--format", "json"])
+    assert not json.loads(result.stdout)["violations"]
+
+
+def test_package_sibling_resource_keeps_native_skill_dialect(tmp_path):
+    ctx = RepositoryContext(copy_fixture("sibling-resource", tmp_path))
+    assert paths(ctx, PiSkillBlock) == {"shared/scan/SKILL.md"}
+    assert not paths(ctx, SkillBlock)

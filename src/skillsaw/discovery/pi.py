@@ -244,6 +244,7 @@ def resources(
     excluded: Callable[[Path], bool],
     *,
     manifest: bool = True,
+    include_disabled: bool = False,
 ) -> list[Path]:
     """Expand manifest globs; settings wildcards filter existing literal roots."""
     if not string_list(entries):
@@ -273,11 +274,16 @@ def resources(
         for p in entries
         if p.startswith(("!", "+", "-")) or (not manifest and ("*" in p or "?" in p))
     ]
-    return sorted(set(filter_resources(paths, patterns, base)))
+    return sorted(set(paths if include_disabled else filter_resources(paths, patterns, base)))
 
 
 def package_resources(
-    base: Path, kind: str, boundary: Path, excluded: Callable[[Path], bool]
+    base: Path,
+    kind: str,
+    boundary: Path,
+    excluded: Callable[[Path], bool],
+    *,
+    include_disabled: bool = False,
 ) -> list[Path]:
     manifest = base / "package.json"
     data, _ = (
@@ -287,12 +293,19 @@ def package_resources(
     )
     pi = data.get("pi") if isinstance(data, dict) else None
     if isinstance(pi, dict):
-        return resources(base, kind, pi.get(kind, []), boundary, excluded)
+        return resources(
+            base, kind, pi.get(kind, []), boundary, excluded, include_disabled=include_disabled
+        )
     return collect(base / kind, kind, boundary, excluded)
 
 
 def project_resources(
-    directory: Path, kind: str, boundary: Path, excluded: Callable[[Path], bool]
+    directory: Path,
+    kind: str,
+    boundary: Path,
+    excluded: Callable[[Path], bool],
+    *,
+    include_disabled: bool = False,
 ) -> list[Path]:
     """Autoload and explicitly configured resources share override semantics."""
     settings = directory / "settings.json"
@@ -308,6 +321,15 @@ def project_resources(
     automatic = collect(
         directory / kind, kind, boundary, excluded, shallow=kind in {"prompts", "themes"}
     )
-    automatic = filter_resources(automatic, overrides, directory)
-    explicit = resources(directory, kind, entries, boundary, excluded, manifest=False)
+    if not include_disabled:
+        automatic = filter_resources(automatic, overrides, directory)
+    explicit = resources(
+        directory,
+        kind,
+        entries,
+        boundary,
+        excluded,
+        manifest=False,
+        include_disabled=include_disabled,
+    )
     return sorted(set(automatic + explicit))
