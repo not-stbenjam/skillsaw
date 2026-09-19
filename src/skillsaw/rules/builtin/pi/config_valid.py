@@ -4,7 +4,7 @@ from typing import List
 
 from skillsaw.blocks.pi import PiPackageBlock, PiSettingsBlock
 from skillsaw.context import RepositoryContext, RepositoryType
-from skillsaw.formats.pi import RESOURCE_FIELDS, string_list
+from skillsaw.formats.pi import RESOURCE_FIELDS, settings_resources, string_list
 from skillsaw.rule import Rule, RuleViolation, Severity
 
 
@@ -41,7 +41,7 @@ class PiConfigValidRule(Rule):
                     )
                     continue
                 settings = isinstance(block, PiSettingsBlock)
-                config = data if settings else data.get("pi", {})
+                config = settings_resources(data) if settings else data.get("pi", {})
                 if not isinstance(config, dict):
                     violations.append(
                         self.violation(
