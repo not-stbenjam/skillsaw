@@ -1987,33 +1987,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # --- APM ---
     _attach_apm_tree(state)
 
-    # --- Extra content paths from config ---
-    # User-configured content paths plus globs contributed by detected
-    # plugin repo types; the ``seen`` set dedupes any overlap.
-    for glob_pattern in [*context.content_paths, *context.plugin_content_paths]:
-        try:
-            matches = sorted(context.root_path.glob(glob_pattern))
-        except (NotImplementedError, ValueError) as e:
-            # Path.glob() rejects absolute patterns (NotImplementedError)
-            # and some malformed ones (ValueError). The tree builds lazily
-            # inside each rule's check(), so an invalid pattern — from user
-            # config ``content-paths`` or a plugin repo type — would
-            # otherwise surface as one rule-execution-error per rule.
-            logger.warning("Ignoring invalid content path glob %r: %s", glob_pattern, e)
-            continue
-        for extra in matches:
-            if not extra.is_file():
-                continue
-            extra_resolved = safe_resolve(extra)
-            if extra_resolved is not None and any(
-                claimed == extra_resolved for claimed, _ in state.seen_roles
-            ):
-                # Already attached under a structured parser role (hooks,
-                # MCP): re-attaching it as prose would make every
-                # content-quality rule lint structured config as text.
-                continue
-            state.add_block(root, extra, ExtraBlock)
-
     # --- Plugin tree contributors ---
     # Contributors return pre-constructed nodes (typically ContentBlock or
     # JsonConfigBlock subclasses), attached at the root. The ``seen`` set
@@ -2086,6 +2059,33 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # Pi prompts can select another host's configured command or skill.
     # Those semantic owners keep the single body and its parser role.
     attach_pi_prompts(state)
+
+    # --- Extra content paths from config ---
+    # User-configured content paths plus globs contributed by detected
+    # plugin repo types; the ``seen`` set dedupes any overlap.
+    for glob_pattern in [*context.content_paths, *context.plugin_content_paths]:
+        try:
+            matches = sorted(context.root_path.glob(glob_pattern))
+        except (NotImplementedError, ValueError) as e:
+            # Path.glob() rejects absolute patterns (NotImplementedError)
+            # and some malformed ones (ValueError). The tree builds lazily
+            # inside each rule's check(), so an invalid pattern — from user
+            # config ``content-paths`` or a plugin repo type — would
+            # otherwise surface as one rule-execution-error per rule.
+            logger.warning("Ignoring invalid content path glob %r: %s", glob_pattern, e)
+            continue
+        for extra in matches:
+            if not extra.is_file():
+                continue
+            extra_resolved = safe_resolve(extra)
+            if extra_resolved is not None and any(
+                claimed == extra_resolved for claimed, _ in state.seen_roles
+            ):
+                # Already attached under a structured parser role (hooks,
+                # MCP): re-attaching it as prose would make every
+                # content-quality rule lint structured config as text.
+                continue
+            state.add_block(root, extra, ExtraBlock)
 
     # Configured OpenCode instructions are ambient prose, but their
     # original semantic owner wins when a path is also a skill, command,

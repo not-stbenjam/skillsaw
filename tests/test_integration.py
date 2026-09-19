@@ -10551,3 +10551,34 @@ class TestOpenClawExplicitRuntime:
             assert "empty extension list" in findings[0]["message"]
         else:
             assert findings == []
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("source", ["package", "project", "both"])
+def test_pi_prompt_keeps_native_checks_under_extra_content_globs(tmp_path, source):
+    from skillsaw.blocks import BodyContent, ExtraBlock
+    from skillsaw.blocks.pi import PiPromptBlock
+    from skillsaw.context import RepositoryContext
+
+    repo = copy_fixture("pi/prompt-extra-content", tmp_path)
+    if source == "package":
+        (repo / ".pi/settings.json").unlink()
+    elif source == "project":
+        (repo / "package.json").unlink()
+    result = run_lint(repo, "--no-custom-rules", "--rule", "content-description-routing")
+    findings = result["out"]["violations"]
+    assert result["rc"] == 0
+    assert len(findings) == 1
+    assert findings[0]["file_path"] == "prompts/deploy.md"
+    assert findings[0]["line"] == 2
+    assert "only restates the name" in findings[0]["message"]
+
+    context = RepositoryContext(repo, content_paths=["**/*.md"])
+    tree = context.lint_tree
+    assert len(tree.find(PiPromptBlock)) == 1
+    assert len(tree.find(BodyContent)) == 1
+    assert [b.path.relative_to(repo).as_posix() for b in tree.find(ExtraBlock)] == [
+        "notes/checklist.md"
+    ]
+    assert not context.lint_tree_errors
+
