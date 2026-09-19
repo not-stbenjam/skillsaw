@@ -16,9 +16,8 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle at runtime
 NAME_MAX_LENGTH = 64
 DESCRIPTION_MAX_LENGTH = 1024
 COMPATIBILITY_MAX_LENGTH = 500
-# Spec: lowercase alphanumerics and hyphens, must not start or end with a
-# hyphen — digit-leading names like "3d-printing" are valid.
-NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# Unicode alphanumerics, excluding underscore. Lowercase is checked separately.
+NAME_PATTERN = re.compile(r"\A[^\W_][\w-]*\Z")
 CONSECUTIVE_HYPHENS = re.compile(r"--")
 DEFAULT_ALLOWED_DIRS = {"scripts", "references", "assets", "evals"}
 
@@ -68,9 +67,14 @@ def is_installed_plugin_skill(context: "RepositoryContext", path: Path) -> bool:
     return context.is_codex_installed_plugin(path)
 
 
+def valid_name_format(name: str) -> bool:
+    """Accept the spec's Unicode lowercase alphanumerics and hyphens."""
+    return bool(NAME_PATTERN.fullmatch(name)) and "_" not in name and name == name.lower()
+
+
 def _to_kebab(name: str) -> str:
     s = re.sub(r"([a-z])([A-Z])", r"\1-\2", name)
-    s = re.sub(r"[^a-z0-9]+", "-", s.lower())
+    s = re.sub(r"[\W_]+", "-", s.lower())
     s = re.sub(r"-+", "-", s).strip("-")
     return s
 

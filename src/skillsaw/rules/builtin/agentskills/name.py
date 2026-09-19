@@ -20,11 +20,11 @@ from skillsaw.utils import (
 
 from ._helpers import (
     CONSECUTIVE_HYPHENS,
-    NAME_PATTERN,
     SKILL_REPO_TYPES,
     _add_rename,
     _to_kebab,
     is_installed_plugin_skill,
+    valid_name_format,
 )
 
 
@@ -89,7 +89,7 @@ def _plan_name_fix(
     if not isinstance(old_name, str) or not old_name:
         return None
     new_name = directory_name if directory_name is not None else _to_kebab(old_name)
-    if new_name == old_name or not NAME_PATTERN.match(new_name):
+    if new_name == old_name or not valid_name_format(new_name):
         return None
     fm_text = frontmatter_text(original) or ""
     line_match = re.search(r"^name[ \t]*:[^\r\n]*", fm_text, re.MULTILINE)
@@ -153,7 +153,7 @@ class AgentSkillNameRule(Rule):
 
             name_line = block.key_line("name")
 
-            bad_format = not NAME_PATTERN.match(name)
+            bad_format = not valid_name_format(name)
             trailing_hyphen = name.endswith("-")
             consecutive_hyphens = bool(CONSECUTIVE_HYPHENS.search(name))
             dir_mismatch = skill_node.path != context.root_path and name != skill_node.path.name

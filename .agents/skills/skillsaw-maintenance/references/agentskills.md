@@ -33,6 +33,12 @@ Package `src/skillsaw/rules/builtin/agentskills/`:
 
 ## Sync notes
 - `description.py` hand-copies the 1024-char limit — re-check against the spec.
-- `name.py` hand-copies the name format regex — re-check allowed characters/length.
+- `name.py` uses the Unicode-aware format predicate in `_helpers.py`; re-check
+  allowed characters and length. The published spec permits Unicode lowercase
+  alphanumerics, confirmed against `skills-ref` at revision
+  `547831f3a23724ba64a9b79bbf59c5e0bc8f2d1a`. Preserve non-Latin names in
+  validation and autofixes. The reference validator also normalizes NFKC and
+  trims names; the published spec does not specify those transformations, so
+  skillsaw retains literal directory matching.
 - agentskills rules are disabled in `openshift-eng/ai-helpers` config; keep them
   backward-compatible (`enabled: auto`/`false`).

@@ -26,14 +26,17 @@ name: deploy-staging
 ## How to fix
 
 Rename the `name` field in SKILL.md frontmatter to match the skill's
-directory name, using lowercase letters, numbers, and hyphens (a
+directory name, using lowercase Unicode letters, numbers, and hyphens (a
 leading digit is allowed, e.g. `1password`). `skillsaw fix`
 can correct the name automatically when a valid kebab-case name can be
 derived from it.
 
 Some violations need a manual rename and are reported without the
-`[*]` fixable marker: names with no Latin letters or digits to
-kebab-case (for example, a fully non-Latin name), a `name:` written as
+`[*]` fixable marker: names with no letters or digits to
+kebab-case (for example, punctuation alone), a `name:` written as
 a block scalar or spread over multiple lines, duplicate `name:` keys,
 and directory mismatches where the directory name itself is not valid
 kebab-case (rename the directory instead).
+
+Names such as `café`, `данные`, and `数据分析` are valid when they match
+the directory name. Autofixes preserve Unicode letters and numbers.

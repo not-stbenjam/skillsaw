@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.markdown_doc import MarkdownDoc
 from skillsaw.rule import AutofixConfidence, Severity
@@ -437,11 +439,11 @@ def test_name_fixable_matches_fix_coverage(tmp_path):
     assert len(violations) == 5
     by_dir = {v.file_path.parent.name: v for v in violations}
 
-    # Un-kebab-able name: a fully non-Latin value kebab-cases to "".
+    # A Unicode name is valid, but this one mismatches its ASCII directory.
     v = by_dir["keigo-formatter"]
-    assert "lowercase letters" in v.message
-    assert v.fixable is False
-    assert v.fix_confidence is None
+    assert "does not match directory" in v.message
+    assert v.fixable is True
+    assert v.fix_confidence == AutofixConfidence.SAFE
 
     # Block-scalar name (``name: >-``): the value is not on the key line,
     # so the single-line rewrite is unsafe.
@@ -472,7 +474,7 @@ def test_name_fixable_matches_fix_coverage(tmp_path):
         for d in ["keigo-formatter", "deploy-service", "release-notes", "My_Skill"]
     }
     fixes = rule.fix(context, violations)
-    assert [f.file_path.parent.name for f in fixes] == ["format-checker"]
+    assert {f.file_path.parent.name for f in fixes} == {"format-checker", "keigo-formatter"}
     for d, content in before.items():
         assert (repo / d / "SKILL.md").read_text() == content
 
@@ -2408,3 +2410,21 @@ def test_reachability_stops_after_last_transitive_target(temp_dir, monkeypatch):
     # The root covers docs/, but its guide must still be read to reach the
     # data file. Remaining queued documents cannot add any bundled target.
     assert reads == ["SKILL.md", "docs/deep/guide.md"]
+
+
+@pytest.mark.parametrize(
+    "name", ["café", "данные", "数据分析", "٣-تقارير", "日本語スキル", "3d-printing"]
+)
+def test_unicode_skill_name_format(name):
+    from skillsaw.rules.builtin.agentskills._helpers import valid_name_format
+
+    assert valid_name_format(name)
+
+
+@pytest.mark.parametrize(
+    "name", ["CAFÉ", "Данные", "数据_分析", "数据 分析", "📝", "café\n", "", "-café"]
+)
+def test_invalid_unicode_skill_name_format(name):
+    from skillsaw.rules.builtin.agentskills._helpers import valid_name_format
+
+    assert not valid_name_format(name)

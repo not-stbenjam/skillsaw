@@ -3237,7 +3237,7 @@ class TestEditorTools:
         tests/fixtures alone.
         """
         tracked = subprocess.run(
-            ["git", "ls-files", "tests/fixtures"],
+            ["git", "ls-files", "-z", "tests/fixtures"],
             capture_output=True,
             text=True,
             cwd=FIXTURES.parent.parent,
@@ -3249,7 +3249,7 @@ class TestEditorTools:
             for p in FIXTURES.rglob("*")
             if p.is_file() and "__pycache__" not in p.parts
         }
-        untracked = sorted(on_disk - set(tracked.stdout.splitlines()))
+        untracked = sorted(on_disk - set(tracked.stdout.split("\0")))
         assert not untracked, f"fixture files missing from git: {untracked}"
 
     def test_mcp_rules_reach_cursor_and_vscode_configs(self, tmp_path):
@@ -7984,7 +7984,7 @@ class TestSafeAutofixIdempotency:
 
     EXPECTED_SAFE_VIOLATIONS = {
         "claude-agent-frontmatter": 3,
-        "agentskill-name": 4,
+        "agentskill-name": 6,
         "agentskill-valid": 7,
         "claude-command-frontmatter": 3,
         "content-unlinked-internal-reference": 23,
@@ -10194,3 +10194,29 @@ class TestCodexPortableOverlay:
         assert len(findings) == 1
         assert findings[0]["rule_id"] == "agent-plugin-mcp-valid"
         assert findings[0]["file_path"] == "packages/release/mcp.json"
+
+
+def test_unicode_skill_names_survive_cli_fix(tmp_path):
+    repo = copy_fixture("agentskills/unicode-names", tmp_path)
+    before = _snapshot_contents(repo)
+    result = run_lint(repo, "--rule", "agentskill-name")
+    assert result["rc"] == 0
+    assert len(result["out"]["stats"]["skills"]) == 4
+    _run_fix(repo, "--rule", "agentskill-name")
+    assert _snapshot_contents(repo) == before
+
+
+def test_unicode_skill_name_fixes_preserve_letters(tmp_path):
+    repo = copy_fixture("autofix/safe-idempotency", tmp_path)
+    paths = [repo / "skills" / name / "SKILL.md" for name in ("café", "数据分析")]
+    lines = {p: len(p.read_text().splitlines()) for p in paths}
+    _run_fix(repo, "--rule", "agentskill-name")
+    for path in paths:
+        assert f"name: {path.parent.name}\n" in path.read_text()
+        assert len(path.read_text().splitlines()) == lines[path]
+    after = _snapshot_contents(repo)
+    _run_fix(repo, "--rule", "agentskill-name")
+    assert _snapshot_contents(repo) == after
+    result = run_lint(repo, "--rule", "agentskill-name")
+    for violation in violations(result):
+        assert not any(name in violation["file_path"] for name in ("café", "数据分析"))
