@@ -375,3 +375,45 @@ def test_multi_root_counts_native_plugins(tmp_path):
     )
     data = json.loads(result.stdout)
     assert data["stats"]["plugins"] == 2
+
+
+def test_tightened_excludes_do_not_reprobe_ordinary_packages(tmp_path, monkeypatch):
+    from skillsaw.discovery import openclaw
+
+    repo = copy_fixture("valid", tmp_path)
+    ordinary = repo / "packages" / "ordinary"
+    ordinary.mkdir(parents=True)
+    (ordinary / "package.json").write_text('{"name":"ordinary"}')
+    context = RepositoryContext(repo)
+    assert context.openclaw_plugin_roots() == [repo]
+    original = openclaw.declares_extensions
+
+    def probe(path):
+        assert path.parent != ordinary, "negative package evidence must survive tighter exclusions"
+        return original(path)
+
+    monkeypatch.setattr(openclaw, "declares_extensions", probe)
+    context.exclude_patterns.append("dist/**")
+    assert context.openclaw_plugin_roots() == [repo]
+
+
+def test_relaxed_excludes_rediscover_native_package_roots(tmp_path):
+    repo = copy_fixture("package-only", tmp_path)
+    context = RepositoryContext(repo, exclude_patterns=["package.json"])
+    assert not context.openclaw_plugin_roots()
+    context.exclude_patterns.clear()
+    assert context.openclaw_plugin_roots() == [repo]
+    context.exclude_patterns.append("package.json")
+    assert not context.openclaw_plugin_roots()
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_package_evidence_symlink_containment(tmp_path, outside):
+    from skillsaw.discovery.openclaw import discover_plugins
+
+    repo = copy_fixture("package-only", tmp_path)
+    package = repo / "package.json"
+    target = (tmp_path if outside else repo) / "metadata.json"
+    package.rename(target)
+    package.symlink_to(target)
+    assert discover_plugins([], [package], lambda _: False) == ([] if outside else [repo])

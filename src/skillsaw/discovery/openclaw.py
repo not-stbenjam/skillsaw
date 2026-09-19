@@ -7,12 +7,18 @@ from typing import Callable, Iterable
 
 from skillsaw.formats.openclaw import MANIFEST, contained_file
 from skillsaw.paths import safe_exists, safe_is_symlink, safe_resolve, contained_resolve
-from skillsaw.utils import read_json, read_text
+from skillsaw.utils import read_json
 
 
 def declares_extensions(path: Path) -> bool:
     """Package hook packs alone are not native plugins; extensions declare one."""
-    content = read_text(path)
+    # This one-shot evidence probe rejects ordinary packages without filling
+    # the parsed-file cache or resolving every negative cache key. The context
+    # caches discovery results; positive candidates use the shared JSON reader.
+    try:
+        content = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
     # Escaped keys are legal JSON too, so a backslash requires parsing.
     if not content or ('"openclaw"' not in content and "\\" not in content):
         return False
@@ -41,12 +47,17 @@ def discover_plugins(
     for path in (*manifests, *packages):
         if excluded(path) or excluded(path.parent):
             continue
-        root = safe_resolve(path.parent)
-        if root is None:
-            continue
+        # A regular package.json is necessarily inside its resolved parent.
+        # Resolve file containment only for symlinks, before reading them;
+        # ordinary monorepos otherwise pay two realpath walks per package.
+        if path.name != MANIFEST:
+            if safe_is_symlink(path):
+                root = safe_resolve(path.parent)
+                if root is None or contained_resolve(path, root) is None:
+                    continue
+            if not declares_extensions(path):
+                continue
         # A manifest symlink still declares a plugin; never read its target.
-        if path.name == MANIFEST:
-            roots.add(path.parent)
-        elif contained_resolve(path, root) is not None and declares_extensions(path):
+        if safe_resolve(path.parent) is not None:
             roots.add(path.parent)
     return sorted(roots)
