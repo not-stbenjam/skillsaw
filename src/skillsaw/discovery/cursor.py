@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
-from skillsaw.formats.cursor import MARKER, local_source, read_manifest, safe_component
+from skillsaw.formats.cursor import MARKER, local_source, read_manifest, source_path
 from skillsaw.paths import contained_resolve, safe_exists, safe_is_dir, safe_is_symlink
 
 
@@ -40,7 +40,7 @@ def entries(paths: Iterable[Path]) -> dict[Path, list[tuple[Path, dict]]]:
             source = local_source(entry.get("source"))
             if source is None:
                 continue
-            target = safe_component(path.parent.parent, f"{prefix}/{source}" if prefix else source)
+            target = source_path(path.parent.parent, prefix, source)
             if target is not None:
                 found.setdefault(target, []).append((path, entry))
     return found

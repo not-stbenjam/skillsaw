@@ -66,9 +66,7 @@ class CursorMarketplaceValidRule(Rule):
                 source = cursor.local_source(entry.get("source"))
                 if source is None or not isinstance(prefix, str):
                     continue
-                path = cursor.safe_component(
-                    block.path.parent.parent, f"{prefix}/{source}" if prefix else source
-                )
+                path = cursor.source_path(block.path.parent.parent, prefix, source)
                 if path is None or not safe_is_dir(path):
                     violations.append(
                         self.violation(

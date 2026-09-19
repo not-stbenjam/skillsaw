@@ -51,12 +51,15 @@ class RepositoryCursorMixin:
         return [(origin, {**entry, **native}) for origin, entry in entries] or [(manifest, native)]
 
     def cursor_skills(self) -> set[Path]:
+        roots = set(self.distinct_plugin_dirs())
         return {
             p
             for root in self.cursor_plugin_roots()
             for _, data in self.cursor_views(root)
             for p in cursor.skill_dirs(root, data, self.is_path_excluded)
-            if not self.is_path_excluded(p) and not self.is_path_excluded(p / "SKILL.md")
+            if not self.is_path_excluded(p)
+            and not self.is_path_excluded(p / "SKILL.md")
+            and next((parent for parent in (p, *p.parents) if parent in roots), None) == root
         }
 
     def _reset_cursor(self) -> None:

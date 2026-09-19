@@ -1503,7 +1503,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
         if not prov.cursor or prov.ecosystems != frozenset({"cursor"}):
             _add_plugin_prose(container, plugin_path, resolved_plugin)
-        else:
+        elif _inside_plugin(plugin_path / "README.md", resolved_plugin):
             state.add_block(
                 container, plugin_path / "README.md", ReadmeBlock, owner=resolved_plugin
             )

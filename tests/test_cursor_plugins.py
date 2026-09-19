@@ -193,3 +193,22 @@ def test_cursor_plugin_mcp_duplicate_keys_keep_last_value(tmp_path):
     block = next(b for b in blocks if b.path == path)
     assert block.parse_error is None
     assert block.servers[0].command == "new"
+
+
+def test_cursor_prefix_cannot_hide_absolute_source(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    path = repo / ".cursor-plugin/marketplace.json"
+    data = json.loads(path.read_text())
+    data["plugins"][0]["source"] = "/review"
+    path.write_text(json.dumps(data))
+    assert CursorMarketplaceValidRule().check(RepositoryContext(repo))
+
+
+def test_cursor_readme_cannot_escape_plugin(tmp_path):
+    from skillsaw.blocks import ReadmeBlock
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    other = repo / "outside.md"
+    other.write_text("Outside the plugin boundary.\n")
+    (repo / "packages/review/README.md").symlink_to(other)
+    assert not RepositoryContext(repo).lint_tree.find(ReadmeBlock)

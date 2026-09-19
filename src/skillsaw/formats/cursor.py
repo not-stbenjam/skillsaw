@@ -53,6 +53,15 @@ def safe_component(root: Path, value: str) -> Path | None:
     return contained_resolve(root / value, root)
 
 
+def source_path(root: Path, prefix: str, source: str) -> Path | None:
+    """Validate source and prefix separately before joining their spellings."""
+    if safe_component(root, source) is None:
+        return None
+    if prefix and safe_component(root, prefix) is None:
+        return None
+    return safe_component(root, f"{prefix}/{source}" if prefix else source)
+
+
 def component_paths(root: Path, data: dict, field: str) -> list[Path]:
     """Resolve declared paths/globs, or the default when no field exists."""
     value = data.get(field, DEFAULTS.get(field, field))
