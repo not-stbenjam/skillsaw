@@ -151,7 +151,7 @@ class RepositoryProvenanceMixin:
         marketplace_entries: Dict[Path, Dict[str, Any]]
 
         # Required host behavior.
-        def pi_package_roots(self) -> List[Path]: ...
+        def _pi_claim_set(self) -> Set[Path]: ...
 
         def _codex_catalog_files(self) -> List[Path]: ...
 
@@ -289,7 +289,7 @@ class RepositoryProvenanceMixin:
             )
         ):
             ecosystems.add("codex")
-        if resolved is not None and resolved in self.pi_package_roots():
+        if resolved is not None and resolved in self._pi_claim_set():
             ecosystems.add("pi")
         if resolved is not None and resolved in self._agent_plugin_claim_set():
             ecosystems.add("agent-plugin")

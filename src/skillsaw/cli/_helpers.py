@@ -159,7 +159,7 @@ def _build_merged_context(contexts):
     for ctx in contexts:
         repo_types |= ctx.repo_types
         plugin_repo_types |= ctx.plugin_repo_types
-        plugins.extend(ctx.plugins)
+        plugins.extend(ctx.distinct_plugin_dirs())
         skills.extend(ctx.skills)
         codex_plugins.extend(ctx.codex_plugins)
         agent_plugins.extend(ctx.agent_plugins)

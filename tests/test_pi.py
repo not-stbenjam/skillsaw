@@ -446,3 +446,114 @@ def test_cli_forced_pi_type_and_primary_type(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["stats"]["repo_type"] == "pi-package"
+
+
+def test_oversized_paths_preserve_valid_siblings(tmp_path):
+    ctx = RepositoryContext(copy_fixture("oversized", tmp_path))
+    assert paths(ctx, PiSkillBlock) == {"skills/check/SKILL.md"}
+    assert not ctx.lint_tree_errors
+    assert len(PiResourcePathsRule().check(ctx)) == 2
+
+
+@pytest.mark.parametrize(
+    "entries,expected",
+    [
+        (["prompts", "*not-present*"], set()),
+        (["*not-present*"], {".pi/prompts/direct.md"}),
+        (["prompts", "*not-present*", "+prompts/direct.md"], {".pi/prompts/direct.md"}),
+        (
+            ["prompts", "+prompts/direct.md", "-prompts/direct.md"],
+            {".pi/prompts/nested/ignored.md"},
+        ),
+    ],
+)
+def test_explicit_settings_candidates_reserve_autoload_identity(entries, expected, tmp_path):
+    root = copy_fixture("project", tmp_path)
+    settings = root / ".pi/settings.json"
+    settings.write_text(json.dumps({"prompts": entries}))
+    ctx = RepositoryContext(root)
+    assert paths(ctx, PiPromptBlock) == expected
+
+
+def test_late_manifest_exclusion_restores_portable_validation(tmp_path):
+    root = copy_fixture("conventional", tmp_path)
+    ctx = RepositoryContext(root)
+    assert not paths(ctx, SkillBlock)
+    ctx.exclude_patterns.append("package.json")
+    ctx.apply_excludes()
+    fresh = RepositoryContext(root, exclude_patterns=["package.json"])
+    assert paths(ctx, SkillBlock) == paths(fresh, SkillBlock) == {"skills/check/SKILL.md"}
+    assert ctx.repo_types == fresh.repo_types
+    ctx.exclude_patterns.append("skills/**")
+    ctx.apply_excludes()
+    assert not paths(ctx, SkillBlock)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Requires POSIX symlinks")
+def test_local_package_symlink_has_canonical_provenance(tmp_path):
+    root = copy_fixture("project", tmp_path)
+    (root / "linked").symlink_to(root / "local", target_is_directory=True)
+    (root / ".pi/settings.json").write_text('{"packages":["../linked"]}')
+    ctx = RepositoryContext(root)
+    assert ctx.provenance(root / "linked").pi
+    assert ctx.provenance(root / "local").pi
+    assert any(p.endswith("skills/flat.md") for p in paths(ctx, PiSkillBlock))
+    assert not ctx.lint_tree_errors
+
+
+def test_transient_compile_failure_is_not_cached(monkeypatch):
+    from skillsaw import pi_patterns
+    from skillsaw.timeouts import RegexTimeout
+
+    pi_patterns._compile_glob.cache_clear()
+    original = pi_patterns.glob.compile
+    calls = 0
+
+    def compile_once(pattern, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RegexTimeout("transient load")
+        return original(pattern, **kwargs)
+
+    monkeypatch.setattr(pi_patterns.glob, "compile", compile_once)
+    assert not pi_patterns._globmatch("review.md", "*.md")
+    assert pi_patterns._globmatch("review.md", "*.md")
+    assert calls == 2
+    pi_patterns._compile_glob.cache_clear()
+
+
+def test_match_timeout_is_contained(monkeypatch):
+    from skillsaw import pi_patterns
+    from skillsaw.timeouts import RegexTimeout
+
+    class SlowPattern:
+        def match(self, value):
+            raise RegexTimeout("slow match")
+
+    monkeypatch.setattr(pi_patterns, "_compile_glob", lambda p: SlowPattern())
+    assert not pi_patterns._globmatch("review.md", "*.md")
+
+
+def test_project_theme_autoload_is_shallow(tmp_path):
+    from skillsaw.blocks.pi import PiThemeBlock
+
+    ctx = RepositoryContext(copy_fixture("project", tmp_path))
+    assert paths(ctx, PiThemeBlock) == {".pi/themes/dark.json"}
+
+
+def test_multi_path_report_counts_pi_packages(tmp_path):
+    roots = [copy_fixture(name, tmp_path) for name in ("conventional", "empty")]
+    result = run_cli(["lint", *map(str, roots), "--rule", "pi-config-valid", "--format", "json"])
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["stats"]["plugins"] == 2
+
+
+def test_dual_package_retains_claude_hooks_security(tmp_path):
+    from skillsaw.blocks import HooksBlock
+    from skillsaw.rules.builtin.hooks.dangerous import HooksDangerousRule
+
+    ctx = RepositoryContext(copy_fixture("dual", tmp_path))
+    assert paths(ctx, HooksBlock) == {"hooks/hooks.json"}
+    violations = HooksDangerousRule().check(ctx)
+    assert any(v.file_path == ctx.root_path / "hooks/hooks.json" for v in violations)

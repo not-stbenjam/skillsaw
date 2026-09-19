@@ -3,90 +3,26 @@
 from __future__ import annotations
 
 import os
-import re
-from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Iterable
 
 from pathspec import GitIgnoreSpec
-from wcmatch import glob
-from bracex import ExpansionLimitException
-from wcmatch._wcparse import PatternLimitException
 
 from skillsaw.discovery.detect import WALK_SKIP_DIRS, VENDOR_DIR_NAMES
 
 from skillsaw.formats.pi import REMOTE_PREFIXES, string_list
-from skillsaw.paths import contained_resolve, relative_to_str, safe_resolve
+from skillsaw.paths import (
+    contained_resolve,
+    relative_to_str,
+    safe_resolve,
+    safe_is_dir,
+    safe_is_file,
+    safe_exists,
+)
 from skillsaw.utils import read_json, read_text
+from skillsaw.pi_patterns import _globmatch, _ignore_patterns, _ignored, _MAX_IGNORE_PATTERNS
 
-_FLAGS = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB
 _SKIP_DIRS = WALK_SKIP_DIRS | VENDOR_DIR_NAMES
-_PATTERN_SECONDS = 0.02
-_MAX_PATTERN_LENGTH = 1024
-_MAX_IGNORE_PATTERNS = 4096
-
-
-@lru_cache(maxsize=256)
-def _compile_glob(pattern: str):
-    # Imported lazily: discovery also runs while RepositoryContext initializes.
-    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
-
-    if not pattern or len(pattern) > _MAX_PATTERN_LENGTH:
-        return None
-    try:
-        with regex_timeout(_PATTERN_SECONDS):
-            return glob.compile(pattern, flags=_FLAGS, limit=256)
-    except (
-        PatternLimitException,
-        ExpansionLimitException,
-        ValueError,
-        re.error,
-        RecursionError,
-        RegexTimeout,
-    ):
-        return None
-
-
-def _globmatch(value: str, pattern: str) -> bool:
-    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
-
-    compiled = _compile_glob(pattern)
-    if compiled is None:
-        return False
-    try:
-        with regex_timeout(_PATTERN_SECONDS):
-            return compiled.match(value)
-    except (ValueError, re.error, RecursionError, RegexTimeout):
-        return False
-
-
-def _ignore_patterns(lines: Iterable[str]) -> list:
-    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
-
-    patterns = []
-    for index, line in enumerate(lines):
-        if index >= _MAX_IGNORE_PATTERNS:
-            break
-        if len(line) > _MAX_PATTERN_LENGTH:
-            continue
-        try:
-            with regex_timeout(_PATTERN_SECONDS):
-                patterns.extend(GitIgnoreSpec.from_lines([line], backend="simple").patterns)
-        except (ValueError, re.error, RecursionError, RegexTimeout):
-            # GitIgnorePatternError (including the legacy GitWildMatch spelling)
-            # derives from ValueError. A bad line must not suppress valid siblings.
-            continue
-    return patterns
-
-
-def _ignored(ignore: GitIgnoreSpec, value: str) -> bool:
-    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
-
-    try:
-        with regex_timeout(_PATTERN_SECONDS):
-            return ignore.match_file(value)
-    except (ValueError, re.error, RecursionError, RegexTimeout):
-        return False
 
 
 def package_marker(path: Path) -> bool:
@@ -137,7 +73,7 @@ def package_roots(
             if not isinstance(source, str):
                 continue
             local = local_path(path.parent, source, root)
-            if local is not None and local.is_dir() and not excluded(local):
+            if local is not None and safe_is_dir(local) and not excluded(local):
                 roots.add(local)
     return sorted(roots)
 
@@ -215,13 +151,17 @@ def extension_entries(
         found = []
         for entry in entries:
             path = local_path(directory, entry, boundary)
-            if path is not None and path.exists() and not excluded(path):
+            if path is not None and safe_exists(path) and not excluded(path):
                 found.append(path)
         if found:
             return found
     for name in ("index.ts", "index.js"):
         path = directory / name
-        if contained_resolve(path, boundary) is not None and path.is_file() and not excluded(path):
+        if (
+            contained_resolve(path, boundary) is not None
+            and safe_is_file(path)
+            and not excluded(path)
+        ):
             return [path]
     return []
 
@@ -251,9 +191,9 @@ def collect(
         if resolved is None or resolved in visited or excluded(current):
             return []
         visited.add(resolved)
-        if current.is_file():
+        if safe_is_file(current):
             return [current] if current.suffix in suffixes[kind] else []
-        if not current.is_dir():
+        if not safe_is_dir(current):
             return []
         if kind == "extensions":
             entries = extension_entries(current, boundary, excluded)
@@ -286,11 +226,11 @@ def collect(
         ignore = GitIgnoreSpec(patterns[-_MAX_IGNORE_PATTERNS:], backend="simple")
 
         def ignored(p: Path) -> bool:
-            rel = (relative_to_str(p, path) or p.name) + ("/" if p.is_dir() else "")
+            rel = (relative_to_str(p, path) or p.name) + ("/" if safe_is_dir(p) else "")
             return _ignored(ignore, rel)
 
         entrypoint = current / "SKILL.md"
-        if kind == "skills" and entrypoint.is_file() and not ignored(entrypoint):
+        if kind == "skills" and safe_is_file(entrypoint) and not ignored(entrypoint):
             return walk(entrypoint, False, ignore)
         try:
             children = sorted(current.iterdir())
@@ -300,7 +240,7 @@ def collect(
         for child in children:
             if child.name.startswith(".") or child.name in _SKIP_DIRS or ignored(child):
                 continue
-            if child.is_dir():
+            if safe_is_dir(child):
                 if shallow:
                     continue
                 if kind == "extensions":
@@ -311,7 +251,7 @@ def collect(
                 found.extend(walk(child, False, ignore))
         return found
 
-    if path.is_file() and contained_resolve(path, boundary) is not None and not excluded(path):
+    if safe_is_file(path) and contained_resolve(path, boundary) is not None and not excluded(path):
         # Explicit files have no suffix restriction in Pi's loader.
         return [path]
     try:
@@ -400,12 +340,14 @@ def project_resources(
         directory / kind, kind, boundary, excluded, shallow=kind in {"prompts", "themes"}
     )
     automatic = filter_resources(automatic, overrides, directory)
-    explicit = resources(
-        directory,
-        kind,
-        entries,
-        boundary,
-        excluded,
-        manifest=False,
+    # Explicit selections are registered before autoload in Pi. Even disabled
+    # explicit candidates reserve their identity, so autoload cannot revive them.
+    literals = (
+        [p for p in entries if not p.startswith(("!", "+", "-")) and "*" not in p and "?" not in p]
+        if string_list(entries)
+        else []
     )
-    return sorted(set(automatic + explicit))
+    candidates = resources(directory, kind, literals, boundary, excluded, manifest=False)
+    explicit = resources(directory, kind, entries, boundary, excluded, manifest=False)
+    claimed = {safe_resolve(p) for p in candidates}
+    return sorted(set(explicit + [p for p in automatic if safe_resolve(p) not in claimed]))

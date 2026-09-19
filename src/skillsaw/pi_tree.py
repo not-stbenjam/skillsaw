@@ -14,6 +14,7 @@ from .blocks.pi import PiSettingsBlock, PiSkillBlock, PiPromptBlock, PiThemeBloc
 from .discovery.pi import local_path, package_resources, project_resources
 from .formats.pi import RESOURCE_FIELDS
 from .utils import read_frontmatter_commented
+from .paths import safe_is_file
 
 _CLASSES = {
     "skills": PiSkillBlock,
@@ -70,5 +71,5 @@ def attach_pi_projects(state: _TreeBuildState, root: LintTarget) -> None:
                 source = entry.get("source") if isinstance(entry, dict) else entry
                 if isinstance(source, str):
                     path = local_path(directory, source, context.root_path)
-                    if path is not None and path.is_file():
+                    if path is not None and safe_is_file(path):
                         _attach(state, root, [path], "extensions")

@@ -5,6 +5,7 @@ from typing import List
 from skillsaw.blocks.pi import PiPackageBlock, PiSettingsBlock
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.diagnostics import safe_display
+from skillsaw.paths import safe_exists
 from skillsaw.discovery.pi import local_path
 from skillsaw.formats.pi import RESOURCE_FIELDS, REMOTE_PREFIXES, string_list
 from skillsaw.rule import Rule, RuleViolation, Severity
@@ -60,7 +61,7 @@ class PiResourcePathsRule(Rule):
                     if (
                         path is not None
                         and not context.is_path_excluded(path)
-                        and not path.exists()
+                        and not safe_exists(path)
                     ):
                         missing.append(f"{key}: {safe_display(entry)!r}")
                 if missing:

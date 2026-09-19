@@ -9,7 +9,7 @@ from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
 from .repository_types import RepositoryType, TOOL_REPO_TYPES
 from .utils import read_json
-from .paths import contained_resolve
+from .paths import contained_resolve, safe_resolve
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
@@ -35,7 +35,7 @@ class RepositoryScanMixin:
         repo_types: Set[RepositoryType]
         _overridden_types: Optional[Set[RepositoryType]]
         exclude_patterns: List[str]
-        _pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path]]]
+        _pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path], Set[Path]]]
         plugins: List[Path]
         codex_plugins: List[Path]
 
@@ -100,8 +100,18 @@ class RepositoryScanMixin:
                 (p / "settings.json" for p in self.agent_tool_dirs(".pi")),
                 self.is_path_excluded,
             )
-            self._pi_packages_cache = (key, roots)
+            self._pi_packages_cache = (
+                key,
+                roots,
+                {r for p in roots if (r := safe_resolve(p)) is not None},
+            )
         return list(self._pi_packages_cache[1])
+
+    def _pi_claim_set(self) -> Set[Path]:
+        """Canonical identities for provenance; display roots keep their spelling."""
+        self.pi_package_roots()
+        assert self._pi_packages_cache is not None
+        return self._pi_packages_cache[2]
 
     def _discover_instruction_files(self) -> List[Path]:
         """Discover root and nested instruction files read by supported tools.
@@ -262,6 +272,10 @@ class RepositoryScanMixin:
             is_excluded=self.is_path_excluded,
         )
 
+        return self._filter_pi_skills(skills)
+
+    def _filter_pi_skills(self, skills: List[Path]) -> List[Path]:
+        """Assign native roles while retaining portable candidates for exclusions."""
         # Pi owns selection inside its packages and .pi/skills. A dual package
         # retains other consumers' discovery as well as Pi's own resources.
         pi_roots = [
@@ -320,4 +334,6 @@ class RepositoryScanMixin:
                     break
             return declared
 
-        return [p for p in skills if not owned_by_pi(p)]
+        self._pi_portable_skills = [p for p in skills if owned_by_pi(p)]
+        native = set(self._pi_portable_skills)
+        return [p for p in skills if p not in native]
