@@ -7977,7 +7977,7 @@ class TestSafeAutofixIdempotency:
         "agentskill-name": 4,
         "agentskill-valid": 7,
         "claude-command-frontmatter": 3,
-        "content-unlinked-internal-reference": 23,
+        "content-unlinked-internal-reference": 24,
         "cursor-rules-valid": 3,
     }
 

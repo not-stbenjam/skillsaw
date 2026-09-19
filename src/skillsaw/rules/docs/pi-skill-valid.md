@@ -10,6 +10,11 @@ valid native Pi metadata.
 Add parseable frontmatter with a nonempty string `description`. A `name` is
 optional. Pi derives the fallback name from the containing directory.
 
+Native frontmatter follows Pi's YAML 1.2 core schema: unquoted `no` and
+dates are strings, duplicate mapping keys are invalid, and YAML merge keys
+(`<<`) do not supply a missing description. Flat-file selection uses the
+same parser as directory skills.
+
 Ordinary flat Markdown without a description is ignored, as Pi does, rather
 than diagnosed as an invalid skill. An explicit `SKILL.md` without a description
 is reported because its filename declares a skill that Pi will skip.

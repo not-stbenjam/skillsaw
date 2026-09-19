@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 from .blocks.pi import PiSettingsBlock, PiSkillBlock, PiPromptBlock, PiThemeBlock, PiExtensionNode
 from .discovery.pi import local_path, package_resources, project_resources
 from .formats.pi import RESOURCE_FIELDS
-from .utils import read_frontmatter_commented
+from .blocks.pi_frontmatter import parse_pi_frontmatter
+from .utils import read_text
 from .paths import safe_is_file
 
 _CLASSES = {
@@ -41,9 +42,9 @@ def _attach(
             # Other consumers retain their portable skill role in dual packages.
             continue
         if kind == "skills" and path.name != "SKILL.md":
-            frontmatter, error, _error_line = read_frontmatter_commented(path)
-            description = frontmatter.get("description") if isinstance(frontmatter, dict) else None
-            if error or not isinstance(description, str) or not description.strip():
+            parsed = parse_pi_frontmatter(read_text(path) or "")
+            description = parsed.data.get("description") if parsed.data is not None else None
+            if parsed.error or not isinstance(description, str) or not description.strip():
                 # Pi ignores ordinary Markdown documentation among flat skills.
                 continue
         state.add_block(parent, path, _CLASSES[kind], owner=owner)

@@ -1,9 +1,10 @@
 """Pi package metadata, project settings, and native resources."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 from .frontmatter import FrontmatteredBlock
+from .pi_frontmatter import parse_pi_frontmatter
 from .json_config import JsonConfigBlock
 from ..lint_target import LintTarget
 
@@ -46,6 +47,20 @@ class PiSkillBlock(FrontmatteredBlock):
     """
 
     category: str = "skill"
+    _pi_key_lines: dict = field(default_factory=dict, init=False, repr=False)
+
+    def _parse_frontmatter_content(self, content):
+        parsed = parse_pi_frontmatter(content)
+        self._pi_key_lines = parsed.key_lines
+        return parsed[:5]
+
+    def key_line(self, key):
+        self._ensure_parsed()
+        return self._pi_key_lines.get(key)
+
+    def line_map(self):
+        self._ensure_parsed()
+        return dict(self._pi_key_lines)
 
 
 @dataclass(eq=False)
