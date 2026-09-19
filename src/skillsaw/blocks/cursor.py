@@ -1,0 +1,77 @@
+"""Native Cursor plugin configuration and prose nodes."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, ClassVar
+
+from skillsaw.lint_target import LintTarget
+from .frontmatter import FrontmatteredBlock
+from .json_config import JsonConfigBlock, CursorHooksBlock, CursorMcpBlock
+
+
+@dataclass(eq=False)
+class CursorAgentBlock(FrontmatteredBlock):
+    category: str = "agent"
+
+
+@dataclass(eq=False)
+class CursorPluginNode(LintTarget):
+    def tree_label(self):
+        return f"{self.path.name}/ [cursor plugin]"
+
+    def provenance_dir(self):
+        return self.path
+
+
+@dataclass(eq=False)
+class CursorMarketplaceBlock(JsonConfigBlock):
+    strict_json: ClassVar[bool] = True
+    duplicate_keys_fatal: ClassVar[bool] = False
+
+    def tree_label(self):
+        return "marketplace.json [cursor]"
+
+
+@dataclass(eq=False)
+class CursorPluginBlock(JsonConfigBlock):
+    strict_json: ClassVar[bool] = True
+    duplicate_keys_fatal: ClassVar[bool] = False
+    plugin_dir: Path | None = None
+    effective_data: dict = field(default_factory=dict)
+    component_sources: dict[str, Path] = field(default_factory=dict)
+
+    def tree_label(self):
+        return "plugin.json [cursor]"
+
+
+@dataclass(eq=False)
+class CursorPluginHooksBlock(CursorHooksBlock):
+    """Plugin hooks omit the project-only required version field."""
+
+    duplicate_keys_fatal: ClassVar[bool] = False
+
+
+@dataclass(eq=False)
+class CursorInlineHooksBlock(CursorPluginHooksBlock):
+    inline_data: Any = None
+
+    def _ensure_parsed(self):
+        if self._parsed is None:
+            self._parsed = (self.inline_data, None)
+
+
+@dataclass(eq=False)
+class CursorPluginMcpBlock(CursorMcpBlock):
+    duplicate_keys_fatal: ClassVar[bool] = False
+
+
+@dataclass(eq=False)
+class CursorInlineMcpBlock(CursorPluginMcpBlock):
+    inline_data: Any = None
+
+    def _ensure_parsed(self):
+        if self._parsed is None:
+            data = self.inline_data
+            self._parsed = (data if "mcpServers" in data else {"mcpServers": data}, None)

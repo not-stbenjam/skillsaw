@@ -139,7 +139,7 @@ class RepositoryScanMixin:
             if (provenance := self.provenance(plugin)).claude
             or (provenance.codex and portable_manifest(plugin) is None)
         ]
-        return claude_discovery.discover_skills(
+        discovered = claude_discovery.discover_skills(
             self.root_path,
             agentskills=RepositoryType.AGENTSKILLS in self.repo_types,
             # A plugins/* layout can cause legacy Claude discovery to list an
@@ -183,3 +183,4 @@ class RepositoryScanMixin:
             ),
             is_excluded=self.is_path_excluded,
         )
+        return self._filter_cursor_skills(discovered)

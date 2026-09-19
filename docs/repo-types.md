@@ -672,7 +672,7 @@ the value `Repo type:` prints, the JSON report lists under `repo_types`, and
 | **Portable** | `agents-md`, `claude-md`, `gemini`, `qwen` | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `QWEN.md` |
 | **Portable skills** | `agentskills` | `.agents/skills/*/SKILL.md` and the other conventional skill directories |
 | **Vercel skills CLI** | `skills-lock` | Every `skills-lock.json`, plus matching installed skill payloads unless `lint-external-content: false` |
-| **Cursor** | `cursor` | `.cursor/rules/**/*.mdc`, `.cursor/commands/**/*.md`, `.cursor/skills/*/SKILL.md`, `.cursor/mcp.json`, `.cursor/hooks.json`, legacy `.cursorrules` |
+| **Cursor** | `cursor` | `.cursor/rules/**/*.mdc`, `.cursor/commands/**/*.md`, `.cursor/agents/**/*.md`, `.cursor/skills/*/SKILL.md`, `.cursor/mcp.json`, `.cursor/hooks.json`, legacy `.cursorrules` |
 | **Copilot / VS Code** | `copilot` | `.github/copilot-instructions.md`, `**/*.instructions.md`, `.github/prompts/**/*.prompt.md`, `.github/agents/**/*.md`, legacy `.github/chatmodes/**/*.chatmode.md`, `.github/skills/*/SKILL.md`, `.vscode/mcp.json` |
 | **Cline** | `cline` | `.clinerules` (file), `.clinerules/**/*.md`, `.clinerules/**/*.txt` (excluding `workflows/`, `hooks/`, `skills/`), `.clinerules/workflows/**/*.md`, `.clinerules/skills/*/SKILL.md`, `.cline/skills/*/SKILL.md` |
 | **OpenCode** | `opencode` | `opencode.json` or `opencode.jsonc` at the root and in `.opencode/`, `.opencode/commands/**/*.md`, `.opencode/agents/**/*.md`, `.opencode/modes/*.md`, `.opencode/skills/*/SKILL.md`, and the 1.x singular spelling of each (`command/`, `agent/`, `mode/`, `skill/`). Repository-local files matched by `instructions` paths or globs are also linted; remote URLs are not fetched. |
@@ -785,6 +785,30 @@ Files that are on-demand rather than always-on — Cursor commands, Copilot
 prompt files, Cline workflows, OpenCode commands — are budgeted by
 [`context-budget`](rules/context-budget.md) as commands, not as instruction
 files, because they enter the context window only when invoked.
+
+### Cursor plugins and marketplaces
+
+Native `.cursor-plugin/plugin.json` packages are detected as `cursor-plugin`;
+`.cursor-plugin/marketplace.json` catalogs as `cursor-marketplace`, including
+nested packages. Cursor provenance keeps native-only plugins out of Claude
+format checks while preserving shared content and security checks.
+
+Catalog sources accept relative strings or objects with `path` and an optional
+`metadata.pluginRoot` prefix. Entry metadata is merged with the native plugin
+manifest, whose values take precedence. Remote sources are not fetched.
+
+Native plugins load rules, agents, commands, skills, hooks, MCP, and variable
+schema metadata. Explicit component paths replace defaults; supported prose
+extensions and path globs follow the Cursor reference. Commands also support
+`.txt`. A root `SKILL.md` is used when there is no skills directory or override.
+Inline hooks and MCP entries receive the existing security and policy checks.
+Declared and conventional component files must stay within the package.
+
+[`cursor-plugin-json-valid`](rules/cursor-plugin-json-valid.md) validates native
+manifests and component references;
+[`cursor-marketplace-json-valid`](rules/cursor-marketplace-json-valid.md)
+validates catalogs, duplicate names, and local source resolution. Portable
+Agent Plugins retain their existing schema validation.
 
 ### Cursor hooks
 

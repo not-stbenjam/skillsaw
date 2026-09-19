@@ -25,6 +25,7 @@ from .paths import safe_is_dir, safe_resolve
 from .utils import read_yaml
 from .repository_external_content import RepositoryExternalContentMixin
 from .repository_grok import RepositoryGrokMixin
+from .repository_cursor import RepositoryCursorMixin
 from .repository_antigravity import RepositoryAntigravityMixin
 from .repository_mcp_registry import RepositoryMcpRegistryMixin
 from .repository_provenance import PluginProvenance, RepositoryProvenanceMixin
@@ -61,6 +62,7 @@ class RepositoryContext(
     RepositoryMcpRegistryMixin,
     RepositoryExternalContentMixin,
     RepositoryGrokMixin,
+    RepositoryCursorMixin,
     RepositoryAntigravityMixin,
     RepositoryProvenanceMixin,
 ):
@@ -79,6 +81,8 @@ class RepositoryContext(
         # convention is a Codex plugin first, not an agentskills.io repo.
         RepositoryType.CODEX_MARKETPLACE,
         RepositoryType.CODEX_PLUGIN,
+        RepositoryType.CURSOR_MARKETPLACE,
+        RepositoryType.CURSOR_PLUGIN,
         RepositoryType.GROK_MARKETPLACE,
         RepositoryType.GROK_PLUGIN,
         RepositoryType.ANTIGRAVITY_PLUGIN,
@@ -209,6 +213,7 @@ class RepositoryContext(
         self.agent_plugins: List[Path] = (
             self._discover_agent_plugins() if self._agent_plugin_discovery_enabled else []
         )
+        self._init_cursor(repo_types)
         self._init_grok(repo_types)
         self._init_antigravity(repo_types)
         # An explicit ``--type`` answers "how is this content packaged", and
@@ -465,6 +470,7 @@ class RepositoryContext(
         self._codex_evidence = None
         self._agent_plugin_claims = None
         self._agent_plugin_roots = None
+        self._reset_cursor()
         self._reset_grok_caches(filtering=bool(self.exclude_patterns))
         self._reset_antigravity_caches(filtering=bool(self.exclude_patterns))
         self._contained_plugin_roots = self._mcp_registry_paths = None
@@ -542,6 +548,10 @@ class RepositoryContext(
             types.add(RepositoryType.CODEX_PLUGIN)
         if self.agent_plugins:
             types.add(RepositoryType.AGENT_PLUGIN)
+        if self.cursor_marketplace_paths():
+            types.add(RepositoryType.CURSOR_MARKETPLACE)
+        if self._cursor_enabled and self.cursor_plugin_roots():
+            types.add(RepositoryType.CURSOR_PLUGIN)
         if self.has_grok_marketplace():
             types.add(RepositoryType.GROK_MARKETPLACE)
         if self.grok_plugins:
@@ -555,50 +565,6 @@ class RepositoryContext(
             types.add(RepositoryType.UNKNOWN)
 
         return types
-
-    def _plugins_dir_suggests_claude_marketplace(self) -> bool:
-        """Whether ``plugins/`` is marketplace evidence once non-Claude claims
-        are subtracted.
-
-        A bare ``plugins/`` directory has always inferred MARKETPLACE. A
-        Codex catalog explains the children it claims, so only a child it
-        does not claim (or a dual-marker child) keeps that inference. A
-        repository with no Codex evidence keeps its historical type exactly.
-        """
-        plugins_dir = self.root_path / "plugins"
-        if not safe_is_dir(plugins_dir):
-            return False
-        try:
-            children = [
-                item
-                for item in plugins_dir.iterdir()
-                if item.is_dir() and not item.name.startswith(".")
-            ]
-        except OSError:
-            return False
-        if not children:
-            # An empty plugins/ keeps its historical meaning unless another
-            # ecosystem has positive evidence explaining the directory. A
-            # portable Agent Plugins claim counts only when it lives under
-            # plugins/ itself — a package declared at the repository root
-            # says nothing about why plugins/ exists. Grok's catalog is asked
-            # of the root for the same reason, and Codex's is root-anchored
-            # already: a package's own catalog at
-            # ``packages/foo/.grok-plugin/marketplace.json`` explains that
-            # package's directory, not the repository's.
-            resolved_plugins = safe_resolve(plugins_dir)
-            agent_plugin_claims_plugins_dir = resolved_plugins is not None and any(
-                claim.is_relative_to(resolved_plugins) for claim in self._agent_plugin_claim_set()
-            )
-            return (
-                not self.codex_catalog_exists()
-                and not self.grok_root_catalog_exists()
-                and not agent_plugin_claims_plugins_dir
-            )
-        return any(
-            not (provenance := self.provenance(item)).ecosystems or provenance.claude
-            for item in children
-        )
 
     #: Filesystem traversal policy lives in discovery; context keeps the
     #: predicate name used by its stateful orchestration.
@@ -722,6 +688,7 @@ class RepositoryContext(
             self.codex_plugins,
             self.agent_plugins,
             self.grok_plugins,
+            self.cursor_plugin_roots(),
             # Both spellings: the direct list keeps its unresolved path for
             # display, and the claim union adds the plugins a
             # ``plugins.json`` registry names, which are counted nowhere

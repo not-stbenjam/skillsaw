@@ -1,0 +1,25 @@
+{
+  "name": "review",
+  "rules": "guidance/**/*.mdc",
+  "agents": "reviewers",
+  "commands": [
+    "actions/*.txt"
+  ],
+  "skills": "capabilities",
+  "mcpServers": [
+    {
+      "review-api": {
+        "url": "https://example.com/mcp"
+      }
+    },
+    "config/mcp.json"
+  ],
+  "variables": {
+    "type": "object",
+    "properties": {
+      "API_TOKEN": {
+        "type": "string"
+      }
+    }
+  }
+}

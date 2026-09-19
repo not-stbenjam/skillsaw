@@ -5,6 +5,7 @@ Rule: cursor-hooks-valid
 from typing import Any, Dict, List, Set
 
 from skillsaw.context import RepositoryContext, RepositoryType
+from skillsaw.blocks.cursor import CursorPluginHooksBlock
 from skillsaw.diagnostics import safe_display
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.rules.builtin.content_analysis import CursorHooksBlock
@@ -65,7 +66,9 @@ class CursorHooksValidRule(Rule):
 
     since = "0.19.0"
 
-    repo_types = frozenset({RepositoryType.CURSOR})
+    repo_types = frozenset(
+        {RepositoryType.CURSOR, RepositoryType.CURSOR_PLUGIN, RepositoryType.CURSOR_MARKETPLACE}
+    )
 
     config_schema = {
         "extra-events": {
@@ -127,6 +130,8 @@ class CursorHooksValidRule(Rule):
 
     def _check_version(self, data: dict, block: CursorHooksBlock) -> List[RuleViolation]:
         """The version field is required and pins the only shape Cursor reads."""
+        if "version" not in data and isinstance(block, CursorPluginHooksBlock):
+            return []
         if "version" not in data:
             return [
                 self.violation(

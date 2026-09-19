@@ -38,6 +38,8 @@ class RepositoryType(Enum):
     CODEX_PROJECT = "codex-project"
     AGENT_PLUGIN = "agent-plugin"  # Portable Agent Plugins plugin.json
     MCP_REGISTRY = "mcp-registry"  # MCP Registry server.json publisher metadata
+    CURSOR_PLUGIN = "cursor-plugin"
+    CURSOR_MARKETPLACE = "cursor-marketplace"
     CURSOR = "cursor"  # Repository with `.cursor/` content or a `.cursorrules`
     COPILOT = "copilot"  # Repository with Copilot / VS Code content under `.github/`
     CLINE = "cline"  # Repository with `.clinerules`
@@ -79,6 +81,8 @@ SKILL_REPO_TYPES = {
     RepositoryType.CODEX_PLUGIN,
     RepositoryType.CODEX_MARKETPLACE,
     RepositoryType.AGENT_PLUGIN,
+    RepositoryType.CURSOR_PLUGIN,
+    RepositoryType.CURSOR_MARKETPLACE,
     RepositoryType.GROK_PLUGIN,
     RepositoryType.GROK_MARKETPLACE,
     RepositoryType.ANTIGRAVITY_PLUGIN,

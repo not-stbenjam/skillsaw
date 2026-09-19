@@ -17,6 +17,7 @@ from skillsaw.rules.builtin.content_analysis import (
     SkillBlock,
 )
 from skillsaw.blocks import DevinSkillBlock
+from skillsaw.blocks.cursor import CursorAgentBlock
 from skillsaw.rules.builtin.utils import read_frontmatter_commented
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -96,6 +97,9 @@ class DescriptionRoutingRule(Rule):
     surface_dependencies = ("copilot-agent-valid",)
     repo_types = {
         RepositoryType.AGENTSKILLS,
+        RepositoryType.CURSOR,
+        RepositoryType.CURSOR_PLUGIN,
+        RepositoryType.CURSOR_MARKETPLACE,
         RepositoryType.SINGLE_PLUGIN,
         RepositoryType.MARKETPLACE,
         RepositoryType.DOT_CLAUDE,
@@ -200,6 +204,7 @@ class DescriptionRoutingRule(Rule):
             CopilotAgentBlock,
             OpenCodeAgentBlock,
             GrokAgentBlock,
+            CursorAgentBlock,
             CommandBlock,
             OpenCodeCommandBlock,
             GrokCommandBlock,

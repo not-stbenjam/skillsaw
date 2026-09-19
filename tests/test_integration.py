@@ -5861,6 +5861,7 @@ class TestAssertDirectives:
 
 
 BROKEN_FIXTURES = [
+    "cursor-plugins/broken",
     "single-plugin/broken",
     "single-plugin/with-secrets",
     "single-plugin/content-violations",
@@ -5911,6 +5912,7 @@ BROKEN_FIXTURES = [
 ]
 
 CLEAN_FIXTURES = [
+    "cursor-plugins/clean",
     "single-plugin/clean",
     "marketplace/clean",
     "marketplace/archive-source",

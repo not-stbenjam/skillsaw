@@ -84,7 +84,7 @@ NESTED_TOOL_SKILL_DIRS = (
 # second traversal. Recorded in the same ``tool_dirs`` mapping and read
 # through ``agent_tool_dirs``; kept a separate name so the editor-tool
 # vocabulary above keeps meaning editor tools.
-PLUGIN_MARKER_DIR_NAMES = frozenset({grok.PLUGIN_DIR_NAME})
+PLUGIN_MARKER_DIR_NAMES = frozenset({grok.PLUGIN_DIR_NAME, ".cursor-plugin"})
 
 #: Every directory name the walk records, from both sets above.
 SCANNED_DIR_NAMES = AGENT_TOOL_DIR_NAMES | PLUGIN_MARKER_DIR_NAMES
@@ -206,6 +206,7 @@ _TOOL_EVIDENCE = {
     "cursor": (
         ".cursor",
         (
+            ("agents", True),
             ("rules", True),
             ("commands", True),
             ("skills", True),

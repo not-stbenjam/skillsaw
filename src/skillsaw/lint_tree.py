@@ -93,7 +93,17 @@ from .formats.codex_manifest import codex_manifest_view
 from .discovery import AGENT_MEMORY_DIR, AGENT_MEMORY_INDEX
 from .discovery.excludes import is_root_or_ancestor_excluded
 from .discovery.opencode import contained_instruction_globs
-from .formats import antigravity, devin, grok, muse
+from .formats import antigravity, devin, grok, muse, cursor
+from .blocks.cursor import (
+    CursorAgentBlock,
+    CursorPluginNode,
+    CursorMarketplaceBlock,
+    CursorPluginBlock,
+    CursorPluginHooksBlock,
+    CursorInlineHooksBlock,
+    CursorInlineMcpBlock,
+    CursorPluginMcpBlock,
+)
 from .utils import has_apm_generated_header, read_text
 from .paths import (
     contained_resolve,
@@ -149,6 +159,7 @@ _CLINE_EXCLUDED_DIRS = frozenset({"workflows", "hooks", "skills"})
 _EDITOR_GLOBS = (
     (".cursor", "rules", "**/*.mdc", "CursorRuleBlock"),
     (".cursor", "commands", "**/*.md", "CursorCommandBlock"),
+    (".cursor", "agents", "**/*.md", "CursorAgentBlock"),
     (".github", "agents", "**/*.md", "CopilotAgentBlock"),
     (".github", "prompts", "**/*.prompt.md", "CopilotPromptBlock"),
     (".github", "chatmodes", "**/*.chatmode.md", "CopilotAgentBlock"),
@@ -951,6 +962,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         state.add_block(root, legacy_cursor, InstructionBlock)
 
     for cursor_dir in context.agent_tool_dirs(".cursor"):
+        _add_glob(root, cursor_dir / "agents", "**/*.md", CursorAgentBlock)
         # APM's cursor target compiles ``.apm/instructions/`` into
         # ``.cursor/rules/`` only (docs/repo-types.md) — not commands, mcp.json
         # or hooks.json, which are authored even in an APM repo. So the compiled
@@ -1353,7 +1365,11 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                     )
         root.children.append(catalog_node)
 
+    for catalog in context.cursor_marketplace_paths():
+        root.children.append(CursorMarketplaceBlock(path=catalog))
+
     # --- Plugins (build first so skills can nest inside them) ---
+    cursor_plugin_nodes = {}
     plugin_nodes: dict[Path, PluginNode] = {}
     codex_plugin_nodes: dict[Path, CodexPluginNode] = {}
     grok_plugin_nodes: dict[Path, GrokPluginNode] = {}
@@ -1380,6 +1396,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         *context.plugins,
         *context.codex_plugins,
         *context.grok_plugins,
+        *context.cursor_plugin_roots(),
         *context.antigravity_plugins,
         *context.agent_plugins,
         *sorted(p for p in context._codex_claim_set() if not context.is_path_excluded(p)),
@@ -1411,7 +1428,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # customization root, so without the second half an authored
         # ``.agents/plugins/<name>/`` would be discarded as generated output
         # in every APM repository with a Codex target.
-        if _is_in_compiled_dir(plugin_path) and not (prov.codex or prov.grok or prov.antigravity):
+        if _is_in_compiled_dir(plugin_path) and not (
+            prov.codex or prov.grok or prov.antigravity or prov.cursor
+        ):
             continue
         resolved_plugin = safe_resolve(plugin_path)
         if resolved_plugin is None:
@@ -1430,12 +1449,15 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             container = PluginNode(path=plugin_path)
             plugin_nodes[resolved_plugin] = container
         elif resolved_plugin == root.resolved_path and (
-            prov.codex or prov.grok or prov.antigravity or is_agent_plugin
+            prov.codex or prov.grok or prov.antigravity or prov.cursor or is_agent_plugin
         ):
             container = root
         elif prov.codex:
             container = CodexPluginNode(path=plugin_path)
             codex_plugin_nodes[resolved_plugin] = container
+        elif prov.cursor:
+            container = CursorPluginNode(path=plugin_path)
+            cursor_plugin_nodes[resolved_plugin] = container
         elif prov.grok:
             container = GrokPluginNode(path=plugin_path)
             grok_plugin_nodes[resolved_plugin] = container
@@ -1479,7 +1501,54 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        _add_plugin_prose(container, plugin_path, resolved_plugin)
+        if not prov.cursor or prov.ecosystems != frozenset({"cursor"}):
+            _add_plugin_prose(container, plugin_path, resolved_plugin)
+        else:
+            state.add_block(
+                container, plugin_path / "README.md", ReadmeBlock, owner=resolved_plugin
+            )
+        if prov.cursor:
+            for origin, data in context.cursor_views(resolved_plugin):
+                manifest_path = plugin_path / cursor.MARKER / "plugin.json"
+                config = CursorPluginBlock(
+                    path=manifest_path if safe_exists(manifest_path) else origin,
+                    plugin_dir=plugin_path,
+                    effective_data=data,
+                )
+                native, _ = cursor.read_manifest(manifest_path)
+                config.component_sources = {
+                    field: manifest_path if isinstance(native, dict) and field in native else origin
+                    for field in data
+                }
+                container.children.append(config)
+                for field, cls in (
+                    ("rules", CursorRuleBlock),
+                    ("commands", CursorCommandBlock),
+                    ("agents", CursorAgentBlock),
+                ):
+                    for path in cursor.component_files(plugin_path, data, field, _is_excluded):
+                        if _inside_plugin(path, resolved_plugin):
+                            state.add_block(container, path, cls, owner=resolved_plugin)
+                for field, cls in (
+                    ("hooks", CursorPluginHooksBlock),
+                    ("mcpServers", CursorPluginMcpBlock),
+                ):
+                    for path in cursor.component_paths(plugin_path, data, field):
+                        if _inside_plugin(path, resolved_plugin):
+                            state.add_parser_block(config, path, cls, owner=resolved_plugin)
+                    value = data.get(field)
+                    values = value if isinstance(value, list) else [value]
+                    for inline in values:
+                        if isinstance(inline, dict):
+                            inline_cls = (
+                                CursorInlineHooksBlock if field == "hooks" else CursorInlineMcpBlock
+                            )
+                            block = inline_cls(
+                                path=config.component_sources.get(field, config.path),
+                                inline_data=inline,
+                            )
+                            block.plugin_owner = resolved_plugin
+                            config.children.append(block)
 
         # Conventional Claude configs belong only to Claude or legacy
         # unclaimed packages. Portable-only packages must not accidentally
@@ -1785,7 +1854,8 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         resolved_skill = safe_resolve(skill_path) or skill_path
         for candidate in (resolved_skill, *resolved_skill.parents):
             node = (
-                plugin_nodes.get(candidate)
+                cursor_plugin_nodes.get(candidate)
+                or plugin_nodes.get(candidate)
                 or codex_plugin_nodes.get(candidate)
                 or grok_plugin_nodes.get(candidate)
                 or antigravity_plugin_nodes.get(candidate)

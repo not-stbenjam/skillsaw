@@ -10,7 +10,7 @@
 | **Severity** | error (auto) |
 | **Autofix** | - |
 | **Since** | v0.19.0 |
-| **Repo Types** | cursor |
+| **Repo Types** | cursor, cursor-marketplace, cursor-plugin |
 | **Category** | [Cursor](cursor.md) |
 
 ## Why
@@ -104,6 +104,13 @@ event whose array is empty and so configures nothing.
   `./hooks/script.sh`. Give every prompt hook a non-empty `prompt`.
 - Set `"version": 1` — it is required, and `1` is the only value Cursor
   accepts today. Write it unquoted; `"1"` is a string.
+
+## Plugin hooks
+
+Native Cursor plugins also load hooks from `hooks/hooks.json`, a declared
+file, or an inline `hooks` object in their manifest or marketplace entry.
+The same event and handler checks apply. Unlike project `.cursor/hooks.json`,
+plugin hooks may omit `version`; an explicit version is still validated.
 
 ## Configuration
 
