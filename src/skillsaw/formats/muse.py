@@ -86,8 +86,11 @@ SCRATCH_DIR_NAMES = frozenset({"worktrees"})
 #: ``managed_hooks_path`` points — neither is in the repository.
 HOOKS_FILENAME = "hooks.json"
 
-#: Lifecycle events Muse Code documents, all 13 of them. A hook binds to
+#: Lifecycle events Muse Code documents, all 15 of them. A hook binds to
 #: exactly one; an unknown name is an entry that never fires.
+#: Rechecked 2026-09-18: the official lifecycle list now includes
+#: Notification and PostToolUseFailure. This updates documentation status
+#: only; the historical runtime matrix above has not been re-established.
 HOOK_EVENTS = frozenset(
     {
         "SessionStart",
@@ -95,6 +98,8 @@ HOOK_EVENTS = frozenset(
         "PreToolUse",
         "PermissionRequest",
         "PostToolUse",
+        "PostToolUseFailure",
+        "Notification",
         "PreLLMCall",
         "PostLLMCall",
         "PreCompact",
@@ -111,14 +116,7 @@ HOOK_EVENTS = frozenset(
 #: matrix. Muse parses an entry under one of these rather than skipping it,
 #: but whether anything dispatches it is unknown — so a rule says "verify",
 #: not "this never fires".
-UNDOCUMENTED_HOOK_EVENTS = frozenset(
-    {
-        "Notification",
-        "PostToolUseFailure",
-        "StopFailure",
-        "PostToolBatch",
-    }
-)
+UNDOCUMENTED_HOOK_EVENTS = frozenset({"StopFailure", "PostToolBatch"})
 
 #: Claude Code events Muse recognises by name and deliberately does not
 #: run. The binary carries the diagnostic "Claude hook event `Setup` is

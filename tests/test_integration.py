@@ -10194,3 +10194,10 @@ class TestCodexPortableOverlay:
         assert len(findings) == 1
         assert findings[0]["rule_id"] == "agent-plugin-mcp-valid"
         assert findings[0]["file_path"] == "packages/release/mcp.json"
+
+
+def test_muse_newly_documented_events_have_no_advisories(tmp_path):
+    repo = copy_fixture("muse/documented-events", tmp_path)
+    result = run_lint(repo, "--rule", "muse-hooks-valid", "-v")
+    assert result["rc"] == 0
+    assert violations(result) == []
