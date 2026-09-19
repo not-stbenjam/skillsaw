@@ -1,6 +1,6 @@
 {
   "hooks": {
-    "Notification": [
+    "StopFailure": [
       {
         "hooks": [
           { "type": "command", "command": "./scripts/notify-slack.sh" }
