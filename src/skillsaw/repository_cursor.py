@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -48,7 +49,19 @@ class RepositoryCursorMixin:
         data, error = cursor.read_manifest(manifest)
         native = data if isinstance(data, dict) and not error else {}
         entries = self._cursor_evidence()[1].get(root, [])
-        return [(origin, {**entry, **native}) for origin, entry in entries] or [(manifest, native)]
+        views = []
+        seen = set()
+        fields = (*cursor.COMPONENT_EXTENSIONS, "hooks", "mcpServers")
+        for origin, entry in entries:
+            effective = {**entry, **native}
+            # Catalog metadata is checked on the catalog. Identical component
+            # declarations must not multiply directory walks or inline findings.
+            components = {key: effective[key] for key in fields if key in effective}
+            key = (origin, json.dumps(components, sort_keys=True))
+            if key not in seen:
+                seen.add(key)
+                views.append((origin, effective))
+        return views or [(manifest, native)]
 
     def cursor_skills(self) -> set[Path]:
         roots = set(self.distinct_plugin_dirs())

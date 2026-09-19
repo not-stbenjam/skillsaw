@@ -3,7 +3,7 @@
 
 # Cursor
 
-Validates native `.cursor-plugin` manifests and marketplaces, component paths, and Cursor configuration under every `.cursor/` directory in the repository, the root one and any in a monorepo subpackage: `rules/**/*.mdc` frontmatter (the fields that decide whether a rule ever activates) and `.cursor/hooks.json` structure. Cursor reads AGENTS.md for portable instructions, so no Cursor-specific instruction format is validated. Packaging rules activate on `.cursor-plugin/plugin.json` or `.cursor-plugin/marketplace.json`. Project rules activate wherever a `.cursorrules` file exists, or a `.cursor/` directory holds Cursor content — `rules/`, `commands/`, `agents/`, `skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only unrelated files does not activate them.
+Validates native `.cursor-plugin` manifests, marketplaces and component paths. It also validates Cursor configuration under every `.cursor/` directory in the repository, the root one and any in a monorepo subpackage: `rules/**/*.mdc` frontmatter (the fields that decide whether a rule ever activates) and `.cursor/hooks.json` structure. Cursor reads AGENTS.md for portable instructions, so no Cursor-specific instruction format is validated. Packaging rules activate on `.cursor-plugin/plugin.json` or `.cursor-plugin/marketplace.json`. Project rules activate wherever a `.cursorrules` file exists, or a `.cursor/` directory holds Cursor content — `rules/`, `commands/`, `agents/`, `skills/`, `mcp.json` or `hooks.json`. A `.cursor/` holding only unrelated files does not activate them.
 
 | Rule ID | Description | Default Severity | Autofix |
 |---------|-------------|------------------|---------|

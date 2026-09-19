@@ -382,3 +382,162 @@ def test_cursor_claude_reference_keeps_legacy_containment(tmp_path):
     assert not context.provenance(plugin).cursor_only
     assert context.contained_plugin_owning(refs) is None
     assert any(b.path == refs / "shared.md" for b in context.lint_tree.find(SkillRefBlock))
+
+
+def test_cursor_inline_wrapper_name_keeps_sibling_servers(tmp_path):
+    from skillsaw.rules.builtin.mcp.prohibited import McpProhibitedRule
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    path = repo / "packages/review/.cursor-plugin/plugin.json"
+    data = json.loads(path.read_text())
+    data["mcpServers"] = {"mcpServers": {"command": "echo"}, "sibling": {"command": "sh"}}
+    path.write_text(json.dumps(data))
+    context = RepositoryContext(repo)
+    assert {
+        server.name for block in context.lint_tree.find(McpBlock) for server in block.servers
+    } == {"mcpServers", "sibling"}
+    findings = McpProhibitedRule(config={"allowlist": ["mcpServers"]}).check(context)
+    assert any(v.file_path == path and "sibling" in v.message for v in findings)
+
+
+def test_cursor_repeated_catalog_components_expand_once(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    data = json.loads(catalog.read_text())
+    original = data["plugins"][0]
+    data["plugins"] = [{**original, "name": f"alias-{n}"} for n in range(100)]
+    catalog.write_text(json.dumps(data))
+    context = RepositoryContext(repo)
+    assert len(context.cursor_views(repo / "packages/review")) == 1
+    assert len(context.lint_tree.find(CursorPluginBlock)) == 1
+    assert len(context.lint_tree.find(HooksBlock)) == 1
+    assert len(context.lint_tree.find(McpBlock)) == 2
+
+
+def test_cursor_default_skill_directory_is_one_level(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    manifest.write_text('{"name":"review"}')
+    grouped = plugin / "skills/group/nested"
+    grouped.mkdir(parents=True)
+    (grouped / "SKILL.md").write_text((plugin / "skills/ignored/SKILL.md").read_text())
+    assert RepositoryContext(plugin).skills == [plugin / "skills/ignored"]
+    # Explicit component directories are recursively expanded by the host.
+    manifest.write_text('{"name":"review","skills":"skills"}')
+    from skillsaw.utils import invalidate_read_caches
+
+    invalidate_read_caches(manifest)
+    assert set(RepositoryContext(plugin).skills) == {plugin / "skills/ignored", grouped}
+
+
+@pytest.mark.parametrize(
+    "field, filename, block_type",
+    [("hooks", "hooks.json", HooksBlock), ("mcpServers", "mcp.json", McpBlock)],
+)
+def test_cursor_config_components_honor_parent_exclusion(tmp_path, field, filename, block_type):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    data = json.loads(manifest.read_text())
+    data[field] = f"config/{filename}"
+    manifest.write_text(json.dumps(data))
+    config = plugin / "config" / filename
+    config.write_text("{")
+    context = RepositoryContext(repo, exclude_patterns=["**/config"])
+    assert context.is_path_excluded(config.parent)
+    assert not any(b.path == config for b in context.lint_tree.find(block_type))
+
+
+@pytest.mark.parametrize(
+    "location", ["rules/review.md", "commands/review.md", "agents/review.md", "README.md"]
+)
+def test_cursor_mixed_rule_keeps_parser_and_body_once(tmp_path, location):
+    from skillsaw.blocks import BodyContent, CommandBlock, AgentBlock
+    from skillsaw.rules.builtin.cursor.rules_valid import CursorRulesValidRule
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    manifest.write_text(json.dumps({"name": "review", "rules": location}))
+    (plugin / ".claude-plugin").mkdir()
+    (plugin / ".claude-plugin/plugin.json").write_text('{"name":"review"}')
+    rule = plugin / location
+    rule.parent.mkdir(exist_ok=True)
+    rule.write_text("---\nalwaysApply: [broken]\n---\nUse pytest for tests.\n")
+    context = RepositoryContext(repo)
+    assert len([b for b in context.lint_tree.find(CursorRuleBlock) if b.path == rule]) == 1
+    assert len([b for b in context.lint_tree.find(BodyContent) if b.path == rule]) == 1
+    assert any(
+        v.file_path == rule and "boolean" in v.message
+        for v in CursorRulesValidRule().check(context)
+    )
+    original_type = (
+        CommandBlock
+        if location.startswith("commands")
+        else AgentBlock if location.startswith("agents") else None
+    )
+    if original_type:
+        assert len([b for b in context.lint_tree.find(original_type) if b.path == rule]) == 1
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_cursor_rule_view_preserves_host_parser_and_secret_checks(tmp_path, lenient):
+    from skillsaw.blocks import CommandBlock
+    from skillsaw.rules.builtin.content.embedded_secrets import ContentEmbeddedSecretsRule
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    (plugin / ".cursor-plugin/plugin.json").write_text(
+        '{"name":"review","rules":"commands/review.md"}'
+    )
+    (plugin / ".claude-plugin").mkdir()
+    (plugin / ".claude-plugin/plugin.json").write_text('{"name":"review"}')
+    rule = plugin / "commands/review.md"
+    glob = "globs: **/*.py\n" if lenient else ""
+    rule.write_text(
+        "---\n"
+        + glob
+        + "description: ghp_"
+        + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+        + "\nalwaysApply: true\n---\nUse pytest for tests.\n"
+    )
+    context = RepositoryContext(repo)
+    original = next(b for b in context.lint_tree.find(CommandBlock) if b.path == rule)
+    view = next(b for b in context.lint_tree.find(CursorRuleBlock) if b.path == rule)
+    assert bool(original.frontmatter_error) == lenient
+    assert not view.frontmatter_error
+    assert view.estimate_tokens() == 0
+    findings = [v for v in ContentEmbeddedSecretsRule().check(context) if v.file_path == rule]
+    assert len(findings) == 1
+
+
+@pytest.mark.parametrize("connection", [{"command": "echo"}, {"url": "https://example.com/mcp"}])
+def test_cursor_sole_mcp_wrapper_named_server(tmp_path, connection):
+    from skillsaw.rules.builtin.mcp.prohibited import McpProhibitedRule
+    from skillsaw.rules.builtin.mcp.valid_json import McpValidJsonRule
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    manifest.write_text(json.dumps({"name": "review", "mcpServers": {"mcpServers": connection}}))
+    context = RepositoryContext(plugin)
+    assert [s.name for b in context.lint_tree.find(McpBlock) for s in b.servers] == ["mcpServers"]
+    assert McpProhibitedRule().check(context)
+    assert not McpValidJsonRule().check(context)
+
+
+@pytest.mark.parametrize("component", ["rules", "commands", "agents"])
+def test_cursor_component_override_keeps_skill_role(tmp_path, component):
+    from skillsaw.blocks import BodyContent
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    manifest.write_text(json.dumps({"name": "review", component: "skills/ignored/SKILL.md"}))
+    context = RepositoryContext(plugin)
+    path = plugin / "skills/ignored/SKILL.md"
+    assert len([b for b in context.lint_tree.find(SkillBlock) if b.path == path]) == 1
+    assert len([b for b in context.lint_tree.find(BodyContent) if b.path == path]) == 1
+    if component == "rules":
+        assert len([b for b in context.lint_tree.find(CursorRuleBlock) if b.path == path]) == 1

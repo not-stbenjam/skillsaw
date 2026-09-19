@@ -187,8 +187,8 @@ RULE_GROUPS = [
         "Cursor",
         "cursor",
         ["cursor-rules-valid", "cursor-hooks-valid", "cursor-plugin-json-valid", "cursor-marketplace-json-valid"],
-        "Validates native `.cursor-plugin` manifests and marketplaces, component "
-        "paths, and Cursor configuration under every `.cursor/` "
+        "Validates native `.cursor-plugin` manifests, marketplaces and component "
+        "paths. It also validates Cursor configuration under every `.cursor/` "
         "directory in the repository, the root one and any in a monorepo "
         "subpackage: `rules/**/*.mdc` "
         "frontmatter (the fields that decide whether a rule ever activates) and "

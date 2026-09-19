@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from skillsaw.lint_target import LintTarget
-from .frontmatter import FrontmatteredBlock
+from .frontmatter import FrontmatteredBlock, CursorRuleBlock, BodyContent
 from .json_config import JsonConfigBlock, CursorHooksBlock, CursorMcpBlock, _InlineJsonPayload
 
 
@@ -72,3 +72,18 @@ class CursorInlineMcpBlock(_InlineJsonPayload, CursorPluginMcpBlock):
 
     def tree_label(self) -> str:
         return f"{self.path.name} (inline Cursor MCP)"
+
+
+@dataclass(eq=False)
+class CursorRuleValidationBlock(CursorRuleBlock):
+    """Cursor's parser view of prose already owned by another block."""
+
+    def _build_children(self) -> None:
+        super()._build_children()
+        self.children = [child for child in self.children if not isinstance(child, BodyContent)]
+
+    def estimate_tokens(self) -> int:
+        return 0
+
+    def tree_label(self) -> str:
+        return f"{self.path.name} (Cursor rule validation)"

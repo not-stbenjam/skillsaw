@@ -42,7 +42,7 @@ def local_source(source: Any) -> str | None:
         source = source.get("path")
     if not isinstance(source, str) or not source:
         return None
-    if source.startswith(("https://", "http://", "ssh://", "git://", "git@")):
+    if source.casefold().startswith(("https://", "http://", "ssh://", "git://", "git@")):
         return None
     return source
 
@@ -54,7 +54,7 @@ def safe_component(root: Path, value: str) -> Path | None:
 
 
 def source_path(root: Path, prefix: str, source: str) -> Path | None:
-    """Validate source and prefix separately before joining their spellings."""
+    """A pluginRoot prefix must not disguise an absolute or traversing source."""
     if safe_component(root, source) is None:
         return None
     if prefix and safe_component(root, prefix) is None:
@@ -74,7 +74,7 @@ def component_paths(root: Path, data: dict, field: str) -> list[Path]:
             try:
                 matches = root.glob(item)
                 result.update(p for p in matches if contained_resolve(p, root) is not None)
-            except (OSError, ValueError):
+            except (OSError, ValueError, RecursionError):
                 continue
         else:
             result.add(root / item)

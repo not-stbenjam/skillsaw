@@ -617,6 +617,7 @@ class ContentEmbeddedSecretsRule(Rule):
         threshold = self._entropy_threshold()
         markers = self._placeholder_markers()
         violations = []
+        seen_locations = set()
         for cf in gather_all_content_blocks(context):
             body = cf.read_body(strip_code_blocks=False)
             if not body:
@@ -630,6 +631,10 @@ class ContentEmbeddedSecretsRule(Rule):
             for line_num, desc in self._scan_text(
                 body, threshold, markers, ordered_list_lines, prose=prose
             ):
+                key = (cf.resolved_path, cf.file_line(line_num), desc)
+                if key in seen_locations:
+                    continue
+                seen_locations.add(key)
                 violations.append(
                     self.violation(
                         f"Potential secret detected: {desc}",
@@ -649,6 +654,16 @@ class ContentEmbeddedSecretsRule(Rule):
                 else None
             )
             for _line_num, desc in self._scan_text(text, threshold, markers, ordered_list_lines):
+                # Shared prose can have multiple host parser views. Scan every
+                # interpretation, but report each physical field defect once.
+                key = (
+                    fld.resolved_path,
+                    fld.field_line if fld.field_line is not None else fld.name,
+                    desc,
+                )
+                if key in seen_locations:
+                    break
+                seen_locations.add(key)
                 violations.append(
                     self.violation(
                         f"Potential secret detected in frontmatter " f"field '{fld.name}': {desc}",

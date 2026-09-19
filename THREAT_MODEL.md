@@ -132,6 +132,8 @@ review workflow govern that risk.
 - updated: 2026-09-03 — Codex project `config.toml`: `codex_plugin_inputs` extended with `.codex/config.toml`, read with the same `read_toml` parser `.grok/config.toml` uses. Its `[hooks]` tables are the second file Codex loads project hooks from and are rendered into the shared hooks shape, so `hooks-dangerous` and `hooks-prohibited` scan their commands; its `[mcp_servers]` tables are exposed through the same MCP role `.grok/config.toml` carries, so `mcp-prohibited` sees them and `mcp-valid-json` keeps its credential and URL checks over them. No new dependency and no new regex compilation: a Codex `matcher` is not compiled, so T19 is unchanged.
 - updated: 2026-09-03 — Google Antigravity support: built-in rules count updated to 101. `editor_tool_inputs` extended with the four customization roots (`.agents/`, `.agent/`, `_agents/`, `_agent/`) at the repository root or any package — `hooks.json`, `mcp_config.json`, prose in `rules/**/*.md` and `agents/*.md`, and the four registries; `package_metadata_inputs` extended with `plugins/<name>/plugin.json` and a plugin's own `hooks.json` and `mcp_config.json`. A `plugins.json` or `agents.json` registry may name a directory elsewhere in the repository, and the lint tree follows it: every entry path — and every `inherits` target — is resolved with `contained_resolve()` against the repository root before a file under it is opened, a `~/`-relative path is skipped rather than expanded, and the iterative `inherits` walk reads each contained registry at most once. Hook commands reach `hooks-dangerous` and `hooks-prohibited`; MCP servers reach `mcp-prohibited` and `mcp-valid-json`'s credential and URL checks. T19 is unchanged and now says why: `agy` does not compile a `matcher` at load time, so `antigravity-hooks-valid` compiles nothing. T6 records one deliberate divergence — `agy` follows a plugin symlinked out of the workspace and skillsaw drops it. No new dependency.
 
+- updated: 2026-09-18 — Native Cursor plugin and marketplace inputs, inline hooks/MCP security checks, source/prefix and component containment documented; built-in rule count updated to 103.
+
 ## 8. Recommended mitigations
 
 | mitigation | threat_ids | closes_class | effort |
@@ -142,5 +144,3 @@ review workflow govern that risk.
 | Add a `--strict-baseline` CI mode that fails if `.skillsaw-baseline.json` has new entries compared to the base branch | T12 | partial | M |
 | Publish an SBOM and hash-lock release build dependencies; PyPI and container provenance attestations are already published | T8 | partial | M |
 | Require pull requests, review, and `Tests` on `main`; protect `v*` tags and the `pypi` environment with no Actions bypass | T17 | partial | S (repository settings) |
-
-- updated: 2026-09-18 — Native Cursor plugin and marketplace inputs, inline hooks/MCP security checks, source/prefix and component containment documented; built-in rule count updated to 103.
