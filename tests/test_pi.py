@@ -1,5 +1,6 @@
 """Pi discovery and CLI regression tests against repository fixtures."""
 
+import os
 import json
 import shutil
 from pathlib import Path
@@ -46,7 +47,7 @@ def test_package_selection_and_native_skill_dialect(tmp_path):
         "custom/prompts/review.md",
         "custom/prompts/nested/check.md",
     }
-    assert not paths(ctx, SkillBlock)
+    assert paths(ctx, SkillBlock) == {"skills/unselected/SKILL.md", "custom/skills/skip/SKILL.md"}
     assert paths(ctx, PiExtensionNode) == {"extensions/index.ts"}
     assert not ctx.lint_tree_errors
 
@@ -64,10 +65,10 @@ def test_project_relative_paths_and_local_conventions(tmp_path):
     assert not ctx.lint_tree_errors
 
 
-def test_empty_manifest_does_not_fall_back(tmp_path):
+def test_empty_manifest_keeps_portable_skills(tmp_path):
     ctx = RepositoryContext(copy_fixture("empty", tmp_path))
     assert not paths(ctx, PiSkillBlock)
-    assert not paths(ctx, SkillBlock)
+    assert paths(ctx, SkillBlock) == {"skills/unused/SKILL.md"}
 
 
 def test_keyword_only_package_uses_conventions(tmp_path):
@@ -133,6 +134,7 @@ def test_unrelated_npm_package_is_not_pi(tmp_path):
     assert not paths(ctx, PiPackageBlock)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Requires POSIX symlinks")
 def test_containment_excludes_and_symlink_loop(tmp_path):
     root = copy_fixture("package", tmp_path)
     outside = tmp_path / "outside.md"
@@ -183,6 +185,7 @@ def test_project_overrides_filter_autoload(tmp_path):
     assert not paths(ctx, PiPromptBlock)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Requires POSIX symlinks")
 def test_manifest_globs_do_not_walk_hidden_or_symlinked_trees(tmp_path):
     root = copy_fixture("package", tmp_path)
     (root / "custom/prompts/.hidden").mkdir()
@@ -195,6 +198,7 @@ def test_manifest_globs_do_not_walk_hidden_or_symlinked_trees(tmp_path):
     }
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Requires POSIX symlinks")
 def test_explicit_symlink_and_hidden_roots_load_once(tmp_path):
     root = copy_fixture("package", tmp_path)
     (root / ".selected").symlink_to(root / "custom/skills", target_is_directory=True)
@@ -203,7 +207,7 @@ def test_explicit_symlink_and_hidden_roots_load_once(tmp_path):
     )
     ctx = RepositoryContext(root)
     assert len(paths(ctx, PiSkillBlock)) == 4
-    assert ctx.skill_count == 4
+    assert ctx.skill_count == 5
     assert not ctx.lint_tree_errors
 
 
@@ -236,6 +240,7 @@ def test_extension_index_precedence_and_self_reference_never_execute(tmp_path):
     assert not ctx.lint_tree_errors
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Requires POSIX symlinks")
 def test_settings_symlink_outside_checkout_is_not_read(tmp_path):
     root = copy_fixture("project", tmp_path)
     outside = tmp_path / "settings.json"
@@ -315,16 +320,129 @@ def test_excludes_refresh_package_identity(tmp_path):
     assert RepositoryType.PI_PACKAGE not in ctx.repo_types
 
 
-def test_disabled_settings_skill_is_not_resurrected_as_portable(tmp_path):
+def test_disabled_settings_skill_keeps_portable_checks(tmp_path):
     root = copy_fixture("project-filtered", tmp_path)
     ctx = RepositoryContext(root)
     assert not paths(ctx, PiSkillBlock)
-    assert not paths(ctx, SkillBlock)
-    result = run_cli(["lint", str(root), "--rule", "agentskill-name", "--format", "json"])
-    assert not json.loads(result.stdout)["violations"]
+    assert paths(ctx, SkillBlock) == {"custom/scan/SKILL.md"}
+    result = run_cli(["lint", str(root), "--rule", "agentskill-valid", "--format", "json"])
+    assert json.loads(result.stdout)["violations"]
 
 
 def test_package_sibling_resource_keeps_native_skill_dialect(tmp_path):
     ctx = RepositoryContext(copy_fixture("sibling-resource", tmp_path))
     assert paths(ctx, PiSkillBlock) == {"shared/scan/SKILL.md"}
     assert not paths(ctx, SkillBlock)
+
+
+@pytest.mark.parametrize("fmt", ["text", "json", "sarif", "html"])
+def test_multi_path_reports_native_and_portable_skills(fmt, tmp_path):
+    roots = [copy_fixture(name, tmp_path) for name in ("conventional", "empty")]
+    result = run_cli(["lint", *map(str, roots), "--rule", "pi-config-valid", "--format", fmt])
+    assert result.returncode == 0, result.stderr
+    if fmt == "json":
+        assert json.loads(result.stdout)["stats"]["skills"] == 2
+
+
+def test_verbose_skill_paths_match_summary(tmp_path):
+    root = copy_fixture("package", tmp_path)
+    args = ["lint", str(root), "--rule", "pi-config-valid", "--format", "json"]
+    summary = json.loads(run_cli(args).stdout)
+    verbose = json.loads(run_cli(args + ["--verbose"]).stdout)
+    assert summary["stats"]["skills"] == len(verbose["stats"]["skills"]) == 5
+
+
+def test_empty_pi_claim_preserves_portable_findings(tmp_path):
+    root = copy_fixture("empty", tmp_path)
+    args = ["lint", str(root), "--format", "json"]
+
+    def portable_findings():
+        return [
+            v
+            for v in json.loads(run_cli(args).stdout)["violations"]
+            if v["rule_id"].startswith("agentskill-")
+        ]
+
+    (root / "package.json").unlink()
+    before = portable_findings()
+    assert before
+    for claim in ({"pi": {}}, {"pi": None}):
+        (root / "package.json").write_text(json.dumps(claim))
+        assert portable_findings() == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Wall-clock regex budget requires SIGALRM")
+def test_hostile_patterns_do_not_escape_discovery(tmp_path):
+    root = copy_fixture("patterns", tmp_path)
+    ctx = RepositoryContext(root)
+    assert len(paths(ctx, PiSkillBlock)) == 1
+    assert not ctx.lint_tree_errors
+    result = run_cli(["lint", str(root), "--rule", "pi-config-valid", "--format", "json"])
+    assert result.returncode == 0, result.stderr
+
+
+def test_nested_ignore_prefixing_matches_pinned_pi_loader(tmp_path):
+    root = copy_fixture("conventional", tmp_path)
+    nested = root / "prompts/nested"
+    (nested / ".gitignore").write_text(
+        "# Pi prefixes these patterns with nested/\ndraft-*.md\n!draft-keep.md\n"
+    )
+    (nested / "draft-drop.md").write_text("Review validation.\n")
+    (nested / "draft-keep.md").write_text("Review error responses.\n")
+    (nested / "deeper").mkdir()
+    (nested / "deeper/draft-visible.md").write_text("Review response schemas.\n")
+    ctx = RepositoryContext(root)
+    assert paths(ctx, PiPromptBlock) == {
+        "prompts/nested/review.md",
+        "prompts/nested/draft-keep.md",
+        "prompts/nested/deeper/draft-visible.md",
+    }
+
+
+def test_pi_only_package_prose_and_config_roles(tmp_path):
+    from skillsaw.blocks import ReadmeBlock, CommandBlock, HooksBlock, SettingsBlock
+
+    ctx = RepositoryContext(copy_fixture("attachment", tmp_path))
+    assert paths(ctx, ReadmeBlock) == {"packages/review/README.md"}
+    assert paths(ctx, CommandBlock) == {"packages/review/commands/review.md"}
+    assert not paths(ctx, HooksBlock)
+    assert not paths(ctx, SettingsBlock)
+
+
+@pytest.mark.parametrize("directory", ["node_modules", "vendor", "venv"])
+def test_glob_discovery_prunes_dependency_directories(directory, tmp_path):
+    root = copy_fixture("package", tmp_path)
+    target = root / directory / "prompts"
+    target.mkdir(parents=True)
+    (target / "review.md").write_text("Review third-party implementation.\n")
+    (root / "package.json").write_text('{"pi":{"prompts":["**/*.md"]}}')
+    ctx = RepositoryContext(root)
+    assert not any(p.startswith(directory + "/") for p in paths(ctx, PiPromptBlock))
+
+
+@pytest.mark.parametrize("value", [[], False, None])
+def test_nonobject_settings_reports_json_shape(value, tmp_path):
+    root = copy_fixture("project", tmp_path)
+    (root / ".pi/settings.json").write_text(json.dumps(value))
+    violations = PiConfigValidRule().check(RepositoryContext(root))
+    assert len(violations) == 1
+    assert "Expected a JSON object" in violations[0].message
+    assert "package.json" not in violations[0].message
+
+
+def test_resource_path_diagnostics_redact_userinfo(tmp_path):
+    root = copy_fixture("missing", tmp_path)
+    (root / "package.json").write_text('{"pi":{"skills":["ftp://user:secret@host/missing"]}}')
+    violations = PiResourcePathsRule().check(RepositoryContext(root))
+    assert len(violations) == 1
+    assert "secret" not in violations[0].message
+
+
+def test_cli_forced_pi_type_and_primary_type(tmp_path):
+    root = copy_fixture("conventional", tmp_path)
+    (root / "package.json").unlink()
+    result = run_cli(
+        ["lint", str(root), "--type", "pi-package", "--rule", "pi-skill-valid", "--format", "json"]
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["stats"]["repo_type"] == "pi-package"

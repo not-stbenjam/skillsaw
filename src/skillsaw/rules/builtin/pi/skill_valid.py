@@ -1,8 +1,10 @@
 """Pi's native skill metadata contract, separate from portable Agent Skills."""
 
+from typing import List
+
 from skillsaw.blocks.pi import PiSkillBlock
-from skillsaw.context import RepositoryType
-from skillsaw.rule import Rule, Severity
+from skillsaw.context import RepositoryContext, RepositoryType
+from skillsaw.rule import Rule, RuleViolation, Severity
 
 
 class PiSkillValidRule(Rule):
@@ -12,17 +14,17 @@ class PiSkillValidRule(Rule):
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "pi-skill-valid"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "Pi skills need parseable frontmatter and a nonempty description"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         return Severity.WARNING
 
-    def check(self, context):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for block in context.lint_tree.find(PiSkillBlock):
             if block.frontmatter_error:

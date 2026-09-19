@@ -5913,6 +5913,8 @@ BROKEN_FIXTURES = [
 ]
 
 CLEAN_FIXTURES = [
+    "pi/conventional",
+    "pi/project",
     "single-plugin/clean",
     "marketplace/clean",
     "marketplace/archive-source",

@@ -1,9 +1,11 @@
 """Validate Pi package manifests and resource-related project settings."""
 
+from typing import List
+
 from skillsaw.blocks.pi import PiPackageBlock, PiSettingsBlock
-from skillsaw.context import RepositoryType
+from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.formats.pi import RESOURCE_FIELDS, string_list
-from skillsaw.rule import Rule, Severity
+from skillsaw.rule import Rule, RuleViolation, Severity
 
 
 class PiConfigValidRule(Rule):
@@ -13,23 +15,23 @@ class PiConfigValidRule(Rule):
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "pi-config-valid"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "Pi package and project resource declarations must have valid types"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         # Current Pi ignores malformed manifest fields rather than crashing.
         return Severity.WARNING
 
-    def check(self, context):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for cls in (PiPackageBlock, PiSettingsBlock):
             for block in context.lint_tree.find(cls):
                 data = block.raw_data
-                if block.parse_error or data is None:
+                if block.parse_error or not isinstance(data, dict):
                     violations.append(
                         self.violation(
                             "Expected a JSON object"

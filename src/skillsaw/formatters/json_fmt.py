@@ -29,7 +29,7 @@ def format_json(
             "repo_type": context.repo_type.value,
             "repo_types": repo_types_list,
             "plugins": [str(p) for p in plugin_dirs],
-            "skills": [str(s) for s in context.skills],
+            "skills": [str(s) for s in context.skill_paths],
             "rules_run": [r.rule_id for r in rules],
         }
     else:

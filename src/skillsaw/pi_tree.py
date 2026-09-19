@@ -1,6 +1,15 @@
 """Attach Pi resources through the shared tree builder's containment/dedup seam."""
 
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Iterable, Optional, TYPE_CHECKING
+
+from .lint_target import LintTarget
 from .blocks import ContextFileBlock
+
+if TYPE_CHECKING:
+    from .lint_tree import _TreeBuildState
 from .blocks.pi import PiSettingsBlock, PiSkillBlock, PiPromptBlock, PiThemeBlock, PiExtensionNode
 from .discovery.pi import local_path, package_resources, project_resources
 from .formats.pi import RESOURCE_FIELDS
@@ -14,7 +23,13 @@ _CLASSES = {
 }
 
 
-def _attach(state, parent, paths, kind, owner=None):
+def _attach(
+    state: _TreeBuildState,
+    parent: LintTarget,
+    paths: Iterable[Path],
+    kind: str,
+    owner: Optional[Path] = None,
+) -> None:
     for path in paths:
         if kind == "skills" and path.name == "SKILL.md" and path.parent in state.context.skills:
             # Other consumers retain their portable skill role in dual packages.
@@ -28,7 +43,7 @@ def _attach(state, parent, paths, kind, owner=None):
         state.add_block(parent, path, _CLASSES[kind], owner=owner)
 
 
-def attach_pi_resources(state, parent, package):
+def attach_pi_resources(state: _TreeBuildState, parent: LintTarget, package: Path) -> None:
     context = state.context
     for kind in RESOURCE_FIELDS:
         _attach(
@@ -40,7 +55,7 @@ def attach_pi_resources(state, parent, package):
         )
 
 
-def attach_pi_projects(state, root):
+def attach_pi_projects(state: _TreeBuildState, root: LintTarget) -> None:
     context = state.context
     for directory in context.agent_tool_dirs(".pi"):
         block = state.add_parser_block(root, directory / "settings.json", PiSettingsBlock)

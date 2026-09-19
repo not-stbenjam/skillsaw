@@ -1,10 +1,13 @@
 """Optional checks for literal repository-local Pi resource declarations."""
 
+from typing import List
+
 from skillsaw.blocks.pi import PiPackageBlock, PiSettingsBlock
-from skillsaw.context import RepositoryType
+from skillsaw.context import RepositoryContext, RepositoryType
+from skillsaw.diagnostics import safe_display
 from skillsaw.discovery.pi import local_path
 from skillsaw.formats.pi import RESOURCE_FIELDS, REMOTE_PREFIXES, string_list
-from skillsaw.rule import Rule, Severity
+from skillsaw.rule import Rule, RuleViolation, Severity
 
 
 class PiResourcePathsRule(Rule):
@@ -15,22 +18,22 @@ class PiResourcePathsRule(Rule):
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "pi-resource-paths"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "Literal Pi resource paths should exist in the assembled checkout"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         return Severity.WARNING
 
-    def check(self, context):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for cls in (PiPackageBlock, PiSettingsBlock):
             for block in context.lint_tree.find(cls):
                 data = block.raw_data
-                if not data or block.parse_error:
+                if not isinstance(data, dict) or block.parse_error:
                     continue
                 settings = isinstance(block, PiSettingsBlock)
                 config = data if settings else data.get("pi")
@@ -59,7 +62,7 @@ class PiResourcePathsRule(Rule):
                         and not context.is_path_excluded(path)
                         and not path.exists()
                     ):
-                        missing.append(f"{key}: {entry!r}")
+                        missing.append(f"{key}: {safe_display(entry)!r}")
                 if missing:
                     violations.append(
                         self.violation(

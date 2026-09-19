@@ -8,6 +8,8 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
 from .repository_types import RepositoryType, TOOL_REPO_TYPES
+from .utils import read_json
+from .paths import contained_resolve
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
@@ -33,7 +35,7 @@ class RepositoryScanMixin:
         repo_types: Set[RepositoryType]
         _overridden_types: Optional[Set[RepositoryType]]
         exclude_patterns: List[str]
-        _pi_packages_cache: Tuple[Tuple[str, ...], List[Path]]
+        _pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path]]]
         plugins: List[Path]
         codex_plugins: List[Path]
 
@@ -62,11 +64,16 @@ class RepositoryScanMixin:
         def _is_containment_plugin(self, path: Path) -> bool: ...
 
     @property
-    def skill_count(self) -> int:
-        """Portable directories and Pi's native skills, including flat files."""
+    def skill_paths(self) -> List[Path]:
+        """Display paths for portable directories and native Pi skill files."""
         from .blocks.pi import PiSkillBlock
 
-        return len(self.skills) + len(self.lint_tree.find(PiSkillBlock))
+        return list(self.skills) + [b.path for b in self.lint_tree.find(PiSkillBlock)]
+
+    @property
+    def skill_count(self) -> int:
+        """Portable directories and Pi's native skills, including flat files."""
+        return len(self.skill_paths)
 
     @property
     def _pi_package_forced(self) -> bool:
@@ -270,27 +277,35 @@ class RepositoryScanMixin:
                     "skills",
                     self.root_path,
                     self.is_path_excluded,
-                    include_disabled=True,
                 )
             )
 
-        # Declarations own their candidates even when Pi filters them out.
-        # Otherwise the generic scan resurrects a disabled native skill as a
-        # portable one. Package declarations can also select a sibling root.
+        # Only selected resources adopt the native dialect; unselected portable
+        # skills remain visible to their other consumers.
         for directory in self.pi_discovery_roots():
+            manifest = directory / "package.json"
+            data, _ = (
+                read_json(manifest)
+                if contained_resolve(manifest, self.root_path) is not None
+                and not self.is_path_excluded(manifest)
+                else (None, None)
+            )
+            if isinstance(data, dict) and "pi" in data and not isinstance(data["pi"], dict):
+                # Invalid declarations receive config diagnostics, but cannot
+                # take an existing portable skill out of its validation scope.
+                continue
             native_skills.update(
                 package_resources(
                     directory,
                     "skills",
                     self.root_path,
                     self.is_path_excluded,
-                    include_disabled=True,
                 )
             )
 
         def owned_by_pi(path: Path) -> bool:
             declared = path / "SKILL.md" in native_skills
-            if not declared and not any(path.is_relative_to(root) for root in pi_roots):
+            if not declared:
                 return False
             # A Pi package does not own another tool's customization root or
             # an independently declared nested package. Keep those consumers.

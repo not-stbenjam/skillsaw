@@ -10,7 +10,7 @@ developer tool or in CI pipelines (GitHub Actions). It has no network
 listeners and no daemon mode.
 
 skillsaw reads files from a target repository, parses them (Markdown,
-YAML, JSON, JSONC, and TOML), evaluates them against 101 built-in lint rules,
+YAML, JSON, JSONC, and TOML), evaluates them against 104 built-in lint rules,
 and reports violations. It also validates some metadata against bundled
 JSON Schemas. It can automatically fix violations via deterministic
 rewrites. A GitHub Action mode posts lint results as PR review comments.
@@ -29,7 +29,7 @@ are outside skillsaw's trust boundary.
   level is not necessarily the target repository's.
 - Custom-rule paths may be absolute or relative to that config. Loading one
   executes unsandboxed Python by design, so the operator must trust it.
-- Dependencies (PyYAML, ruamel.yaml, markdown-it-py, jsonschema, and
+- Dependencies (PyYAML, ruamel.yaml, markdown-it-py, jsonschema, wcmatch (with bracex), pathspec, and
   `tomli` on Python 3.9/3.10 only) are sourced from PyPI. We delegate
   parsing and schema-validation correctness to those libraries. `tomli`
   is the same parser CPython vendored as `tomllib` in 3.11, so 3.11+
@@ -111,6 +111,9 @@ review workflow govern that risk.
 - Should `.skillsaw-baseline.json` modifications require a separate approval step in CI (e.g., CODEOWNERS)?
 
 ## 7. Provenance
+
+- updated: 2026-09-18 — Pi package manifests (`package.json#pi`), `.pi/settings.json`, and authored resource trees add repository-controlled paths, glob patterns and ignore files. Containment applies before resource reads; extensions are recorded without execution. T8: runtime dependencies `wcmatch>=10,<11` (including transitive `bracex`) and `pathspec>=1,<2` implement Pi-compatible glob and ignore semantics; pathspec uses its pure-Python `simple` backend regardless of optional installed backends. T13: glob compilation and matching, ignore compilation and matching use the existing best-effort POSIX regex time budget, exception guards, pattern-length and expansion limits. Ignore files and accumulated patterns are bounded; automatic walks prune dependency directories. The timer cannot enforce a deadline on Windows or outside the main thread, as with existing configured-regex checks. T4/T12: Pi selection only changes the dialect of selected skills; unselected portable skills retain Agent Skills validation. Pi-only `hooks/hooks.json` and root `settings.json` have no Pi runtime role and do not acquire Claude execution semantics; dual Claude/Pi packages retain Claude hooks checks.
+
 
 - mode: bootstrap
 - date: 2026-05-29

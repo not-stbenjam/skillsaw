@@ -84,7 +84,6 @@ class RepositoryContext(
         RepositoryType.ANTIGRAVITY_PLUGIN,
         RepositoryType.AGENT_PLUGIN,
         RepositoryType.PI_PACKAGE,
-        RepositoryType.PI,
         RepositoryType.AGENTSKILLS,
         RepositoryType.MCP_REGISTRY,
         RepositoryType.CODERABBIT,
@@ -92,6 +91,7 @@ class RepositoryContext(
         # Tool configuration sorts below everything that describes how the
         # repository packages its content, so a marketplace that also ships
         # a `.cursor/` keeps `marketplace` as its primary type.
+        RepositoryType.PI,
         RepositoryType.CODEX_PROJECT,
         RepositoryType.MUSE,
         RepositoryType.GROK_PROJECT,
@@ -162,6 +162,7 @@ class RepositoryContext(
         self._excluded_cache_patterns: Tuple[str, ...] = ()
         self.has_apm = detect_discovery.has_apm(self.root_path)
         self._scan: Optional[detect_discovery.RepositoryScan] = None
+        self._pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path]]] = None
         self._apm_compiled_roots: Optional[Set[Path]] = None
         self._apm_targets: Any = _UNSET  # frozenset once read; None = unknown
         self._codex_marketplace_paths: Optional[List[Path]] = None

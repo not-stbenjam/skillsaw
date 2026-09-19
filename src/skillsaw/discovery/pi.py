@@ -3,17 +3,90 @@
 from __future__ import annotations
 
 import os
+import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Iterable
 
 from pathspec import GitIgnoreSpec
 from wcmatch import glob
+from bracex import ExpansionLimitException
+from wcmatch._wcparse import PatternLimitException
+
+from skillsaw.discovery.detect import WALK_SKIP_DIRS, VENDOR_DIR_NAMES
 
 from skillsaw.formats.pi import REMOTE_PREFIXES, string_list
 from skillsaw.paths import contained_resolve, relative_to_str, safe_resolve
 from skillsaw.utils import read_json, read_text
 
 _FLAGS = glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB
+_SKIP_DIRS = WALK_SKIP_DIRS | VENDOR_DIR_NAMES
+_PATTERN_SECONDS = 0.02
+_MAX_PATTERN_LENGTH = 1024
+_MAX_IGNORE_PATTERNS = 4096
+
+
+@lru_cache(maxsize=256)
+def _compile_glob(pattern: str):
+    # Imported lazily: discovery also runs while RepositoryContext initializes.
+    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
+
+    if not pattern or len(pattern) > _MAX_PATTERN_LENGTH:
+        return None
+    try:
+        with regex_timeout(_PATTERN_SECONDS):
+            return glob.compile(pattern, flags=_FLAGS, limit=256)
+    except (
+        PatternLimitException,
+        ExpansionLimitException,
+        ValueError,
+        re.error,
+        RecursionError,
+        RegexTimeout,
+    ):
+        return None
+
+
+def _globmatch(value: str, pattern: str) -> bool:
+    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
+
+    compiled = _compile_glob(pattern)
+    if compiled is None:
+        return False
+    try:
+        with regex_timeout(_PATTERN_SECONDS):
+            return compiled.match(value)
+    except (ValueError, re.error, RecursionError, RegexTimeout):
+        return False
+
+
+def _ignore_patterns(lines: Iterable[str]) -> list:
+    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
+
+    patterns = []
+    for index, line in enumerate(lines):
+        if index >= _MAX_IGNORE_PATTERNS:
+            break
+        if len(line) > _MAX_PATTERN_LENGTH:
+            continue
+        try:
+            with regex_timeout(_PATTERN_SECONDS):
+                patterns.extend(GitIgnoreSpec.from_lines([line], backend="simple").patterns)
+        except (ValueError, re.error, RecursionError, RegexTimeout):
+            # GitIgnorePatternError (including the legacy GitWildMatch spelling)
+            # derives from ValueError. A bad line must not suppress valid siblings.
+            continue
+    return patterns
+
+
+def _ignored(ignore: GitIgnoreSpec, value: str) -> bool:
+    from skillsaw.rules.builtin.content_analysis import RegexTimeout, regex_timeout
+
+    try:
+        with regex_timeout(_PATTERN_SECONDS):
+            return ignore.match_file(value)
+    except (ValueError, re.error, RecursionError, RegexTimeout):
+        return False
 
 
 def package_marker(path: Path) -> bool:
@@ -77,7 +150,7 @@ def _matches(path: Path, pattern: str, base: Path, exact: bool = False) -> bool:
         target = safe_resolve(base / pattern)
         return target is not None and any(safe_resolve(p) == target for p in candidates)
     return any(
-        glob.globmatch(value, pattern.removeprefix("./"), flags=_FLAGS)
+        _globmatch(value, pattern.removeprefix("./"))
         for p in candidates
         for value in (relative_to_str(p, base) or str(p), p.name, str(p))
     )
@@ -107,7 +180,11 @@ def visible_paths(base: Path, boundary: Path, excluded: Callable[[Path], bool]) 
     result = []
     for directory, dirs, files in os.walk(base, followlinks=False):
         here = Path(directory)
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not excluded(here / d))
+        dirs[:] = sorted(
+            d
+            for d in dirs
+            if not d.startswith(".") and d not in _SKIP_DIRS and not excluded(here / d)
+        )
         for name in dirs + sorted(files):
             path = here / name
             if (
@@ -124,8 +201,7 @@ def extension_entries(
 ) -> list[Path]:
     """An extension root declares exact entries or defaults to index.ts/index.js.
 
-    These are entrypoints, not recursive package installations. Recording a
-    directory is sufficient; its module loader is never invoked by skillsaw.
+    If every declared entry fails containment, fall back to the default names.
     """
     manifest = directory / "package.json"
     data, _ = (
@@ -188,6 +264,11 @@ def collect(
             ignore_path = current / name
             if contained_resolve(ignore_path, boundary) is None:
                 continue
+            try:
+                if ignore_path.stat().st_size > 128 * 1024:
+                    continue
+            except OSError:
+                continue
             text = read_text(ignore_path) or ""
             # Keep nested rules relative to the directory declaring them.
             prefix = relative_to_str(current, path)
@@ -201,12 +282,12 @@ def collect(
                 if prefix:
                     raw = prefix + "/" + raw.lstrip("/")
                 lines.append(("!" if neg else "") + raw)
-            patterns.extend(GitIgnoreSpec.from_lines(lines).patterns)
-        ignore = GitIgnoreSpec(patterns)
+            patterns.extend(_ignore_patterns(lines))
+        ignore = GitIgnoreSpec(patterns[-_MAX_IGNORE_PATTERNS:], backend="simple")
 
         def ignored(p: Path) -> bool:
-            rel = relative_to_str(p, path) + ("/" if p.is_dir() else "")
-            return ignore.match_file(rel)
+            rel = (relative_to_str(p, path) or p.name) + ("/" if p.is_dir() else "")
+            return _ignored(ignore, rel)
 
         entrypoint = current / "SKILL.md"
         if kind == "skills" and entrypoint.is_file() and not ignored(entrypoint):
@@ -217,7 +298,7 @@ def collect(
             return []
         found = []
         for child in children:
-            if child.name.startswith(".") or child.name == "node_modules" or ignored(child):
+            if child.name.startswith(".") or child.name in _SKIP_DIRS or ignored(child):
                 continue
             if child.is_dir():
                 if shallow:
@@ -233,7 +314,11 @@ def collect(
     if path.is_file() and contained_resolve(path, boundary) is not None and not excluded(path):
         # Explicit files have no suffix restriction in Pi's loader.
         return [path]
-    return walk(path, True, GitIgnoreSpec.from_lines([]))
+    try:
+        return walk(path, True, GitIgnoreSpec([], backend="simple"))
+    except RecursionError:
+        # Deep repository trees must not escape the constructor's discovery leg.
+        return []
 
 
 def resources(
@@ -244,7 +329,6 @@ def resources(
     excluded: Callable[[Path], bool],
     *,
     manifest: bool = True,
-    include_disabled: bool = False,
 ) -> list[Path]:
     """Expand manifest globs; settings wildcards filter existing literal roots."""
     if not string_list(entries):
@@ -262,7 +346,7 @@ def resources(
             roots = [
                 p
                 for p in candidates
-                if glob.globmatch(relative_to_str(p, base), entry.removeprefix("./"), flags=_FLAGS)
+                if _globmatch(relative_to_str(p, base) or p.name, entry.removeprefix("./"))
             ]
         else:
             local = local_path(base, entry, boundary)
@@ -274,7 +358,7 @@ def resources(
         for p in entries
         if p.startswith(("!", "+", "-")) or (not manifest and ("*" in p or "?" in p))
     ]
-    return sorted(set(paths if include_disabled else filter_resources(paths, patterns, base)))
+    return sorted(set(filter_resources(paths, patterns, base)))
 
 
 def package_resources(
@@ -282,8 +366,6 @@ def package_resources(
     kind: str,
     boundary: Path,
     excluded: Callable[[Path], bool],
-    *,
-    include_disabled: bool = False,
 ) -> list[Path]:
     manifest = base / "package.json"
     data, _ = (
@@ -293,9 +375,7 @@ def package_resources(
     )
     pi = data.get("pi") if isinstance(data, dict) else None
     if isinstance(pi, dict):
-        return resources(
-            base, kind, pi.get(kind, []), boundary, excluded, include_disabled=include_disabled
-        )
+        return resources(base, kind, pi.get(kind, []), boundary, excluded)
     return collect(base / kind, kind, boundary, excluded)
 
 
@@ -304,8 +384,6 @@ def project_resources(
     kind: str,
     boundary: Path,
     excluded: Callable[[Path], bool],
-    *,
-    include_disabled: bool = False,
 ) -> list[Path]:
     """Autoload and explicitly configured resources share override semantics."""
     settings = directory / "settings.json"
@@ -321,8 +399,7 @@ def project_resources(
     automatic = collect(
         directory / kind, kind, boundary, excluded, shallow=kind in {"prompts", "themes"}
     )
-    if not include_disabled:
-        automatic = filter_resources(automatic, overrides, directory)
+    automatic = filter_resources(automatic, overrides, directory)
     explicit = resources(
         directory,
         kind,
@@ -330,6 +407,5 @@ def project_resources(
         boundary,
         excluded,
         manifest=False,
-        include_disabled=include_disabled,
     )
     return sorted(set(automatic + explicit))

@@ -18,6 +18,14 @@ TOC_END = "<!-- END GENERATED TOC -->"
 
 RULE_GROUPS = [
     (
+        "Pi",
+        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths"],
+        "Discovers Pi packages and `.pi/` project resources, validates resource "
+        "arrays and native skill metadata, and exposes prompts and flat skills "
+        "to content checks. Literal resource-path checks are opt-in. "
+        "Extensions are never executed and remote packages are not installed.",
+    ),
+    (
         "Agent Plugins",
         ["agent-plugin-json-valid", "agent-plugin-mcp-valid", "agent-plugin-required"],
         "Validates portable plugin packages against the "

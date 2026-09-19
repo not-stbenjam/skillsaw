@@ -1360,6 +1360,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     codex_plugin_nodes: dict[Path, CodexPluginNode] = {}
     grok_plugin_nodes: dict[Path, GrokPluginNode] = {}
     antigravity_plugin_nodes: dict[Path, AntigravityPluginNode] = {}
+    pi_package_nodes: dict[Path, PiPackageNode] = {}
     agent_plugin_nodes: dict[Path, AgentPluginNode] = {}
     marketplace_dir = context.root_path / "plugins"
     marketplace_node: MarketplaceNode | None = None
@@ -1448,6 +1449,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             antigravity_plugin_nodes[resolved_plugin] = container
         elif is_pi:
             container = PiPackageNode(path=plugin_path)
+            pi_package_nodes[resolved_plugin] = container
         elif is_agent_plugin:
             container = AgentPluginNode(path=plugin_path)
             agent_plugin_nodes[resolved_plugin] = container
@@ -1485,8 +1487,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        if not is_pi or (prov.ecosystems - {"pi"}):
-            _add_plugin_prose(container, plugin_path, resolved_plugin)
+        _add_plugin_prose(container, plugin_path, resolved_plugin)
         if is_pi:
             state.add_parser_block(
                 container, plugin_path / "package.json", PiPackageBlock, owner=resolved_plugin
@@ -1801,6 +1802,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 or codex_plugin_nodes.get(candidate)
                 or grok_plugin_nodes.get(candidate)
                 or antigravity_plugin_nodes.get(candidate)
+                or pi_package_nodes.get(candidate)
                 or agent_plugin_nodes.get(candidate)
             )
             if node is not None:
@@ -1915,10 +1917,11 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             )
             continue
 
+    attach_pi_projects(state, root)
+
     # Configured OpenCode instructions are ambient prose, but their
     # original semantic owner wins when a path is also a skill, command,
     # agent, editor rule, README, or plugin-contributed content block.
-    attach_pi_projects(state, root)
     _add_opencode_instructions()
 
     external_roots = context.externally_sourced_roots()

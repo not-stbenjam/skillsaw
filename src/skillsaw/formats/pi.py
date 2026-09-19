@@ -1,6 +1,6 @@
 """Pi's authored resource contract (upstream 36b60d2, 2026-09-18).
 
-See https://pi.dev/docs/latest/packages and coding-agent/src/core/{pi-manifest,
+See https://pi.dev/docs/latest/packages and packages/coding-agent/src/core/{pi-manifest,
 package-manager,skills}.ts in https://github.com/earendil-works/pi.
 """
 

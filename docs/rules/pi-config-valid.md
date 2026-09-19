@@ -39,6 +39,16 @@ use `"packages": [{"source": "npm:my-package", "skills": []}]` to configure
 a package and disable its skills. Keep settings paths relative to the directory
 containing `settings.json`, and package paths relative to `package.json`.
 
+## Examples
+
+Use arrays for resource paths:
+
+```json
+{"pi": {"skills": ["./skills"], "prompts": ["./prompts"]}}
+```
+
+A string such as `"skills": "./skills"` is invalid and drops that resource type.
+
 ## Discovery and boundaries
 
 The `pi-package` repository type comes from a `pi` key, the `pi-package` npm
@@ -47,12 +57,13 @@ npm packages and unmarked conventional directories do not establish Pi ownership
 A conventional-only package can be selected through project settings. The `pi`
 type comes from `.pi` project resources, including those in monorepo subprojects.
 
-A `pi` object replaces conventional package discovery; omitted resource types
+Portable `SKILL.md` files not selected by Pi keep their Agent Skills checks.
+A `pi` object replaces conventional Pi package discovery; omitted resource types
 and empty arrays contribute no resources. Without that object, packages use
 `extensions/`, `skills/`, `prompts/`, and `themes/`. Manifest globs discover visible
 paths; `!` exclusions, `+` exact re-inclusions and `-` exact exclusions filter
 those resources. Project resource lists resolve literal paths and use wildcards
-as filters, matching the native loader. Project prompt autoload is shallow;
+as filters, matching the native loader. Project prompt and theme autoload is shallow;
 explicit prompt directories and package prompts are recursive.
 
 Locally referenced packages are linted as authored packages, including resources
@@ -60,27 +71,23 @@ that a particular consumer's package filters disable. Package filters are
 validated, but do not suppress diagnostics on the package's authored content.
 Remote sources and paths outside the checkout are not loaded. Glob traversal
 does not descend through symlinked directories; exact contained roots may use
-symlinks. Resource walks honor `.gitignore`, `.ignore`, and `.fdignore`.
+symlinks. Resource walks read `.gitignore`, `.ignore`, and `.fdignore` at or below each
+resource root, using Pi's directory-relative prefixing.
 
-Extensions are represented as entrypoint nodes without importing code. Themes
+Pi-only packages receive shared prose checks for README, commands, agents and
+rules. Claude configuration at `hooks/hooks.json` or `settings.json` is checked
+only when the directory also declares Claude ownership.
+
+Extensions are represented as entrypoint nodes. Themes
 are configuration nodes, not prose; theme colors and runtime extension behavior
 are outside this rule. No core Pi MCP schema is assumed.
 
-## Compatibility evidence
+## Upstream reference
 
 Pinned to Pi commit
 [`36b60d2e`](https://github.com/earendil-works/pi/tree/36b60d2e8985899743c4cf5bd5f8929832a3f05d),
 particularly `packages/coding-agent/src/core/pi-manifest.ts`,
 `package-manager.ts`, and `skills.ts`. See the [Pi package documentation](https://pi.dev/docs/latest/packages).
-
-The two automatic Pi checks were tested on 15 public package repositories on
-2026-09-18: QuintinShaw/pi-dynamic-workflows, carderne/pi-sandbox,
-dodo-reach/pi-clarify, edgehero/pi-dispatch, fitchmultz/pi-agent-browser-native,
-fitchmultz/pi-codex-goal, fitchmultz/pi-cursor-sdk, fitchmultz/pi-posthorse,
-gotgenes/pi-anthropic-auth, k0valik/pi-blackhole, monotykamary/pi-fabric,
-pranshuchittora/simvyn, tintinweb/pi-gitnexus, tintinweb/pi-tasks, and
-waybarrios/opencode-power-pack. No Pi metadata findings or tree construction
-errors occurred. This measures those checks, not overall repository quality.
 
 ## Configuration
 
