@@ -17,6 +17,13 @@ Unknown npm fields, Pi gallery metadata, and unrelated settings are accepted.
 Empty resource lists are valid. Findings are consolidated by file and default to
 warning: current Pi ignores malformed manifest fields instead of failing startup.
 
+Legacy project settings such as `"skills": {"customDirectories": ["../skills"]}`
+are normalized before validation and discovery, as in Pi's settings loader.
+A nonempty `customDirectories` array supplies the skill paths; an empty, missing,
+or non-array value removes the legacy override and leaves autoload active.
+Malformed array members still warn. This migration applies only to project
+settings, not package manifests or package selectors.
+
 ## How to fix
 
 Put paths in arrays, such as `"skills": ["./skills"]`. In project settings,

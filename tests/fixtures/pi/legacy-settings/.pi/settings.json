@@ -1,0 +1,6 @@
+{
+  "skills": {
+    "customDirectories": ["../native", "!disabled.md"],
+    "enableSkillCommands": true
+  }
+}

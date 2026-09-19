@@ -10,7 +10,7 @@ from pathspec import GitIgnoreSpec
 
 from skillsaw.discovery.detect import WALK_SKIP_DIRS, VENDOR_DIR_NAMES
 
-from skillsaw.formats.pi import REMOTE_PREFIXES, string_list
+from skillsaw.formats.pi import REMOTE_PREFIXES, settings_resources, string_list
 from skillsaw.paths import (
     contained_resolve,
     relative_to_str,
@@ -332,7 +332,7 @@ def project_resources(
         if contained_resolve(settings, boundary) is not None and not excluded(settings)
         else (None, None)
     )
-    entries = data.get(kind, []) if isinstance(data, dict) else []
+    entries = settings_resources(data).get(kind, []) if isinstance(data, dict) else []
     overrides = (
         [p for p in entries if p.startswith(("!", "+", "-"))] if string_list(entries) else []
     )

@@ -7,7 +7,7 @@ from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.diagnostics import safe_display
 from skillsaw.paths import safe_exists
 from skillsaw.discovery.pi import local_path
-from skillsaw.formats.pi import RESOURCE_FIELDS, REMOTE_PREFIXES, string_list
+from skillsaw.formats.pi import RESOURCE_FIELDS, REMOTE_PREFIXES, settings_resources, string_list
 from skillsaw.rule import Rule, RuleViolation, Severity
 
 
@@ -37,7 +37,7 @@ class PiResourcePathsRule(Rule):
                 if not isinstance(data, dict) or block.parse_error:
                     continue
                 settings = isinstance(block, PiSettingsBlock)
-                config = data if settings else data.get("pi")
+                config = settings_resources(data) if settings else data.get("pi")
                 if not isinstance(config, dict):
                     continue
                 entries = [

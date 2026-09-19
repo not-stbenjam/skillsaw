@@ -10210,3 +10210,88 @@ class TestCursorNativePlugins:
             "cursor-marketplace-json-valid",
             "hooks-dangerous",
         } <= rules
+
+
+@pytest.mark.integration
+class TestPiLegacySettings:
+    def test_legacy_skills_are_selected_and_filtered(self, tmp_path):
+        repo = copy_fixture("pi/legacy-settings", tmp_path / "repo")
+        result = run_lint(repo, "--no-custom-rules", "--rule", "pi-config-valid")
+        assert result["rc"] == 0
+        assert result["out"]["violations"] == []
+        assert {Path(p).relative_to(repo).as_posix() for p in result["out"]["stats"]["skills"]} == {
+            "native/review.md",
+            ".pi/skills/automatic/SKILL.md",
+        }
+
+        # The modern spelling must select exactly the same resources.
+        settings = repo / ".pi/settings.json"
+        settings.write_text(json.dumps({"skills": ["../native", "!disabled.md"]}))
+        modern = run_lint(repo, "--no-custom-rules", "--rule", "pi-config-valid")
+        assert modern["out"]["violations"] == []
+        assert modern["out"]["stats"]["skills"] == result["out"]["stats"]["skills"]
+
+    @pytest.mark.parametrize(
+        "legacy",
+        [
+            {},
+            {"enableSkillCommands": False},
+            {"customDirectories": []},
+            {"customDirectories": None},
+            {"customDirectories": "../native"},
+        ],
+    )
+    def test_legacy_object_without_directory_array_keeps_autoload(self, tmp_path, legacy):
+        repo = copy_fixture("pi/legacy-settings", tmp_path / "repo")
+        (repo / ".pi/settings.json").write_text(json.dumps({"skills": legacy}))
+        result = run_lint(repo, "--no-custom-rules", "--rule", "pi-config-valid")
+        assert result["out"]["violations"] == []
+        assert len(result["out"]["stats"]["skills"]) == 1
+
+    @pytest.mark.parametrize(
+        "skills",
+        [
+            None,
+            "../native",
+            {"customDirectories": ["../native", None]},
+            {"customDirectories": [12]},
+        ],
+    )
+    def test_invalid_effective_skills_still_warn(self, tmp_path, skills):
+        repo = copy_fixture("pi/legacy-settings", tmp_path / "repo")
+        (repo / ".pi/settings.json").write_text(json.dumps({"skills": skills}))
+        result = run_lint(repo, "--no-custom-rules", "--rule", "pi-config-valid")
+        findings = result["out"]["violations"]
+        assert len(findings) == 1
+        assert "skills (expected an array of strings)" in findings[0]["message"]
+        assert len(result["out"]["stats"]["skills"]) == 1
+
+    @pytest.mark.parametrize("location", ["manifest", "selector"])
+    def test_legacy_migration_is_settings_only(self, tmp_path, location):
+        repo = copy_fixture("pi/legacy-settings", tmp_path / "repo")
+        legacy = {"customDirectories": ["../native"]}
+        if location == "manifest":
+            (repo / "package.json").write_text(
+                json.dumps({"name": "review", "pi": {"skills": legacy}})
+            )
+            expected = "pi.skills"
+        else:
+            (repo / ".pi/settings.json").write_text(
+                json.dumps({"packages": [{"source": "npm:review-tools", "skills": legacy}]})
+            )
+            expected = "packages[0].skills"
+        result = run_lint(repo, "--no-custom-rules", "--rule", "pi-config-valid")
+        findings = result["out"]["violations"]
+        assert len(findings) == 1
+        assert expected in findings[0]["message"]
+
+    def test_legacy_paths_use_the_same_optional_existence_check(self, tmp_path):
+        repo = copy_fixture("pi/legacy-settings", tmp_path / "repo")
+        (repo / ".pi/settings.json").write_text(
+            json.dumps({"skills": {"customDirectories": ["../missing"]}})
+        )
+        result = run_lint(repo, "--no-custom-rules", "--rule", "pi-resource-paths")
+        findings = result["out"]["violations"]
+        assert len(findings) == 1
+        assert "skills: '../missing'" in findings[0]["message"]
+
