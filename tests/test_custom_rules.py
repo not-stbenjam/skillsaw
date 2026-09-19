@@ -632,13 +632,13 @@ class MyCustomRule(Rule):
     context = RepositoryContext(valid_plugin)
 
     violations = Linter(context, config, no_custom_rules=True).run()
-    assert not any(v.rule_id == "invalid-config" for v in violations)
+    assert not any(v.rule_id == "unknown-rule" for v in violations)
 
     # Without custom-rules files configured, a typo'd ID still warns.
     typo_config = LinterConfig(rules={"my-custom-rule": {"enabled": True}})
     context = RepositoryContext(valid_plugin)
     violations = Linter(context, typo_config, no_custom_rules=True).run()
-    assert any(v.rule_id == "invalid-config" for v in violations)
+    assert any(v.rule_id == "unknown-rule" for v in violations)
 
 
 def _write_custom_rule(path, rule_id, since=None):

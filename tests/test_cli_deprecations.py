@@ -17,7 +17,7 @@ def _assert_one_stderr_warning(result, command: str) -> None:
 
 
 def test_deprecated_command_help_warns_once_per_invocation() -> None:
-    for command in ("add", "docs"):
+    for command in ("add",):
         for _ in range(2):
             result = run_cli([command, "--help"])
             assert result.returncode == 0
@@ -33,32 +33,8 @@ def test_add_still_scaffolds_with_one_deprecation_warning(tmp_path) -> None:
     _assert_one_stderr_warning(result, "add")
 
 
-def test_docs_still_generates_with_one_deprecation_warning(tmp_path) -> None:
-    skill_dir = tmp_path / "release-helper"
-    skill_dir.mkdir()
-    (skill_dir / "SKILL.md").write_text(
-        "---\n"
-        "name: release-helper\n"
-        "description: Prepare and verify a project release\n"
-        "---\n\n"
-        "# Release Helper\n\n"
-        "Review the release checklist and report any blockers.\n",
-        encoding="utf-8",
-    )
-    output = tmp_path / "release-helper.md"
-
-    result = run_cli(["docs", skill_dir, "--format", "markdown", "--output", output])
-
-    assert result.returncode == 0
-    assert output.is_file()
-    _assert_one_stderr_warning(result, "docs")
-
-
 def test_deprecated_command_parse_errors_still_warn_once() -> None:
-    for command, args in (
-        ("add", ["add", "unknown-component"]),
-        ("docs", ["docs", "--format", "unknown-format"]),
-    ):
+    for command, args in (("add", ["add", "unknown-component"]),):
         result = run_cli(args)
 
         assert result.returncode == 2

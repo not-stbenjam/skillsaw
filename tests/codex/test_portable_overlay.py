@@ -114,19 +114,6 @@ def test_forced_agent_plugin_does_not_claim_legacy_host_sources(tmp_path, locati
     assert all(n.plugin_dir != package for n in context.lint_tree.find(AgentPluginConfigNode))
 
 
-def test_installed_portable_package_is_not_documented(tmp_path):
-    from skillsaw.docs.extractor import extract_docs
-
-    source = copy_fixture("codex/portable-overlay", tmp_path)
-    repo = tmp_path / "installed-repo"
-    package = repo / ".codex/plugins/release"
-    package.parent.mkdir(parents=True)
-    source.rename(package)
-    docs = extract_docs(RepositoryContext(repo))
-    assert docs.plugins == []
-    assert docs.skills == []
-
-
 @pytest.mark.parametrize(
     "override", [None, {RepositoryType.CODEX_PLUGIN}, {RepositoryType.MARKETPLACE}]
 )
@@ -323,23 +310,3 @@ def test_malformed_fallback_overlay_is_reported(tmp_path):
     findings = CodexPluginJsonValidRule({}).check(RepositoryContext(repo))
     assert len(findings) == 1
     assert "Invalid JSON" in findings[0].message
-
-
-@pytest.mark.parametrize("fallback", [False, True])
-def test_docs_use_portable_identity_and_effective_overlay(tmp_path, fallback):
-    from skillsaw.docs.extractor import extract_docs
-
-    repo = copy_fixture("codex/portable-overlay", tmp_path)
-    if fallback:
-        _set_extension(repo, None)
-    docs = extract_docs(RepositoryContext(repo))
-    assert len(docs.plugins) == 1
-    plugin = docs.plugins[0]
-    assert plugin.name == "portable-release"
-    assert plugin.version == "1.0.0"
-    assert plugin.description.startswith("Review release evidence")
-    assert [skill.name for skill in plugin.skills] == ["release-summary"]
-    assert [server.name for server in plugin.mcp_servers] == ["release-api"]
-    assert [hook.event_type for hook in plugin.hooks] == ["SessionStart"]
-    if not fallback:
-        assert plugin.display_name == "Portable Release"

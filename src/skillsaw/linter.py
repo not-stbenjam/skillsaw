@@ -61,10 +61,9 @@ if TYPE_CHECKING:
 
 
 # Violations that display like warnings but never flip the exit code.
-# Deprecation notices must stay advisory: every pre-0.18 `skillsaw init`
-# config names now-deprecated rules, so a fatal warning would break every
-# strict-mode CI run on upgrade.
-ADVISORY_RULE_IDS = frozenset({"deprecated-rule"})
+# Unknown and deprecated rules must stay advisory so old config entries
+# cannot break strict-mode CI when rules are retired or removed on upgrade.
+ADVISORY_RULE_IDS = frozenset({"deprecated-rule", "unknown-rule"})
 
 # Violations exempt from path-based suppression (global and per-rule
 # excludes). Config-validation warnings point at the config file itself;
@@ -76,7 +75,7 @@ ADVISORY_RULE_IDS = frozenset({"deprecated-rule"})
 # visible edit at the exact line the warning names. Region `disable`
 # forms and bare all-rules directives are the same blanket this set
 # exists to close.
-_UNEXCLUDABLE_RULE_IDS = frozenset({"invalid-config"})
+_UNEXCLUDABLE_RULE_IDS = frozenset({"invalid-config", "unknown-rule"})
 
 
 # Config keys every rule accepts regardless of its config_schema. `enabled`
@@ -785,7 +784,7 @@ class Linter:
                     continue
                 warnings.append(
                     RuleViolation(
-                        rule_id="invalid-config",
+                        rule_id="unknown-rule",
                         severity=Severity.WARNING,
                         message=f"Unknown rule '{rule_id}' in config — rule does not exist and will be ignored",
                         file_path=self.config.config_path,
@@ -1012,6 +1011,13 @@ class Linter:
         promised removal warnings.
         """
         return self._deprecation_violations()
+
+    def advisory_notices(self) -> List[RuleViolation]:
+        """Config notices for commands whose output otherwise only lists fixes."""
+        return self._filter_violations(
+            [v for v in self._validate_config() if v.rule_id in ADVISORY_RULE_IDS],
+            record_baseline=False,
+        )
 
     def _is_excluded(self, violation: RuleViolation) -> bool:
         """Check if a violation's file path matches any exclude pattern."""

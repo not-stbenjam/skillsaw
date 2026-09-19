@@ -373,51 +373,6 @@ For more information, visit: https://github.com/stbenjam/skillsaw
         help="Use a pager (e.g. less) to display documentation (default: auto when tty present)",
     )
 
-    # --- docs ---
-    docs_parser = subparsers.add_parser(
-        "docs",
-        help="Deprecated: generate repository documentation",
-        description="Deprecated: Generate documentation for a Claude or Codex plugin, "
-        "marketplace, or .claude repository. This command will be removed in an "
-        "upcoming release.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    docs_parser.add_argument(
-        "path",
-        nargs="?",
-        type=Path,
-        default=Path.cwd(),
-        help="Path to repository (default: current directory)",
-    )
-    docs_parser.add_argument(
-        "-c",
-        "--config",
-        type=Path,
-        help="Path to .skillsaw.yaml config file (default: auto-discover)",
-    )
-    docs_parser.add_argument(
-        "--format",
-        dest="fmt",
-        default="html",
-        choices=["html", "markdown"],
-        help="Output format (default: html)",
-    )
-    docs_parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        default=None,
-        help="Output file or directory (default: skillsaw-docs/). "
-        "If it ends with .html/.md, writes a single file directly.",
-    )
-    docs_parser.add_argument("--title", default=None, help="Custom title for the documentation")
-    docs_parser.add_argument(
-        "--theme",
-        default=None,
-        help="Color theme for HTML output. Presets: indigo (default), forest-green, "
-        "ocean-blue, sunset-orange, royal-purple, crimson-red.",
-    )
-
     # --- port ---
     port_parser = subparsers.add_parser(
         "port",

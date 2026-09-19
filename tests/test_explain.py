@@ -72,10 +72,10 @@ def test_explain_known_rule(temp_dir):
 
 
 def test_explain_shows_config_schema(temp_dir):
-    result = run_explain("content-critical-position", str(temp_dir))
+    result = run_explain("content-section-length", str(temp_dir))
     assert result.returncode == 0
-    assert "min-lines" in result.stdout
-    assert "Minimum file length" in result.stdout
+    assert "max-tokens" in result.stdout
+    assert "Maximum estimated tokens" in result.stdout
 
 
 def test_explain_resolves_the_legacy_hooks_rule_name(temp_dir):

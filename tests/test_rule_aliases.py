@@ -355,73 +355,72 @@ def test_custom_rule_cannot_claim_advisory_id(plugin_repo):
 # ── Deprecation ─────────────────────────────────────────────────
 
 
-def test_deprecated_rules_are_marked():
-    for rule_id in (
-        "content-critical-position",
-        "content-actionability-score",
-        "skill-frontmatter",
-    ):
-        assert BUILTIN_RULE_REGISTRY[rule_id].deprecated == "0.18.0", rule_id
-    assert BUILTIN_RULE_REGISTRY["skill-frontmatter"].replaced_by == "agentskill-valid"
-
-
-def test_deprecated_rules_left_out_of_generated_defaults():
-    defaults = LinterConfig.default().rules
-    for rule_id, cls in BUILTIN_RULE_REGISTRY.items():
-        if cls.deprecated is not None:
-            assert rule_id not in defaults, rule_id
-
-
-def test_deprecated_rule_does_not_run_by_default(plugin_repo):
-    context = RepositoryContext(plugin_repo)
-    linter = Linter(context, no_plugins=True)
-    loaded = {r.rule_id for r in linter.rules}
-    assert "skill-frontmatter" not in loaded
-    assert "content-critical-position" not in loaded
-
-
-def test_deprecated_rule_runs_when_explicitly_enabled(plugin_repo):
+@pytest.fixture
+def deprecated_config(plugin_repo):
+    """Third-party rules retain deprecation support after builtin removal."""
+    source = Path(__file__).parent / "fixtures" / "custom-rules" / "deprecated.py"
+    shutil.copyfile(source, plugin_repo / "deprecated.py")
     config = LinterConfig.default()
-    config.rules["skill-frontmatter"] = {"enabled": True}
+    config.custom_rules = ["deprecated.py"]
+    return config
+
+
+def test_deprecated_builtins_removed():
+    removed = {"content-critical-position", "content-actionability-score", "skill-frontmatter"}
+    assert removed.isdisjoint(BUILTIN_RULE_REGISTRY)
+    assert removed.isdisjoint(LinterConfig.default().rules)
+    assert all(cls.deprecated is None for cls in BUILTIN_RULE_REGISTRY.values())
+
+
+def test_deprecated_rule_does_not_run_by_default(plugin_repo, deprecated_config):
+    context = RepositoryContext(plugin_repo)
+    linter = Linter(context, config=deprecated_config, no_plugins=True)
+    loaded = {r.rule_id for r in linter.rules}
+    assert "example-retired" not in loaded
+
+
+def test_deprecated_rule_runs_when_explicitly_enabled(plugin_repo, deprecated_config):
+    config = deprecated_config
+    config.rules["example-retired"] = {"enabled": True}
     context = RepositoryContext(plugin_repo)
     linter = Linter(context, config=config, no_plugins=True)
-    assert "skill-frontmatter" in {r.rule_id for r in linter.rules}
+    assert "example-retired" in {r.rule_id for r in linter.rules}
     results = linter.run()
     deprecation = [v for v in results if v.rule_id == "deprecated-rule"]
     assert len(deprecation) == 1
     assert deprecation[0].severity == Severity.WARNING
-    assert "skill-frontmatter" in deprecation[0].message
+    assert "example-retired" in deprecation[0].message
     assert "removed in a future release" in deprecation[0].message
     assert "agentskill-valid" in deprecation[0].message
 
 
-def test_deprecated_rule_config_mention_warns_but_does_not_run(plugin_repo):
-    config = LinterConfig.default()
-    config.rules["content-critical-position"] = {"severity": "warning"}
+def test_deprecated_rule_config_mention_warns_but_does_not_run(plugin_repo, deprecated_config):
+    config = deprecated_config
+    config.rules["example-retired"] = {"severity": "warning"}
     context = RepositoryContext(plugin_repo)
     linter = Linter(context, config=config, no_plugins=True)
-    assert "content-critical-position" not in {r.rule_id for r in linter.rules}
+    assert "example-retired" not in {r.rule_id for r in linter.rules}
     results = linter.run()
     deprecation = [v for v in results if v.rule_id == "deprecated-rule"]
     assert len(deprecation) == 1
     assert "no longer runs" in deprecation[0].message
 
 
-def test_deprecated_rule_runs_via_rule_flag(plugin_repo):
+def test_deprecated_rule_runs_via_rule_flag(plugin_repo, deprecated_config):
     context = RepositoryContext(plugin_repo)
-    linter = Linter(context, rule_ids={"content-critical-position"}, no_plugins=True)
-    assert {r.rule_id for r in linter.rules} == {"content-critical-position"}
+    linter = Linter(
+        context, config=deprecated_config, rule_ids={"example-retired"}, no_plugins=True
+    )
+    assert {r.rule_id for r in linter.rules} == {"example-retired"}
     results = linter.run()
     deprecation = [v for v in results if v.rule_id == "deprecated-rule"]
     assert len(deprecation) == 1
 
 
-def test_enabled_reason_mentions_deprecation(plugin_repo):
-    config = LinterConfig.default()
+def test_enabled_reason_mentions_deprecation(plugin_repo, deprecated_config):
+    config = deprecated_config
     context = RepositoryContext(plugin_repo)
-    enabled, reason = config.rule_enabled_reason(
-        "content-critical-position", context, deprecated="0.18.0"
-    )
+    enabled, reason = config.rule_enabled_reason("example-retired", context, deprecated="0.18.0")
     assert enabled is False
     assert "deprecated since 0.18.0" in reason
 

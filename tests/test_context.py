@@ -1487,7 +1487,7 @@ def test_coderabbit_repo_no_command_violations(temp_dir):
         in {
             "claude-command-naming",
             "claude-command-frontmatter",
-            "skill-frontmatter",
+            "agentskill-valid",
             "claude-agent-frontmatter",
             "claude-hooks-valid",
             "mcp-valid-json",

@@ -4,8 +4,6 @@ import json
 
 import pytest
 
-from skillsaw.docs.extractor import extract_docs
-from skillsaw.docs.html_renderer import render_html
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.formatters.json_fmt import format_json
 from skillsaw.formatters.sarif import format_sarif
@@ -692,4 +690,3 @@ class TestUnhashableSourceDiscriminator:
             {"name": "cat", "plugins": [{"name": "x", "source": {"source": bad}}]},
         )
         run_rule(CodexMarketplaceRegistrationRule, repo)  # must not raise
-        assert render_html(extract_docs(RepositoryContext(repo)))

@@ -1,13 +1,11 @@
 from .weak_language import ContentWeakLanguageRule
 from .tautological import ContentTautologicalRule
-from .critical_position import ContentCriticalPositionRule
 from .redundant_with_tooling import ContentRedundantWithToolingRule
 from .instruction_budget import ContentInstructionBudgetRule
 from .negative_only import ContentNegativeOnlyRule
 from .section_length import ContentSectionLengthRule
 from .contradiction import ContentContradictionRule
 from .hook_candidate import ContentHookCandidateRule
-from .actionability_score import ContentActionabilityScoreRule
 from .cognitive_chunks import ContentCognitiveChunksRule
 from .embedded_secrets import ContentEmbeddedSecretsRule
 from .banned_references import ContentBannedReferencesRule
@@ -27,14 +25,12 @@ from .mcp_tool_name import ContentMcpToolNameRule
 __all__ = [
     "ContentWeakLanguageRule",
     "ContentTautologicalRule",
-    "ContentCriticalPositionRule",
     "ContentRedundantWithToolingRule",
     "ContentInstructionBudgetRule",
     "ContentNegativeOnlyRule",
     "ContentSectionLengthRule",
     "ContentContradictionRule",
     "ContentHookCandidateRule",
-    "ContentActionabilityScoreRule",
     "ContentCognitiveChunksRule",
     "ContentEmbeddedSecretsRule",
     "ContentBannedReferencesRule",

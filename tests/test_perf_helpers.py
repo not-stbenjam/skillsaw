@@ -461,9 +461,6 @@ class TestAdversarialInputStaysLinear:
         """One 50 KB token of `a/b/` with no extension took 11 s in
         content-unlinked-internal-reference; a token that long is not a
         reference anyone wrote."""
-        from skillsaw.rules.builtin.content.actionability_score import (
-            ContentActionabilityScoreRule,
-        )
         from skillsaw.rules.builtin.content.unlinked_internal_reference import (
             ContentUnlinkedInternalReferenceRule,
         )
@@ -477,7 +474,6 @@ class TestAdversarialInputStaysLinear:
 
         started = time.perf_counter()
         unlinked = ContentUnlinkedInternalReferenceRule().check(context)
-        ContentActionabilityScoreRule().check(context)
         assert time.perf_counter() - started < 2.0
         # The real reference on the short line is still found.
         assert [v.line for v in unlinked] == [3]

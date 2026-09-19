@@ -113,14 +113,6 @@ class TautologicalMatch:
 
 
 @dataclass
-class PositionIssue:
-    line: int
-    keyword: str
-    position_score: float
-    suggested_position: str
-
-
-@dataclass
 class RedundancyMatch:
     line: int
     instruction: str
@@ -459,37 +451,6 @@ class TautologicalDetector:
                 m = pattern.search(line)
                 if m:
                     results.append(TautologicalMatch(line_num, m.group(), reason))
-        return results
-
-
-class CriticalPositionAnalyzer:
-    def __init__(self, min_lines: int = 50):
-        self._min_lines = min_lines
-
-    def analyze(self, cf: ContentBlock) -> List[PositionIssue]:
-        content = _get_body_from_cf(cf)
-        if not content:
-            return []
-        lines = content.splitlines()
-        total = len(lines)
-        if total < self._min_lines:
-            return []
-        results: List[PositionIssue] = []
-        for line_num, line in enumerate(lines, 1):
-            m = _CRITICAL_KEYWORDS.search(line)
-            if not m:
-                continue
-            position = line_num / total
-            if 0.2 < position < 0.8:
-                score = 0.5
-                results.append(
-                    PositionIssue(
-                        line_num,
-                        m.group(),
-                        score,
-                        "Move to the first 20% or last 20% of the file for better attention",
-                    )
-                )
         return results
 
 

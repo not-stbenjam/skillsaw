@@ -90,18 +90,6 @@ Show documentation and effective configuration for a rule
 | `--color`, `--no-color` | Force ANSI colors and terminal hyperlinks on (--color) or off (--no-color). Default: color only when stdout is a terminal; FORCE_COLOR and NO_COLOR are also honored. |  |
 | `--pager`, `--no-pager` | Use a pager (e.g. less) to display documentation (default: auto when tty present) |  |
 
-## `skillsaw docs`
-
-Deprecated: generate repository documentation
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-c`, `--config` | Path to .skillsaw.yaml config file (default: auto-discover) |  |
-| `--format` | Output format (default: html) (choices: html, markdown) | `html` |
-| `-o`, `--output` | Output file or directory (default: skillsaw-docs/). If it ends with .html/.md, writes a single file directly. |  |
-| `--title` | Custom title for the documentation |  |
-| `--theme` | Color theme for HTML output. Presets: indigo (default), forest-green, ocean-blue, sunset-orange, royal-purple, crimson-red. |  |
-
 ## `skillsaw port`
 
 Port Claude Code and Codex plugins to Agent Plugins v1 packages

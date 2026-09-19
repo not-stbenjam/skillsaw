@@ -431,12 +431,14 @@ def test_rule_id_collision_with_legacy_alias_is_skipped(fake_plugin, repo):
     assert "claude-plugin-readme" in warnings[0].message
 
 
-def test_rule_id_collision_with_advisory_id_is_skipped(fake_plugin, repo):
+@pytest.mark.parametrize("advisory_id", ["deprecated-rule", "unknown-rule"])
+def test_rule_id_collision_with_advisory_id_is_skipped(fake_plugin, repo, advisory_id, monkeypatch):
     """A plugin rule claiming an advisory ID is skipped — its violations
     would otherwise never affect the exit code."""
+    monkeypatch.setattr(ShadowsAdvisoryRule, "rule_id", property(lambda self: advisory_id))
     fake_plugin("fake_advisory_shadow", module_attrs={"SKILLSAW_RULES": [ShadowsAdvisoryRule]})
     linter, violations = _lint(repo)
-    assert "deprecated-rule" not in {r.rule_id for r in linter.rules}
+    assert advisory_id not in {r.rule_id for r in linter.rules}
     warnings = [v for v in violations if v.rule_id == "plugin-load-error"]
     assert len(warnings) == 1
     assert warnings[0].severity == Severity.WARNING

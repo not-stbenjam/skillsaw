@@ -885,7 +885,7 @@ class TestAgentskills:
         assert r["rc"] == 1
 
         ids = rule_ids(r)
-        assert "agentskill-valid" in ids or "skill-frontmatter" in ids
+        assert "agentskill-valid" in ids
 
         all_violations = violations(r)
         assert any("name" in v["message"].lower() for v in all_violations)
@@ -5325,11 +5325,7 @@ class TestSuppression:
         repo = copy_fixture("suppression/all-rules", tmp_path)
         r = run_lint(repo)
         assert r["out"] is not None
-        content_violations = [
-            v
-            for v in violations(r)
-            if v["rule_id"].startswith("content-") and v["rule_id"] != "content-actionability-score"
-        ]
+        content_violations = [v for v in violations(r) if v["rule_id"].startswith("content-")]
         assert len(content_violations) == 0
 
     def test_next_line_suppression(self, tmp_path):
@@ -5450,62 +5446,37 @@ class TestConfigFeatures:
         # And it is not reported as an unknown rule.
         assert "invalid-config" not in rule_ids(r)
 
-    def test_deprecated_rules_config_behavior(self, tmp_path):
-        """Explicitly enabled deprecated rules run with a removal warning;
-        mention-only entries warn that the rule no longer runs."""
-        repo = copy_fixture("config/deprecated-rules", tmp_path)
-        r = run_lint(repo)
-        assert r["out"] is not None
-        # enabled: true keeps the deprecated rule running.
-        assert "content-critical-position" in rule_ids(r)
-        # skill-frontmatter is only mentioned (severity override), so it
-        # stays retired.
-        assert "skill-frontmatter" not in r["out"]["stats"]["rules_run"]
-        deprecation = [v for v in violations(r) if v["rule_id"] == "deprecated-rule"]
-        messages = " | ".join(v["message"] for v in deprecation)
-        assert "content-critical-position" in messages
-        assert "skill-frontmatter" in messages
-        assert all(v["severity"] == "warning" for v in deprecation)
+    @pytest.mark.parametrize("flags", [("--strict",), ("--fail-on", "info")])
+    def test_unknown_rules_are_advisory(self, tmp_path, flags):
+        """Removed and misspelled rule IDs cannot break CI on upgrade."""
+        repo = copy_fixture("config/unknown-rules", tmp_path)
+        r = run_lint(repo, *flags)
+        notices = by_rule(r).get("unknown-rule", [])
+        assert len(notices) == 3
+        assert all(v["severity"] == "warning" for v in notices)
+        assert {v["line"] for v in notices} == {5, 7, 9}
+        assert r["rc"] == 0, r
+        assert summary(r)["grade"]["letter"] == "A+"
 
-    def test_fix_command_surfaces_deprecation_notices(self, tmp_path):
-        """skillsaw fix prints the deprecation notices its lint pass found —
-        its output otherwise only lists fixes, not violations."""
-        repo = copy_fixture("config/deprecated-rules", tmp_path)
-        result = subprocess.run(
-            [sys.executable, "-m", "skillsaw", "fix", str(repo)],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+    def test_fix_surfaces_unknown_rules(self, tmp_path):
+        repo = copy_fixture("config/unknown-rules", tmp_path)
+        result = run_cli(["fix", str(repo)])
         assert result.returncode == 0, result.stderr
-        assert "deprecated since 0.18.0" in result.stdout
-        assert "content-critical-position" in result.stdout
-        assert "skill-frontmatter" in result.stdout
+        for rule in (
+            "skill-frontmatter",
+            "content-critical-position",
+            "misspelled-or-removed-rule",
+        ):
+            assert f"Unknown rule '{rule}'" in result.stdout
 
-    def test_deprecation_notices_are_advisory_under_strict(self, tmp_path):
-        """Deprecation warnings alone must not fail a strict run — every
-        pre-0.18 --init config names now-deprecated rules."""
-        repo = copy_fixture("config/deprecated-rules", tmp_path)
-        config_path = repo / ".skillsaw.yaml"
-        # Keep only the inert mention so the deprecated rule itself cannot
-        # produce content violations, then tighten to strict.
-        config_path.write_text(
-            'version: "99.0.0"\n'
-            "strict: true\n"
-            "rules:\n"
-            "  skill-frontmatter:\n"
-            "    severity: info\n"
-        )
+    def test_unknown_rules_do_not_hide_invalid_options(self, tmp_path):
+        repo = copy_fixture("config/unknown-rules", tmp_path)
+        with (repo / ".skillsaw.yaml").open("a") as config:
+            config.write("  agentskill-description:\n    severty: error\n")
         r = run_lint(repo)
-        deprecation = [v for v in violations(r) if v["rule_id"] == "deprecated-rule"]
-        assert deprecation, "expected a deprecation notice"
-        others = [
-            v
-            for v in violations(r)
-            if v["rule_id"] != "deprecated-rule" and v["severity"] in ("error", "warning")
-        ]
-        assert others == [], others
-        assert r["rc"] == 0
+        assert len(by_rule(r).get("unknown-rule", [])) == 3
+        assert len(by_rule(r).get("invalid-config", [])) == 1
+        assert r["rc"] == 1
 
     def test_strict_mode_exits_nonzero_on_warnings(self, tmp_path):
         repo = copy_fixture("config/strict-mode", tmp_path)

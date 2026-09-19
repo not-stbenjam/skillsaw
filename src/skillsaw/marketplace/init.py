@@ -113,7 +113,6 @@ def init_marketplace(
     print("\nNext steps:")
     print("  skillsaw add plugin my-plugin    # Add a plugin")
     print("  skillsaw -v --strict             # Run linter")
-    print("  skillsaw docs                    # Generate docs")
     if github_repo:
         print(f"  git remote add origin git@github.com:{github_repo}.git")
 

@@ -141,7 +141,7 @@ if _COLLIDING_LEGACY_NAMES:
 
 
 def __getattr__(name):
-    # Keep ``from skillsaw.rules.builtin import SkillFrontmatterRule`` working
+    # Keep ``from skillsaw.rules.builtin import ContentWeakLanguageRule`` working
     # without a hand-maintained re-export block (PEP 562).
     for cls in BUILTIN_RULES:
         if cls.__name__ == name:

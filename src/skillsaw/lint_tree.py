@@ -485,8 +485,7 @@ def _claim_attached_hooks(
     Answers "is this file already in the tree?" for the declared-files loop
     and, when it is, records the plugin that declared it. Nothing but the
     manifest names such a file, so the declaration is the only evidence of
-    ownership there is — and without it ``skillsaw docs`` lists the plugin
-    without its hooks. An attach that already recorded an owner (the Claude
+    ownership there is. An attach that already recorded an owner (the Claude
     branch, the Codex cluster's conventional file) keeps it.
 
     Only the tree root is scanned, which is where every ownerless attach
@@ -1645,7 +1644,10 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 container, plugin_path / "settings.json", SettingsBlock, owner=resolved_plugin
             )
             state.add_block(
-                container, plugin_path / "settings.local.json", SettingsBlock, owner=resolved_plugin
+                container,
+                plugin_path / "settings.local.json",
+                SettingsBlock,
+                owner=resolved_plugin,
             )
 
         # Codex manifest cluster, for any directory Codex claims (dual
@@ -1702,7 +1704,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             # a manifest points at. That block is claimed rather than
             # re-attached: one block per file, or the security rules report
             # every command in it twice, but the declaration is still what
-            # tells ``skillsaw docs`` whose hooks those are.
+            # records which plugin owns those hooks.
             for declared_hooks in codex_declared_hook_files(plugin_path):
                 if _claim_attached_hooks(state, root, declared_hooks, resolved_plugin):
                     continue

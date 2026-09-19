@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from skillsaw.config import LinterConfig
-from skillsaw.docs.extractor import extract_docs
 from skillsaw.context import RepositoryContext
 from skillsaw.blocks import (
     CodexHooksBlock,
@@ -420,8 +419,7 @@ def _hooks_dangerous_findings(repo: Path):
 class TestRootPluginDeclaredHooksAreOwned:
     """A repo-root plugin's declared hooks file is attached by the project
     layer first, with no owner, and the manifest attachment then leaves the
-    one block alone. Without the re-tag nothing records the ownership, and
-    ``skillsaw docs`` lists the plugin without its hooks."""
+    one block alone. Re-tagging records the plugin ownership."""
 
     def _repo(self, tmp_path):
         repo = _codex_plugin_repo(
@@ -443,14 +441,6 @@ class TestRootPluginDeclaredHooksAreOwned:
 
         assert [block.path for block in blocks] == [repo / ".codex" / "hooks.json"]
         assert blocks[0].plugin_owner == repo.resolve()
-
-    def test_the_plugin_doc_lists_the_declared_hooks(self, tmp_path):
-        repo = self._repo(tmp_path)
-
-        docs = extract_docs(RepositoryContext(repo))
-
-        assert [plugin.name for plugin in docs.plugins] == ["root"]
-        assert [hook.event_type for hook in docs.plugins[0].hooks] == ["SessionStart"]
 
     def test_hooks_dangerous_reports_the_command_once(self, tmp_path):
         repo = self._repo(tmp_path)
@@ -480,7 +470,7 @@ class TestNestedPluginDeclaredHooksAreOwned:
     The project layer (and the other editor-tool loops) attach these files
     at the tree root before the plugin pass runs, untagged. The declared
     files loop leaves the one block alone — so it has to record the owner
-    there, or ``skillsaw docs`` lists the plugin without its hooks."""
+    there to preserve the ownership information."""
 
     def _repo(self, tmp_path, declared):
         repo = _codex_marketplace_repo(tmp_path, {"name": "cat", "plugins": []})
@@ -511,16 +501,6 @@ class TestNestedPluginDeclaredHooksAreOwned:
         # does not re-file the block under Codex's class.
         assert type(blocks[0]) is block_cls
         assert blocks[0].plugin_owner == plugin.resolve()
-
-    @pytest.mark.parametrize("declared", list(ROOT_ATTACHED_HOOKS_FILES))
-    def test_the_plugin_doc_lists_the_declared_hooks(self, tmp_path, declared):
-        repo, _, _ = self._repo(tmp_path, declared)
-        _, _, event_type = ROOT_ATTACHED_HOOKS_FILES[declared]
-
-        docs = extract_docs(RepositoryContext(repo))
-
-        assert [plugin.name for plugin in docs.plugins] == ["policy"]
-        assert [hook.event_type for hook in docs.plugins[0].hooks] == [event_type]
 
     @pytest.mark.parametrize("declared", list(ROOT_ATTACHED_HOOKS_FILES))
     def test_hooks_dangerous_reports_the_command_once(self, tmp_path, declared):
@@ -704,29 +684,18 @@ class TestNonStringHookMatcher:
         )
 
     @pytest.mark.parametrize("bad", [[], {}, 42])
-    def test_a_non_string_matcher_is_reported_and_coerced(self, tmp_path, bad):
+    def test_a_non_string_matcher_is_reported(self, tmp_path, bad):
         from skillsaw.rules.builtin.codex import CodexHooksValidRule
 
         context = RepositoryContext(self._repo(tmp_path, bad))
         found = messages(CodexHooksValidRule({}).check(context))
         assert any("matcher' must be a string" in m for m in found), found
 
-        # The docs model must carry a string, or the generated page's
-        # search calls .toLowerCase() on a list and stops rendering.
-        for plugin in extract_docs(context).plugins:
-            for hook in plugin.hooks:
-                for entry in hook.entries:
-                    assert isinstance(entry.matcher, str)
-
     def test_a_real_matcher_is_untouched(self, tmp_path):
         from skillsaw.rules.builtin.codex import CodexHooksValidRule
 
         context = RepositoryContext(self._repo(tmp_path, "Write|Edit"))
         assert CodexHooksValidRule({}).check(context) == []
-        matchers = [
-            e.matcher for p in extract_docs(context).plugins for h in p.hooks for e in h.entries
-        ]
-        assert "Write|Edit" in matchers
 
 
 class TestHookDiagnosticRedaction:

@@ -20,7 +20,6 @@ from skillsaw.rule import (
 from skillsaw.context import RepositoryContext
 from skillsaw.config import LinterConfig
 from skillsaw.linter import Linter
-from skillsaw.rules.builtin.skills import SkillFrontmatterRule
 from skillsaw.rules.builtin.agents import AgentFrontmatterRule
 from skillsaw.rules.builtin.command_format import CommandNamingRule, CommandFrontmatterRule
 from skillsaw.rules.builtin.utils import invalidate_read_caches
@@ -565,91 +564,6 @@ class TestEndToEndFix:
 
         violations_after = linter.run()
         assert len(violations_after) == 0
-
-
-class TestSkillFixBothFieldsMissing:
-    """Regression: when both name and description are missing from SKILL.md
-    frontmatter, the fix must produce a single AutofixResult that adds both
-    fields, not two conflicting results that overwrite each other."""
-
-    def test_skill_fix_adds_both_fields_at_once(self, temp_dir):
-        # Create a plugin with a skill whose frontmatter has neither name nor description
-        plugin_dir = temp_dir / "test-plugin"
-        plugin_dir.mkdir()
-
-        claude_dir = plugin_dir / ".claude-plugin"
-        claude_dir.mkdir()
-        (claude_dir / "plugin.json").write_text(json.dumps({"name": "test-plugin"}))
-
-        skills_dir = plugin_dir / "skills"
-        skills_dir.mkdir()
-
-        skill_dir = skills_dir / "my-skill"
-        skill_dir.mkdir()
-
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("---\nsome-field: value\n---\n\n# My Skill\n")
-
-        context = RepositoryContext(plugin_dir)
-        rule = SkillFrontmatterRule()
-
-        violations = rule.check(context)
-        assert len(violations) == 2
-        messages = {v.message for v in violations}
-        assert "Missing 'name' in SKILL.md frontmatter" in messages
-        assert "Missing 'description' in SKILL.md frontmatter" in messages
-
-        fixes = rule.fix(context, violations)
-        # Must produce exactly one fix, not two conflicting ones
-        assert len(fixes) == 1
-
-        fix = fixes[0]
-        assert "name: my-skill" in fix.fixed_content
-        assert "description: " in fix.fixed_content
-        assert len(fix.violations_fixed) == 2
-
-    def test_skill_fix_single_field_still_works(self, temp_dir):
-        """Ensure fixing just one missing field still works correctly."""
-        plugin_dir = temp_dir / "test-plugin"
-        plugin_dir.mkdir()
-
-        claude_dir = plugin_dir / ".claude-plugin"
-        claude_dir.mkdir()
-        (claude_dir / "plugin.json").write_text(json.dumps({"name": "test-plugin"}))
-
-        skills_dir = plugin_dir / "skills"
-        skills_dir.mkdir()
-
-        skill_dir = skills_dir / "my-skill"
-        skill_dir.mkdir()
-
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("---\nname: my-skill\n---\n\n# My Skill\n")
-
-        context = RepositoryContext(plugin_dir)
-        rule = SkillFrontmatterRule()
-
-        violations = rule.check(context)
-        assert len(violations) == 1
-        assert "description" in violations[0].message
-
-        fixes = rule.fix(context, violations)
-        assert len(fixes) == 1
-        assert "description: " in fixes[0].fixed_content
-        assert "name: my-skill" in fixes[0].fixed_content
-
-    @pytest.mark.parametrize(
-        "fixture_name",
-        ["skill-top-level-nested", "skill-top-level-displayname", "skill-top-level-note"],
-    )
-    def test_skill_fix_uses_top_level_keys(self, tmp_path, fixture_name):
-        """Nested keys must not satisfy required top-level skill fields."""
-        plugin_dir = copy_fixture(f"autofix/{fixture_name}", tmp_path)
-        context = RepositoryContext(plugin_dir)
-        rule = SkillFrontmatterRule()
-        fixes = rule.fix(context, rule.check(context))
-        assert len(fixes) == 1
-        assert "\nname: my-skill\n" in fixes[0].fixed_content
 
 
 class TestAgentFixBothFieldsMissing:
@@ -1229,39 +1143,6 @@ class TestCommandFrontmatterFix:
         assert violations2 == []
         assert rule.fix(context2, violations2) == []
         assert target.read_text() == first_pass
-
-
-class TestSkillFixMissingFrontmatterBlock:
-    """SkillFrontmatterRule.fix(): a SKILL.md without any frontmatter gets a
-    full block prepended, deriving the name from the skill directory and
-    preserving the body byte-for-byte."""
-
-    def test_adds_block_and_preserves_body(self, temp_dir):
-        plugin_dir = temp_dir / "test-plugin"
-        plugin_dir.mkdir()
-        claude_dir = plugin_dir / ".claude-plugin"
-        claude_dir.mkdir()
-        (claude_dir / "plugin.json").write_text(json.dumps({"name": "test-plugin"}))
-
-        skill_dir = plugin_dir / "skills" / "my-skill"
-        skill_dir.mkdir(parents=True)
-        body = "# My Skill\n\nDo the thing.\n"
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text(body)
-
-        context = RepositoryContext(plugin_dir)
-        rule = SkillFrontmatterRule()
-
-        violations = rule.check(context)
-        assert [v.message for v in violations] == ["Missing frontmatter (recommended for SKILL.md)"]
-
-        fixes = rule.fix(context, violations)
-        assert len(fixes) == 1
-        assert fixes[0].fixed_content == f"---\nname: my-skill\ndescription: \n---\n{body}"
-
-        skill_md.write_text(fixes[0].fixed_content)
-        invalidate_read_caches()
-        assert rule.check(RepositoryContext(plugin_dir)) == []
 
 
 class TestAgentFixMissingFrontmatterBlock:

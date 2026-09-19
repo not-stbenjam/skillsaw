@@ -209,12 +209,11 @@ def test_badge_writes_shields_json(tmp_path):
     assert set(payload) <= _SHIELDS_ENDPOINT_KEYS
 
 
-def test_badge_grade_ignores_advisory_deprecation_notices(tmp_path):
-    """Deprecation notices describe the config, not the content — they must
+def test_badge_grade_ignores_unknown_rule_notices(tmp_path):
+    """Unknown rule notices describe the config, not the content — they must
     not ding the badge grade (mirrors the lint command's behavior)."""
     repo = copy_fixture("config/deprecated-rules", tmp_path)
-    # Keep only the inert mention so the deprecated rule itself cannot
-    # produce content violations; the advisory notice is all that remains.
+    # A removed rule produces only an advisory config notice.
     (repo / ".skillsaw.yaml").write_text(
         'version: "99.0.0"\nrules:\n  skill-frontmatter:\n    severity: info\n'
     )

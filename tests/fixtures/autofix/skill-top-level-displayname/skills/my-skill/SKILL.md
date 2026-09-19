@@ -1,4 +1,0 @@
----
-displayname: example
-description: useful
----

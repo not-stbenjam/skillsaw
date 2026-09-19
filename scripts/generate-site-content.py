@@ -420,21 +420,7 @@ RULE_GROUPS = [
         "and paths that remain portable across machines. Lockfiles are discovered "
         "recursively for monorepos and the rule auto-enables when one is present.",
     ),
-    (
-        "Deprecated",
-        "deprecated",
-        [
-            "content-critical-position",
-            "content-actionability-score",
-            "skill-frontmatter",
-        ],
-        "These rules are deprecated and will be removed in a future release. "
-        "They no longer run under `enabled: auto`; set `enabled: true` in "
-        "`.skillsaw.yaml` to keep running one during the transition. The "
-        "content rules encoded attention-era heuristics that newer models no "
-        "longer need; `skill-frontmatter` is replaced by "
-        "[`agentskill-valid`](agentskill-valid.md).",
-    ),
+
 ]
 
 CONTENT_RULE_IDS = [

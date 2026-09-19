@@ -979,10 +979,9 @@ class AntigravityHooksBlock(HooksBlock):
 
     @property
     def effective_events(self) -> Dict[str, List[HookEventConfig]]:
-        """Only the reading ``agy`` dispatches, for ``skillsaw docs``.
+        """Only the reading ``agy`` dispatches.
 
-        A published document says what the tool does, so it must not list a
-        command the host discards. The event decides: a grouped event runs
+        Consumers need the commands the host actually dispatches. A grouped event runs
         the nested ``hooks`` and ignores a stray top-level ``command``; a
         flat event runs the entry's own handler and ignores a ``hooks`` key.
         An event this release does not know — one a project declares
@@ -1014,7 +1013,7 @@ class AntigravityHooksBlock(HooksBlock):
                 # own spelling is normalized to the canonical name and two
                 # spellings of one event land in the same bucket.
                 canonical = antigravity.HOOK_EVENTS_BY_CASEFOLD.get(
-                    antigravity.hook_key_fold(event_type) if isinstance(event_type, str) else "",
+                    (antigravity.hook_key_fold(event_type) if isinstance(event_type, str) else ""),
                     event_type,
                 )
                 configs: List[HookEventConfig] = []

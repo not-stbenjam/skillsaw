@@ -8,7 +8,6 @@ import shutil
 from skillsaw.rules.builtin.content_analysis import (
     WeakLanguageDetector,
     TautologicalDetector,
-    CriticalPositionAnalyzer,
     RedundancyDetector,
     InstructionBudgetAnalyzer,
     gather_all_instruction_files,
@@ -285,78 +284,6 @@ class TestTautologicalDetector:
         detector = TautologicalDetector()
         results = detector.analyze(_cf(temp_dir / "CLAUDE.md"))
         assert len(results) >= 1
-
-
-class TestCriticalPositionAnalyzer:
-    def _make_file(self, temp_dir, num_lines, critical_line):
-        lines = [f"Line {i}" for i in range(1, num_lines + 1)]
-        lines[critical_line - 1] = "IMPORTANT: Never skip tests."
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-
-    def test_critical_in_middle_flagged(self, temp_dir):
-        self._make_file(temp_dir, 50, 25)
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert len(results) >= 1
-        assert results[0].position_score == 0.5
-
-    def test_critical_at_top_not_flagged(self, temp_dir):
-        self._make_file(temp_dir, 50, 3)
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert len(results) == 0
-
-    def test_critical_at_bottom_not_flagged(self, temp_dir):
-        self._make_file(temp_dir, 50, 48)
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert len(results) == 0
-
-    def test_short_file_skipped(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("IMPORTANT: do this.\nNEVER do that.\n")
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert len(results) == 0
-
-    def test_multiple_keywords(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "MUST follow this rule."
-        lines[26] = "NEVER skip that step."
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert len(results) >= 2
-
-    def test_reports_keyword(self, temp_dir):
-        self._make_file(temp_dir, 50, 25)
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "CLAUDE.md"))
-        assert results[0].keyword == "IMPORTANT"
-
-    def test_lowercase_must_not_flagged(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "This function must return a value."
-        (temp_dir / "crit_lower.md").write_text("\n".join(lines) + "\n")
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "crit_lower.md"))
-        assert len(results) == 0
-
-    def test_lowercase_required_not_flagged(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "The required fields are: name, email."
-        (temp_dir / "crit_req.md").write_text("\n".join(lines) + "\n")
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "crit_req.md"))
-        assert len(results) == 0
-
-    def test_allcaps_must_flagged(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "You MUST always run tests."
-        (temp_dir / "crit_caps.md").write_text("\n".join(lines) + "\n")
-        analyzer = CriticalPositionAnalyzer()
-        results = analyzer.analyze(_cf(temp_dir / "crit_caps.md"))
-        assert len(results) >= 1
-        assert results[0].keyword == "MUST"
 
 
 class TestRedundancyDetector:

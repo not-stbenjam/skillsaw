@@ -102,8 +102,7 @@ class CodexMarketplaceJsonValidRule(Rule):
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations: List[RuleViolation] = []
         # Shared across every catalog, not rebuilt per file: Codex aggregates
-        # siblings into one namespace and ``skillsaw docs`` writes one page
-        # per name, so two catalogs claiming a name can silently lose a page.
+        # siblings into one namespace, so names must be unique across catalogs.
         # Maps a name to the (file, index, source) that claimed it first.
         seen_names: Dict[str, Tuple[Path, int, str]] = {}
 

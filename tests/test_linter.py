@@ -101,7 +101,7 @@ def test_linter_warns_on_unknown_rule_id(valid_plugin):
     violations = linter.run()
 
     unknown_warnings = [
-        v for v in violations if v.rule_id == "invalid-config" and "nonexistent-rule" in v.message
+        v for v in violations if v.rule_id == "unknown-rule" and "nonexistent-rule" in v.message
     ]
     assert len(unknown_warnings) == 1
     assert unknown_warnings[0].severity.value == "warning"
@@ -117,7 +117,7 @@ def test_linter_warns_on_multiple_unknown_rule_ids(valid_plugin):
     linter = Linter(context, config)
     violations = linter.run()
 
-    unknown_warnings = [v for v in violations if v.rule_id == "invalid-config"]
+    unknown_warnings = [v for v in violations if v.rule_id == "unknown-rule"]
     assert len(unknown_warnings) == 2
 
 
@@ -129,7 +129,7 @@ def test_linter_no_warning_for_known_rule_ids(valid_plugin):
     linter = Linter(context, config)
     violations = linter.run()
 
-    unknown_warnings = [v for v in violations if v.rule_id == "invalid-config"]
+    unknown_warnings = [v for v in violations if v.rule_id == "unknown-rule"]
     assert len(unknown_warnings) == 0
 
 
@@ -396,20 +396,17 @@ def test_suggestion_cutoff_matches_at_point_six(valid_plugin):
 
 
 def test_option_validation_is_enablement_independent(valid_plugin):
-    """Typos warn even on disabled, auto-inactive, and deprecated rules."""
+    """Typos warn even on disabled and auto-inactive rules."""
     context = RepositoryContext(valid_plugin)
     config = LinterConfig.default()
     # Disabled builtin.
     config.rules["content-weak-language"] = {"enabled": False, "severty": "error"}
     # Auto rule whose repo types don't match a single-plugin fixture.
     config.rules["codex-plugin-json-valid"]["requird-fields"] = []
-    # Deprecated rule: absent from default().rules, assign a fresh dict.
-    config.rules["content-critical-position"] = {"enabled": False, "windw": 10}
 
     violations = Linter(context, config).run()
     assert len(_option_warnings(violations, "content-weak-language")) == 1
     assert len(_option_warnings(violations, "codex-plugin-json-valid")) == 1
-    assert len(_option_warnings(violations, "content-critical-position")) == 1
 
 
 def test_typo_on_opt_in_rule_warns_and_still_enables_it(valid_plugin):
@@ -624,7 +621,7 @@ def test_config_warnings_survive_global_exclude_of_config_file(temp_dir):
     violations = Linter(context, config).run()
 
     unknown_rule = [
-        v for v in violations if v.rule_id == "invalid-config" and "nonexistent-rule" in v.message
+        v for v in violations if v.rule_id == "unknown-rule" and "nonexistent-rule" in v.message
     ]
     assert len(unknown_rule) == 1
     warnings = _option_warnings(violations, "agentskill-description")
@@ -735,3 +732,27 @@ def test_fix_filters_config_warnings_like_run(temp_dir):
 
     remaining, _fixes = Linter(RepositoryContext(temp_dir), config).fix()
     assert _option_warnings(remaining, "agentskill-description") == []
+
+
+def test_unknown_rule_notices_are_unbaselinable(temp_dir):
+    """Advisories remain visible without requiring a baseline migration."""
+    from skillsaw.baseline import build_baseline
+
+    config = LinterConfig(rules={"removed-rule": {"enabled": True}})
+    linter = Linter(RepositoryContext(temp_dir), config)
+    notices = [v for v in linter.run() if v.rule_id == "unknown-rule"]
+    assert len(notices) == 1
+    assert build_baseline(notices, temp_dir, "0.21.0").violations == []
+
+
+def test_unknown_rule_notice_inline_suppression_applies_to_fix(temp_dir):
+    config_path = temp_dir / ".skillsaw.yaml"
+    config_path.write_text(
+        'version: "99.0.0"\nrules:\n'
+        "  # skillsaw-disable-next-line unknown-rule\n"
+        "  removed-rule:\n    enabled: false\n"
+    )
+    config = LinterConfig.from_file(config_path)
+    linter = Linter(RepositoryContext(temp_dir), config)
+    assert not any(v.rule_id == "unknown-rule" for v in linter.run())
+    assert linter.advisory_notices() == []

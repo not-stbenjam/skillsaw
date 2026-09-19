@@ -63,7 +63,7 @@ def _run_fix(args):
     suggested = []
     failed = []
     skipped = dict(input_skips)
-    deprecation_messages = []
+    advisory_messages = []
     for fix_path in paths:
         context = RepositoryContext(
             fix_path,
@@ -128,17 +128,17 @@ def _run_fix(args):
         for path, reason in path_skips:
             skipped.setdefault((path, reason), context.root_path)
 
-        # fix output only lists fixes, so the deprecation notices carried in
+        # fix output only lists fixes, so the advisory notices carried in
         # the violations list would otherwise never reach the user.
-        for notice in linter.deprecation_notices():
-            if notice.message not in deprecation_messages:
-                deprecation_messages.append(notice.message)
+        for notice in linter.advisory_notices():
+            if notice.message not in advisory_messages:
+                advisory_messages.append(notice.message)
 
     c = _ansi_colors(color_enabled(sys.stdout, args.color))
 
-    for message in deprecation_messages:
+    for message in advisory_messages:
         print(f"{c['yellow']}⚠ {message}{c['reset']}")
-    if deprecation_messages:
+    if advisory_messages:
         print()
 
     # Single-root runs print repo-relative paths, matching lint output.

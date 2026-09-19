@@ -11,7 +11,6 @@ _SUBCOMMANDS = {
     "init",
     "feedback",
     "list-rules",
-    "docs",
     "add",
     "fix",
     "tree",
@@ -22,7 +21,7 @@ _SUBCOMMANDS = {
     "port",
 }
 
-_DEPRECATED_COMMANDS = frozenset({"add", "docs"})
+_DEPRECATED_COMMANDS = frozenset({"add"})
 
 
 def _warn_deprecated_command(command: str) -> None:
@@ -113,10 +112,6 @@ def main():
         from ._explain import _run_explain
 
         _run_explain(args)
-    elif args.command == "docs":
-        from ._docs import _run_docs
-
-        _run_docs(args)
     elif args.command == "baseline":
         from ._baseline import _run_baseline
 

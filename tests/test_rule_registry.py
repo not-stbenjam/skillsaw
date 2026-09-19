@@ -17,7 +17,7 @@ from skillsaw.rules.builtin import BUILTIN_RULES, BUILTIN_RULE_REGISTRY
 def test_registry_discovers_rules():
     assert len(BUILTIN_RULES) >= 53
     ids = [cls().rule_id for cls in BUILTIN_RULES]
-    assert "skill-frontmatter" in ids
+    assert "agentskill-valid" in ids
     assert "claude-plugin-json-required" in ids
     assert "content-weak-language" in ids
 
@@ -152,7 +152,6 @@ def test_class_severity_is_effective_severity():
 
 def test_backward_compatible_class_imports():
     # Individual class imports must keep working without a re-export block
-    from skillsaw.rules.builtin import SkillFrontmatterRule  # noqa: F401
     from skillsaw.rules.builtin import ContentWeakLanguageRule  # noqa: F401
 
     with pytest.raises(ImportError):

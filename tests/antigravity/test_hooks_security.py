@@ -350,7 +350,7 @@ class TestEventsRendering:
     def test_the_effective_view_of_a_grouped_event_drops_the_stray_command(
         self, tmp_path: Path
     ) -> None:
-        """What ``skillsaw docs`` publishes: what ``agy`` dispatches."""
+        """Effective events match what ``agy`` dispatches."""
         document = {
             "a": {
                 "PreToolUse": [

@@ -1192,7 +1192,7 @@ def test_exclude_non_string_items_raises_valueerror(tmp_path):
 
 def test_missing_version_emits_warning(tmp_path):
     config = LinterConfig.from_file(
-        _write(tmp_path, "rules:\n  skill-frontmatter:\n    severity: warning\n")
+        _write(tmp_path, "rules:\n  agentskill-frontmatter-valid:\n    severity: warning\n")
     )
     assert any("version" in w for w in config.warnings)
 

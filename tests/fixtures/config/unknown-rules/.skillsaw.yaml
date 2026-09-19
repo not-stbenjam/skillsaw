@@ -1,0 +1,10 @@
+version: "99.0.0"
+strict: true
+exclude: ["**/*.yaml"]
+rules:
+  skill-frontmatter:
+    severity: info
+  content-critical-position:
+    enabled: true
+  misspelled-or-removed-rule:
+    enabled: false

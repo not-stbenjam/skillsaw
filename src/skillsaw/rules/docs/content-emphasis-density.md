@@ -18,9 +18,6 @@ small file with a couple of MUSTs is fine. Table rows are excluded
 from both counts — "| `exp` | MUST be present |" in a claims matrix is
 RFC-2119 spec language, not steering emphasis.
 
-This complements `content-critical-position`, which checks *where*
-critical instructions sit; this rule checks *how many* there are.
-
 ## Examples
 
 **Bad (everything is critical):**

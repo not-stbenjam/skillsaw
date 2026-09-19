@@ -39,7 +39,6 @@ CYCLE_SENSITIVE_MODULES = [
     "skillsaw.formats.openclaw",
     "skillsaw.discovery.openclaw",
     "skillsaw.lint_tree",
-    "skillsaw.docs.extractor",
     "skillsaw.rules.builtin.content_analysis",
     "skillsaw.rules.builtin.utils",
     "skillsaw.cli",

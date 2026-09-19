@@ -70,14 +70,18 @@ plugins:
         rules/content/index.md: rules/content-intelligence.md
         rules/content/weak-language.md: rules/content-weak-language.md
         rules/content/tautological.md: rules/content-tautological.md
-        rules/content/critical-position.md: rules/content-critical-position.md
+        rules/content/critical-position.md: configuration.md
+        rules/content-critical-position.md: configuration.md
+        rules/content-actionability-score.md: configuration.md
+        rules/skill-frontmatter.md: rules/agentskill-valid.md
+        rules/deprecated.md: configuration.md
         rules/content/redundant-with-tooling.md: rules/content-redundant-with-tooling.md
         rules/content/instruction-budget.md: rules/content-instruction-budget.md
         rules/content/negative-only.md: rules/content-negative-only.md
         rules/content/section-length.md: rules/content-section-length.md
         rules/content/contradiction.md: rules/content-contradiction.md
         rules/content/hook-candidate.md: rules/content-hook-candidate.md
-        rules/content/actionability-score.md: rules/content-actionability-score.md
+        rules/content/actionability-score.md: configuration.md
         rules/content/cognitive-chunks.md: rules/content-cognitive-chunks.md
         rules/content/embedded-secrets.md: rules/content-embedded-secrets.md
         rules/content/banned-references.md: rules/content-banned-references.md
@@ -152,7 +156,5 @@ nav:
     - Promptfoo: rules/promptfoo.md
     - Security: rules/security.md
     - Vercel: rules/vercel.md
-    - Deprecated: rules/deprecated.md
   - Changelog: changelog.md
   - Research: research.md
-

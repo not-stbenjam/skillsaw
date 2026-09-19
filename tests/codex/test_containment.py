@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from skillsaw.docs.extractor import extract_docs
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.blocks import HooksBlock, SkillRefBlock
 from skillsaw.formats.codex import codex_declared_skill_dirs
@@ -13,7 +12,13 @@ from skillsaw.paths import escapes_root, safe_resolve
 from skillsaw.rules.builtin.codex import CodexMarketplaceJsonValidRule, CodexPluginJsonValidRule
 from skillsaw.rules.builtin.plugins.json_required import PluginJsonRequiredRule
 
-from ._helpers import run_rule, messages, _write_plugin, _codex_plugin_repo, _codex_marketplace_repo
+from ._helpers import (
+    run_rule,
+    messages,
+    _write_plugin,
+    _codex_plugin_repo,
+    _codex_marketplace_repo,
+)
 
 
 class TestSymlinkContainment:
@@ -244,27 +249,6 @@ class TestEvalContainment:
 
         violations = AgentSkillEvalsRule({}).check(RepositoryContext(repo))
         assert any("Invalid JSON" in m for m in messages(violations))
-
-
-class TestNestedPluginSkillAttribution:
-    def test_a_nested_plugins_skills_are_not_claimed_by_the_root(self, tmp_path):
-        """A root that is itself a plugin contains plugins/, so nested skills
-        are relative to both roots."""
-        repo = _codex_plugin_repo(
-            tmp_path, {"name": "root-plugin", "version": "1.0.0", "description": "x"}
-        )
-        nested = _write_plugin(repo / "plugins" / "nested", {"name": "nested", "version": "1.0.0"})
-        skill = nested / "skills" / "inner"
-        skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text(
-            "---\nname: inner\ndescription: Belongs to the nested plugin\n---\n\n# Inner\n",
-            encoding="utf-8",
-        )
-
-        docs = extract_docs(RepositoryContext(repo))
-        by_name = {p.name: p for p in docs.plugins}
-        assert [s.name for s in by_name["nested"].skills] == ["inner"]
-        assert by_name["root-plugin"].skills == []
 
 
 class TestVisiblePluginSkillContainment:

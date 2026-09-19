@@ -18,6 +18,7 @@ _SEVERITY_MAP = {
 # Rule instance (e.g. "invalid-config" emitted by Linter._validate_config).
 _SYNTHETIC_DESCRIPTIONS = {
     "invalid-config": "Invalid configuration",
+    "unknown-rule": "Unknown rule in configuration",
 }
 
 

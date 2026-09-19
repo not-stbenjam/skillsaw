@@ -117,9 +117,7 @@ def enumerate_codex_catalogs(
         return contained_resolve(path, root) is not None
 
     def _keep(path: Path) -> bool:
-        # Exclusions applied here, not at each reader: ``skillsaw docs``
-        # reads this list directly, so an excluded catalog would
-        # otherwise still supply published pages and the generated title.
+        # Apply exclusions centrally so every consumer sees the same catalogs.
         return _inside(path) and not is_excluded(path)
 
     found: List[Path] = []

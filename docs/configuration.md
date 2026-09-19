@@ -132,8 +132,8 @@ mentions a deprecated rule (for example a severity override) also warns,
 since the entry has become inert. These deprecation notices are
 advisory: they display as warnings but never affect the exit code or
 the grade, so upgrading skillsaw cannot break a `strict: true` CI run
-whose config still names a deprecated rule. The [Deprecated rules
-page](rules/deprecated.md) lists the current set and replacements.
+whose config still names a deprecated rule. Rules removed in 0.21.0 are
+listed under [Unknown Rules](#unknown-rules).
 
 ## Strict Mode
 
@@ -223,14 +223,27 @@ These defaults are replaced when you specify your own `exclude` list.
 
 Exclude patterns apply to **all** rules, including custom rules loaded via
 `custom-rules`. Any violation whose file path matches an exclude pattern is
-filtered out before results are reported. The one exception is
-`invalid-config`: warnings about `.skillsaw.yaml` itself are never dropped by
+filtered out before results are reported. The exceptions are
+`invalid-config` and `unknown-rule`: warnings about `.skillsaw.yaml` itself are never dropped by
 exclude patterns (global or per-rule), so an `exclude` entry matching the
 config file cannot silently turn off config validation. To silence a specific
-config warning, put a `# skillsaw-disable-next-line invalid-config` comment
-on the line above the flagged one. Only that precise form works for these
+config warning, put a `# skillsaw-disable-next-line invalid-config` or
+`# skillsaw-disable-next-line unknown-rule` comment on the line above the flagged one. Only that precise form works for these
 warnings: a region `# skillsaw-disable`, or a bare `disable-next-line`
 naming no rule, does not apply to them.
+
+## Unknown Rules
+
+Version 0.21.0 removed `content-critical-position`, `content-actionability-score`,
+and `skill-frontmatter`. Remove these entries from existing configurations;
+[`agentskill-valid`](rules/agentskill-valid.md) validates skill frontmatter.
+
+Unknown keys directly under `rules:` are ignored and reported as `unknown-rule`
+warnings. This includes removed rules left in older configurations. These
+notices never fail a run, even with `strict: true` or `--fail-on info`, and
+do not affect the grade or enter baselines. Remove obsolete entries or correct
+misspelled rule IDs to clear the warnings. Unknown options inside a known rule
+still produce `invalid-config` warnings and follow the configured failure threshold.
 
 ## Rule Options
 

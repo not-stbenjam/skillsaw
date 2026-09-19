@@ -15,14 +15,12 @@ from skillsaw.rule import AutofixConfidence, Severity
 from skillsaw.rules.builtin.content_rules import (
     ContentWeakLanguageRule,
     ContentTautologicalRule,
-    ContentCriticalPositionRule,
     ContentRedundantWithToolingRule,
     ContentInstructionBudgetRule,
     ContentNegativeOnlyRule,
     ContentSectionLengthRule,
     ContentContradictionRule,
     ContentHookCandidateRule,
-    ContentActionabilityScoreRule,
     ContentCognitiveChunksRule,
     ContentEmbeddedSecretsRule,
     ContentBannedReferencesRule,
@@ -181,45 +179,6 @@ class TestContentTautologicalRule:
         )
         context = RepositoryContext(temp_dir)
         violations = ContentTautologicalRule().check(context)
-        assert len(violations) == 0
-
-
-class TestContentCriticalPositionRule:
-    def test_rule_metadata(self):
-        rule = ContentCriticalPositionRule()
-        assert rule.rule_id == "content-critical-position"
-        assert rule.default_severity() == Severity.INFO
-
-    def test_critical_in_middle_flagged(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "IMPORTANT: Never skip tests."
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentCriticalPositionRule().check(context)
-        assert len(violations) >= 1
-        assert "dead zone" in violations[0].message.lower()
-
-    def test_critical_at_top_passes(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[2] = "IMPORTANT: Never skip tests."
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentCriticalPositionRule().check(context)
-        assert len(violations) == 0
-
-    def test_short_file_no_violations(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("MUST do this.\nNEVER do that.\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentCriticalPositionRule().check(context)
-        assert len(violations) == 0
-
-    def test_lowercase_keywords_not_flagged(self, temp_dir):
-        lines = [f"Line {i}" for i in range(1, 51)]
-        lines[24] = "This function must return a value."
-        lines[26] = "The required fields are: name, email."
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentCriticalPositionRule().check(context)
         assert len(violations) == 0
 
 
@@ -529,34 +488,6 @@ class TestContentHookCandidateRule:
         (temp_dir / "CLAUDE.md").write_text("Use descriptive commit messages.\n")
         context = RepositoryContext(temp_dir)
         violations = ContentHookCandidateRule().check(context)
-        assert len(violations) == 0
-
-
-class TestContentActionabilityScoreRule:
-    def test_rule_metadata(self):
-        rule = ContentActionabilityScoreRule()
-        assert rule.rule_id == "content-actionability-score"
-        assert rule.default_severity() == Severity.INFO
-
-    def test_low_actionability_warned(self, temp_dir):
-        lines = [f"This is a description about something {i}." for i in range(20)]
-        (temp_dir / "CLAUDE.md").write_text("\n".join(lines) + "\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentActionabilityScoreRule().check(context)
-        assert len(violations) >= 1
-        assert "actionability" in violations[0].message.lower()
-
-    def test_high_actionability_passes(self, temp_dir):
-        content = "- Use 4-space indentation\n- Run `npm test` before commits\n- Check `src/config.ts` settings\n- Add error handling for API calls\n- Follow the `eslint` rules\n"
-        (temp_dir / "CLAUDE.md").write_text(content)
-        context = RepositoryContext(temp_dir)
-        violations = ContentActionabilityScoreRule().check(context)
-        assert len(violations) == 0
-
-    def test_short_file_skipped(self, temp_dir):
-        (temp_dir / "CLAUDE.md").write_text("Short.\n")
-        context = RepositoryContext(temp_dir)
-        violations = ContentActionabilityScoreRule().check(context)
         assert len(violations) == 0
 
 

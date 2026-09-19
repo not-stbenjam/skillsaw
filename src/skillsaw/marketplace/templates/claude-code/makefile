@@ -1,6 +1,6 @@
 # Makefile for {{MARKETPLACE_NAME}}
 
-.PHONY: help lint docs new-plugin
+.PHONY: help lint new-plugin
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -8,9 +8,6 @@ help: ## Show this help message
 
 lint: ## Run plugin linter (verbose, strict mode)
 	skillsaw -v --strict
-
-docs: ## Generate documentation (deprecated in skillsaw 0.20.0)
-	skillsaw docs --format html -o docs/
 
 new-plugin: ## Create a plugin (deprecated; usage: make new-plugin NAME=my-plugin)
 	@if [ -z "$(NAME)" ]; then \

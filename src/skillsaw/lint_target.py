@@ -22,8 +22,8 @@ class LintTarget:
     parent: Optional["LintTarget"] = field(default=None, repr=False)
     # Resolved root of the plugin directory that owns this node, recorded by
     # ``build_lint_tree`` while it attaches plugin content — ownership is
-    # decided once at build time and read back by consumers such as
-    # ``skillsaw docs``, never re-derived by path matching. ``None`` for
+    # decided once at build time and read back by consumers,
+    # never re-derived by path matching. ``None`` for
     # nodes no plugin owns.
     plugin_owner: Optional[Path] = field(default=None, repr=False)
 

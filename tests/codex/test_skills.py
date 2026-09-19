@@ -3,7 +3,6 @@
 import pytest
 
 from skillsaw.config import LinterConfig
-from skillsaw.docs.extractor import extract_docs
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.linter import Linter
 from skillsaw.rule import AutofixConfidence
@@ -240,28 +239,6 @@ class TestInstalledSkillRenameFix:
         violations = rule.check(context)
         assert violations, "the stale reference is still worth reporting"
         assert rule.fix(context, violations) == []
-
-
-class TestInstalledSkillsAreNotRepositoryContent:
-    def test_a_personal_installs_skills_are_not_published_as_standalone(self, tmp_path):
-        repo = tmp_path / "repo"
-        own = repo / "skills" / "mine"
-        own.mkdir(parents=True)
-        (own / "SKILL.md").write_text(
-            "---\nname: mine\ndescription: A skill this repository wrote\n---\n\n# Mine\n",
-            encoding="utf-8",
-        )
-        vendor = repo / ".codex" / "plugins" / "vendor"
-        _write_plugin(vendor, {"name": "vendor", "version": "1.0.0"})
-        theirs = vendor / "skills" / "theirs"
-        theirs.mkdir(parents=True)
-        (theirs / "SKILL.md").write_text(
-            "---\nname: theirs\ndescription: A skill somebody else wrote\n---\n\n# Theirs\n",
-            encoding="utf-8",
-        )
-
-        docs = extract_docs(RepositoryContext(repo))
-        assert [s.name for s in docs.skills] == ["mine"]
 
 
 class TestVendorManagedContentIsNeverRewritten:

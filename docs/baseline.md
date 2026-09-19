@@ -74,7 +74,6 @@ Rules with ratchet behavior:
 |------|--------|-----------------|
 | `context-budget` | token count | ceiling (can't increase) |
 | `content-instruction-budget` | instruction count | ceiling (can't increase) |
-| `content-actionability-score` | actionability score | floor (can't decrease) |
 | `agentskill-unreferenced-files` | unreferenced files in a collapsed directory | ceiling (can't increase) |
 
 Every other finding, including that rule's per-file ones, uses fingerprint
