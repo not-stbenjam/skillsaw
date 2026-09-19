@@ -1501,7 +1501,10 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        if not prov.cursor or prov.ecosystems != frozenset({"cursor"}):
+        # Cursor overrides replace conventional directories. Attaching generic
+        # prose here would lint unloaded defaults and assign Claude block types.
+        # Mixed packages still retain the other ecosystems' conventional prose.
+        if prov.ecosystems != frozenset({"cursor"}):
             _add_plugin_prose(container, plugin_path, resolved_plugin)
         elif _inside_plugin(plugin_path / "README.md", resolved_plugin):
             state.add_block(
@@ -1543,6 +1546,8 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                             inline_cls = (
                                 CursorInlineHooksBlock if field == "hooks" else CursorInlineMcpBlock
                             )
+                            if field == "mcpServers" and "mcpServers" not in inline:
+                                inline = {"mcpServers": inline}
                             block = inline_cls(
                                 path=config.component_sources.get(field, config.path),
                                 inline_data=inline,

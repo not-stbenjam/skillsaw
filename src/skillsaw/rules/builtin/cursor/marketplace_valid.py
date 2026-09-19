@@ -44,6 +44,14 @@ class CursorMarketplaceValidRule(Rule):
                         file_path=block.path,
                     )
                 )
+            try:
+                oversized = block.path.stat().st_size > 10 * 1024 * 1024
+            except OSError:
+                oversized = False  # The parser reports unreadable files.
+            if oversized:
+                violations.append(
+                    self.violation("Marketplace exceeds Cursor's 10 MB limit", file_path=block.path)
+                )
             entries = data.get("plugins")
             if not isinstance(entries, list):
                 continue
@@ -74,12 +82,4 @@ class CursorMarketplaceValidRule(Rule):
                             file_path=block.path,
                         )
                     )
-            try:
-                oversized = block.path.stat().st_size > 10 * 1024 * 1024
-            except OSError:
-                oversized = False  # The parser reports unreadable files.
-            if oversized:
-                violations.append(
-                    self.violation("Marketplace exceeds Cursor's 10 MB limit", file_path=block.path)
-                )
         return violations

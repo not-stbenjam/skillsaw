@@ -62,7 +62,7 @@ _HOOK_TYPES = (_COMMAND_TYPE, _PROMPT_TYPE)
 
 
 class CursorHooksValidRule(Rule):
-    """Validate the structure of .cursor/hooks.json"""
+    """Validate Cursor project and plugin hook configurations"""
 
     since = "0.19.0"
 
@@ -87,7 +87,9 @@ class CursorHooksValidRule(Rule):
 
     @property
     def description(self) -> str:
-        return ".cursor/hooks.json must declare version 1 and known hook events with commands"
+        return (
+            "Cursor hooks must use known events and valid commands; project hooks require version 1"
+        )
 
     def default_severity(self) -> Severity:
         return Severity.ERROR
@@ -129,7 +131,7 @@ class CursorHooksValidRule(Rule):
         return violations
 
     def _check_version(self, data: dict, block: CursorHooksBlock) -> List[RuleViolation]:
-        """The version field is required and pins the only shape Cursor reads."""
+        """Project hooks require version 1; plugin hooks may omit it."""
         if "version" not in data and isinstance(block, CursorPluginHooksBlock):
             return []
         if "version" not in data:

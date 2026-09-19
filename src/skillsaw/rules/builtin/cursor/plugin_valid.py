@@ -37,9 +37,9 @@ class CursorPluginValidRule(Rule):
                             file_path=block.path,
                         )
                     )
-                    continue
+                # Even malformed native JSON leaves catalog components active.
                 # Marketplace-only entries have no standalone manifest.
-                if block.path.name == "plugin.json":
+                elif block.path.name == "plugin.json":
                     errors = list(validator("plugin").iter_errors(block.raw_data))
                     for error in errors:
                         location = ".".join(str(p) for p in error.absolute_path) or "manifest"

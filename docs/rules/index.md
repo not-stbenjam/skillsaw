@@ -88,7 +88,7 @@ skillsaw includes **103** built-in rules organized into the following categories
 | [`context-budget`](context-budget.md) | Warn when instruction or config files exceed recommended token limits | warning (auto) | - | Context Budget |
 | [`copilot-agent-valid`](copilot-agent-valid.md) | Copilot and VS Code custom agents must use target-compatible frontmatter | error (auto) | - | Copilot / VS Code |
 | [`cursor-rules-valid`](cursor-rules-valid.md) | Cursor .mdc rules must have frontmatter that lets the rule activate | error (auto) | auto | Cursor |
-| [`cursor-hooks-valid`](cursor-hooks-valid.md) | .cursor/hooks.json must declare version 1 and known hook events with commands | error (auto) | - | Cursor |
+| [`cursor-hooks-valid`](cursor-hooks-valid.md) | Cursor hooks must use known events and valid commands; project hooks require version 1 | error (auto) | - | Cursor |
 | [`cursor-plugin-json-valid`](cursor-plugin-json-valid.md) | Cursor plugin manifests must declare valid metadata and contained components | error (auto) | - | Cursor |
 | [`cursor-marketplace-json-valid`](cursor-marketplace-json-valid.md) | Cursor marketplaces must contain valid entries with unique names and resolvable local sources | error (auto) | - | Cursor |
 | [`devin-rules-valid`](devin-rules-valid.md) | Devin workspace rules must have valid activation frontmatter and fit its size limit | error (auto) | - | Devin |

@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 
 from skillsaw.lint_target import LintTarget
 from .frontmatter import FrontmatteredBlock
-from .json_config import JsonConfigBlock, CursorHooksBlock, CursorMcpBlock
+from .json_config import JsonConfigBlock, CursorHooksBlock, CursorMcpBlock, _InlineJsonPayload
 
 
 @dataclass(eq=False)
@@ -54,12 +54,11 @@ class CursorPluginHooksBlock(CursorHooksBlock):
 
 
 @dataclass(eq=False)
-class CursorInlineHooksBlock(CursorPluginHooksBlock):
+class CursorInlineHooksBlock(_InlineJsonPayload, CursorPluginHooksBlock):
     inline_data: Any = None
 
-    def _ensure_parsed(self):
-        if self._parsed is None:
-            self._parsed = (self.inline_data, None)
+    def tree_label(self) -> str:
+        return f"{self.path.name} (inline Cursor hooks)"
 
 
 @dataclass(eq=False)
@@ -68,10 +67,8 @@ class CursorPluginMcpBlock(CursorMcpBlock):
 
 
 @dataclass(eq=False)
-class CursorInlineMcpBlock(CursorPluginMcpBlock):
+class CursorInlineMcpBlock(_InlineJsonPayload, CursorPluginMcpBlock):
     inline_data: Any = None
 
-    def _ensure_parsed(self):
-        if self._parsed is None:
-            data = self.inline_data
-            self._parsed = (data if "mcpServers" in data else {"mcpServers": data}, None)
+    def tree_label(self) -> str:
+        return f"{self.path.name} (inline Cursor MCP)"

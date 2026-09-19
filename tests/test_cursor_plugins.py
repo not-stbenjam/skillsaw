@@ -30,6 +30,7 @@ def test_cursor_native_components(tmp_path):
     assert len(tree.find(HooksBlock)) == 1
     assert len(tree.find(McpBlock)) == 2
     assert all("ignored" not in str(b.path) for b in tree.find(SkillBlock))
+    assert all("ignored" not in str(b.path) for b in tree.find(CursorCommandBlock))
     assert not CursorPluginValidRule().check(context)
     assert not CursorMarketplaceValidRule().check(context)
     result = run_lint(repo)
@@ -134,12 +135,21 @@ def test_cursor_nested_marketplace_and_excluded_component(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "payload", ["[]", "{", '{"name":null}', '{"name":"ok","variables":{"type":"string"}}']
+    "payload, expected",
+    [
+        ("[]", "expected a JSON object"),
+        ("{", "Invalid Cursor manifest:"),
+        ('{"name":null}', "name:"),
+        ('{"name":"ok","variables":{"type":"string"}}', "variables.type:"),
+    ],
 )
-def test_cursor_malformed_manifest(tmp_path, payload):
+def test_cursor_malformed_manifest(tmp_path, payload, expected):
     repo = copy_fixture("cursor-plugins/clean", tmp_path)
-    (repo / "packages/review/.cursor-plugin/plugin.json").write_text(payload)
-    assert CursorPluginValidRule().check(RepositoryContext(repo))
+    plugin = repo / "packages/review"
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    manifest.write_text(payload)
+    findings = CursorPluginValidRule().check(RepositoryContext(plugin))
+    assert any(v.file_path == manifest and expected in v.message for v in findings)
 
 
 def test_cursor_inline_mcp_array_keeps_every_server(tmp_path):
@@ -212,3 +222,119 @@ def test_cursor_readme_cannot_escape_plugin(tmp_path):
     other.write_text("Outside the plugin boundary.\n")
     (repo / "packages/review/README.md").symlink_to(other)
     assert not RepositoryContext(repo).lint_tree.find(ReadmeBlock)
+
+
+def test_non_cursor_skill_discovery_preserves_order(tmp_path):
+    context = RepositoryContext(tmp_path)
+    discovered = [tmp_path / "z-first", tmp_path / "a-second"]
+    assert context._filter_cursor_skills(iter(discovered)) == discovered
+
+
+@pytest.mark.parametrize("kind", ["plugin", "marketplace"])
+def test_cursor_metadata_is_forward_compatible(kind):
+    from skillsaw.formats.cursor_schema import validator
+
+    schema = validator(kind).schema
+
+    def assert_open(value):
+        if isinstance(value, dict):
+            assert value.get("additionalProperties") is not False
+            for child in value.values():
+                assert_open(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_open(child)
+
+    assert_open(schema)
+    for author in ("A Team", {"name": "A Team", "url": "custom:team", "email": ""}):
+        plugin = {
+            "name": "sample",
+            "author": author,
+            "repository": {"type": "git", "url": "git@example.com:team/repo"},
+            "futureMetadata": {"extra": True},
+        }
+        data = (
+            plugin
+            if kind == "plugin"
+            else {
+                "name": "catalog",
+                "owner": author,
+                "plugins": [{**plugin, "source": "./sample"}],
+            }
+        )
+        assert not list(validator(kind).iter_errors(data))
+
+
+def test_cursor_inline_payload_identity_and_accounting(tmp_path):
+    from skillsaw.blocks.cursor import CursorInlineHooksBlock, CursorInlineMcpBlock
+    from skillsaw.blocks.json_config import _inline_payload_token_count
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    manifest = repo / "packages/review/.cursor-plugin/plugin.json"
+    data = json.loads(manifest.read_text())
+    data["mcpServers"] = [{"one": {"command": "first"}}, {"two": {"command": "second"}}]
+    data["unrelated"] = "x" * 10000
+    manifest.write_text(json.dumps(data))
+    tree = RepositoryContext(repo).lint_tree
+    blocks = tree.find(CursorInlineMcpBlock)
+    assert len(set(blocks)) == 2
+    assert blocks[0] != blocks[1]
+    for block in [*blocks, *tree.find(CursorInlineHooksBlock)]:
+        assert block.estimate_tokens() == _inline_payload_token_count(block.inline_data)
+        assert block.estimate_tokens() < 100
+        assert not block.has_utf8_bom()
+        assert "inline Cursor" in block.tree_label()
+
+
+@pytest.mark.parametrize("part", ["source", "prefix"])
+@pytest.mark.parametrize("spelling", ["absolute", "traversal", "symlink"])
+def test_cursor_rejects_existing_escaped_sources(tmp_path, part, spelling):
+    from skillsaw.formats.cursor import source_path
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "review").mkdir()
+    (repo / "escape").symlink_to(outside, target_is_directory=True)
+    value = {"absolute": str(outside), "traversal": "../outside", "symlink": "escape"}[spelling]
+    prefix, source = (value, "review") if part == "prefix" else ("", value)
+    assert source_path(repo, prefix, source) is None
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    catalog.write_text(
+        json.dumps(
+            {
+                "name": "catalog",
+                "metadata": {"pluginRoot": prefix},
+                "plugins": [{"name": "escaped", "source": source}],
+            }
+        )
+    )
+    findings = CursorMarketplaceValidRule().check(RepositoryContext(repo))
+    assert any(v.file_path == catalog and "inside this marketplace" in v.message for v in findings)
+
+
+def test_cursor_glob_cannot_attach_symlinked_file(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    outside = tmp_path / "secret.mdc"
+    outside.write_text("Private guidance outside the plugin.\n")
+    guidance = repo / "packages/review/guidance"
+    (guidance / "escape.mdc").symlink_to(outside)
+    blocks = RepositoryContext(repo).lint_tree.find(CursorRuleBlock)
+    assert len(blocks) == 1
+    assert all(b.path.name != "escape.mdc" for b in blocks)
+
+
+def test_cursor_bad_manifest_still_checks_catalog_components(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    (repo / "packages/review/.cursor-plugin/plugin.json").write_text("{")
+    findings = CursorPluginValidRule().check(RepositoryContext(repo))
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    assert any(v.file_path == catalog and "catalog-commands" in v.message for v in findings)
+
+
+def test_cursor_size_limit_independent_of_entry_shape(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    catalog.write_text(json.dumps({"name": "catalog", "plugins": False}) + " " * (10 * 1024 * 1024))
+    findings = CursorMarketplaceValidRule().check(RepositoryContext(repo))
+    assert any("10 MB" in v.message for v in findings)

@@ -3,7 +3,7 @@
 
 # cursor-hooks-valid
 
-.cursor/hooks.json must declare version 1 and known hook events with commands
+Cursor hooks must use known events and valid commands; project hooks require version 1
 
 | | |
 |---|---|

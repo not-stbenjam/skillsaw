@@ -21,5 +21,14 @@
         "type": "string"
       }
     }
+  },
+  "author": {
+    "name": "Platform Team",
+    "url": "https://example.com/team",
+    "email": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/team/review.git"
   }
 }

@@ -1,7 +1,8 @@
 {
   "name": "team-tools",
   "owner": {
-    "name": "Platform Team"
+    "name": "Platform Team",
+    "url": "https://example.com/team"
   },
   "metadata": {
     "pluginRoot": "packages"
@@ -22,7 +23,8 @@
             }
           ]
         }
-      }
+      },
+      "author": "Platform Team"
     }
   ]
 }

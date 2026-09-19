@@ -74,7 +74,6 @@ claudelint = "skillsaw.__main__:claudelint_shim"
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-"skillsaw.schemas.cursor" = ["*.json", "SCHEMA-SOURCE.md"]
 "skillsaw.marketplace.templates" = [
     "claude-code/*.md",
     "claude-code/*.html",

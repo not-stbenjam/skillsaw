@@ -11,6 +11,10 @@ fields replace their default discovery locations. Paths and globs must stay
 inside the plugin. Inline hooks and MCP configurations are attached to the
 lint tree for the existing format, security, and policy checks.
 
+The interoperability validator allows unknown metadata, author/owner URL fields,
+and npm-style string authors and repository objects. It does not enforce
+publication-only URL or email formatting policies.
+
 ## How to fix
 
 Correct the field named in the finding. Use relative paths within the

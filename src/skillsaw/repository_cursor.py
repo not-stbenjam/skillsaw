@@ -73,6 +73,7 @@ class RepositoryCursorMixin:
                 | set(self.codex_plugins)
                 | set(self.grok_plugins)
                 | set(self.agent_plugins)
+                | set(self.antigravity_plugins)
                 | after
             )
             self.skills = [
@@ -96,6 +97,8 @@ class RepositoryCursorMixin:
 
     def _filter_cursor_skills(self, discovered: Iterable[Path]) -> list[Path]:
         """Replace generic skill discovery only inside exclusively Cursor packages."""
+        if not self.cursor_plugin_roots():
+            return list(discovered)
         cursor_only = {
             p
             for p in self.cursor_plugin_roots()
