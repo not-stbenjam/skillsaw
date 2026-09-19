@@ -10,7 +10,7 @@ from skillsaw.diagnostics import safe_display
 
 
 class CursorPluginValidRule(Rule):
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.CURSOR_PLUGIN, RepositoryType.CURSOR_MARKETPLACE})
 
     @property

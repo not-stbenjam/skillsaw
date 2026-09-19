@@ -70,10 +70,10 @@ class RepositoryCursorMixin:
         if dropped:
             active = (
                 set(self.plugins)
-                | set(self.codex_plugins)
-                | set(self.grok_plugins)
-                | set(self.agent_plugins)
-                | set(self.antigravity_plugins)
+                | set(self.codex_plugin_roots())
+                | set(self.grok_plugin_roots())
+                | set(self.agent_plugin_roots())
+                | set(self.antigravity_plugin_roots())
                 | after
             )
             self.skills = [

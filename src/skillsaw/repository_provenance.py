@@ -87,6 +87,11 @@ class PluginProvenance:
         return "cursor" in self.ecosystems
 
     @property
+    def cursor_only(self) -> bool:
+        """Cursor claims the directory and Claude does not."""
+        return self.cursor and not self.claude
+
+    @property
     def grok(self) -> bool:
         return "grok" in self.ecosystems
 
@@ -478,7 +483,7 @@ class RepositoryProvenanceMixin:
         """
         if self._contained_plugin_roots is None:
             self._contained_plugin_roots = (
-                set(self.cursor_plugin_roots())
+                {root for root in self.cursor_plugin_roots() if self.provenance(root).cursor_only}
                 | set(self.codex_plugin_roots())
                 | set(self._agent_plugin_root_set())
                 | {root for root in self.grok_plugin_roots() if self.provenance(root).grok_only}
@@ -547,8 +552,5 @@ class RepositoryProvenanceMixin:
         """
         record = self.provenance(path)
         return (
-            record.codex_only
-            or record.grok_only
-            or record.antigravity_only
-            or (record.cursor and not record.claude)
+            record.codex_only or record.grok_only or record.antigravity_only or record.cursor_only
         )

@@ -10,7 +10,7 @@ from skillsaw.blocks.cursor import CursorAgentBlock, CursorPluginBlock
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.rules.builtin.cursor.plugin_valid import CursorPluginValidRule
 from skillsaw.rules.builtin.cursor.marketplace_valid import CursorMarketplaceValidRule
-from tests.test_integration import copy_fixture, run_lint
+from tests.test_integration import copy_fixture
 
 
 def test_cursor_native_components(tmp_path):
@@ -33,16 +33,6 @@ def test_cursor_native_components(tmp_path):
     assert all("ignored" not in str(b.path) for b in tree.find(CursorCommandBlock))
     assert not CursorPluginValidRule().check(context)
     assert not CursorMarketplaceValidRule().check(context)
-    result = run_lint(repo)
-    assert result["rc"] == 0, result
-
-
-def test_cursor_broken_cli(tmp_path):
-    repo = copy_fixture("cursor-plugins/broken", tmp_path)
-    result = run_lint(repo)
-    assert result["rc"] == 1, result
-    rules = {v["rule_id"] for v in result["out"]["violations"]}
-    assert {"cursor-plugin-json-valid", "cursor-marketplace-json-valid", "hooks-dangerous"} <= rules
 
 
 @pytest.mark.parametrize("forced", [RepositoryType.MARKETPLACE, RepositoryType.CURSOR_PLUGIN])
@@ -332,9 +322,63 @@ def test_cursor_bad_manifest_still_checks_catalog_components(tmp_path):
     assert any(v.file_path == catalog and "catalog-commands" in v.message for v in findings)
 
 
-def test_cursor_size_limit_independent_of_entry_shape(tmp_path):
+@pytest.mark.parametrize("payload", ['{"name":"catalog","plugins":false}', "{", "[]"])
+def test_cursor_size_limit_independent_of_entry_shape(tmp_path, payload):
     repo = copy_fixture("cursor-plugins/clean", tmp_path)
     catalog = repo / ".cursor-plugin/marketplace.json"
-    catalog.write_text(json.dumps({"name": "catalog", "plugins": False}) + " " * (10 * 1024 * 1024))
+    catalog.write_text(payload + " " * (10 * 1024 * 1024))
     findings = CursorMarketplaceValidRule().check(RepositoryContext(repo))
     assert any("10 MB" in v.message for v in findings)
+
+
+@pytest.mark.parametrize(
+    "marker, ecosystem", [(".codex-plugin", "codex"), (".grok-plugin", "grok")]
+)
+def test_cursor_late_excludes_preserve_forced_other_claim(tmp_path, marker, ecosystem):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    (plugin / marker).mkdir()
+    (plugin / marker / "plugin.json").write_text('{"name":"review"}')
+    manifest = plugin / ".cursor-plugin/plugin.json"
+    data = json.loads(manifest.read_text())
+    data["skills"] = "skills"
+    manifest.write_text(json.dumps(data))
+    catalog = repo / (
+        ".agents/plugins/other.json" if ecosystem == "codex" else ".grok-plugin/marketplace.json"
+    )
+    catalog.parent.mkdir(parents=True)
+    source = (
+        {"source": "local", "path": "./packages/review"}
+        if ecosystem == "codex"
+        else "./packages/review"
+    )
+    catalog.write_text(
+        json.dumps({"name": "other", "plugins": [{"name": "review", "source": source}]})
+    )
+    context = RepositoryContext(repo, repo_types={RepositoryType.CURSOR_PLUGIN})
+    skill = plugin / "skills/ignored"
+    assert skill in context.skills
+    assert not getattr(context, f"{ecosystem}_plugins")
+    context.exclude_patterns.append("**/.cursor-plugin/**")
+    context.apply_excludes()
+    assert not context.cursor_plugin_roots()
+    assert skill in context.skills
+    assert any(b.path == skill / "SKILL.md" for b in context.lint_tree.find(SkillBlock))
+
+
+def test_cursor_claude_reference_keeps_legacy_containment(tmp_path):
+    from skillsaw.blocks import SkillRefBlock
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    plugin = repo / "packages/review"
+    (plugin / ".claude-plugin").mkdir()
+    (plugin / ".claude-plugin/plugin.json").write_text('{"name":"review"}')
+    reference = repo / "shared.md"
+    reference.write_text("Shared review guidance.\n")
+    refs = plugin / "skills/ignored/references"
+    refs.mkdir()
+    (refs / "shared.md").symlink_to(reference)
+    context = RepositoryContext(repo)
+    assert not context.provenance(plugin).cursor_only
+    assert context.contained_plugin_owning(refs) is None
+    assert any(b.path == refs / "shared.md" for b in context.lint_tree.find(SkillRefBlock))

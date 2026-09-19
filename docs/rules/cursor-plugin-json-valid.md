@@ -9,7 +9,7 @@ Cursor plugin manifests must declare valid metadata and contained components
 |---|---|
 | **Severity** | error (auto) |
 | **Autofix** | - |
-| **Since** | v0.20.0 |
+| **Since** | v0.21.0 |
 | **Repo Types** | cursor-marketplace, cursor-plugin |
 | **Category** | [Cursor](cursor.md) |
 

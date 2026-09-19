@@ -10,7 +10,7 @@ from skillsaw.diagnostics import safe_display
 
 
 class CursorMarketplaceValidRule(Rule):
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.CURSOR_MARKETPLACE})
 
     @property
@@ -27,6 +27,14 @@ class CursorMarketplaceValidRule(Rule):
     def check(self, context):
         violations = []
         for block in context.lint_tree.find(CursorMarketplaceBlock):
+            try:
+                oversized = block.path.stat().st_size > 10 * 1024 * 1024
+            except OSError:
+                oversized = False  # The parser reports unreadable files.
+            if oversized:
+                violations.append(
+                    self.violation("Marketplace exceeds Cursor's 10 MB limit", file_path=block.path)
+                )
             if block.parse_error or block.raw_data is None:
                 violations.append(
                     self.violation(
@@ -43,14 +51,6 @@ class CursorMarketplaceValidRule(Rule):
                         f"{safe_display(location)}: {safe_display(error.message)}",
                         file_path=block.path,
                     )
-                )
-            try:
-                oversized = block.path.stat().st_size > 10 * 1024 * 1024
-            except OSError:
-                oversized = False  # The parser reports unreadable files.
-            if oversized:
-                violations.append(
-                    self.violation("Marketplace exceeds Cursor's 10 MB limit", file_path=block.path)
                 )
             entries = data.get("plugins")
             if not isinstance(entries, list):

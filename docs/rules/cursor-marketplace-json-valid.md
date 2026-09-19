@@ -9,7 +9,7 @@ Cursor marketplaces must contain valid entries with unique names and resolvable 
 |---|---|
 | **Severity** | error (auto) |
 | **Autofix** | - |
-| **Since** | v0.20.0 |
+| **Since** | v0.21.0 |
 | **Repo Types** | cursor-marketplace |
 | **Category** | [Cursor](cursor.md) |
 
