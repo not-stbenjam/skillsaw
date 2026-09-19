@@ -1502,6 +1502,17 @@ class OpenCodeMcpBlock(McpBlock):
 
 
 @dataclass(eq=False)
+class OpenClawInlineMcpBlock(_InlineJsonPayload, McpBlock):
+    """Static native MCP entries, with dialect-neutral security inspection."""
+
+    inline_data: Optional[Dict[str, Any]] = None
+    shape_deferral: ClassVar[Optional[McpShapeDeferral]] = McpShapeDeferral()
+
+    def tree_label(self) -> str:
+        return f"{self.path.name} (OpenClaw mcpServers)"
+
+
+@dataclass(eq=False)
 class CodexInlineMcpBlock(_InlineJsonPayload, McpBlock):
     """MCP servers written inline in a Codex ``.codex-plugin/plugin.json``."""
 

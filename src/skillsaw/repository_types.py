@@ -23,6 +23,7 @@ class RepositoryType(Enum):
     ``.muse/hooks.json`` reporting ``unknown``.
     """
 
+    OPENCLAW_PLUGIN = "openclaw-plugin"  # Native openclaw.plugin.json packages
     SINGLE_PLUGIN = "single-plugin"  # Single plugin at repo root
     MARKETPLACE = "marketplace"  # Marketplace with multiple plugins
     AGENTSKILLS = "agentskills"  # agentskills.io skill repo
@@ -72,6 +73,7 @@ class RepositoryType(Enum):
 # the same reason as the Codex ones; GROK_PROJECT is not, because ``.grok/``
 # earns its skills through ``CONVENTIONAL_SKILL_DIRS`` instead.
 SKILL_REPO_TYPES = {
+    RepositoryType.OPENCLAW_PLUGIN,
     RepositoryType.AGENTSKILLS,
     RepositoryType.SINGLE_PLUGIN,
     RepositoryType.MARKETPLACE,

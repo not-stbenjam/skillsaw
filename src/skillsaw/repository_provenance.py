@@ -17,6 +17,7 @@ from .discovery.antigravity import (
 )
 from .discovery import agent_plugins as agent_plugins_discovery
 from .discovery import codex as codex_discovery
+from .discovery.openclaw import claims_plugin
 from .formats.codex import codex_manifest_is_contained, codex_marker_escapes
 from .formats.codex_manifest import declares_openai_extension
 from .formats.grok import grok_manifest_is_contained, grok_marker_escapes
@@ -69,6 +70,10 @@ class PluginProvenance:
         ``TestPluginProvenanceCodexOnlyTruthTable`` pins every combination.
         """
         return self.codex and not self.claude
+
+    @property
+    def openclaw(self) -> bool:
+        return "openclaw" in self.ecosystems
 
     @property
     def claude(self) -> bool:
@@ -164,6 +169,8 @@ class RepositoryProvenanceMixin:
         def antigravity_plugin_roots(self) -> List[Path]: ...
 
         def codex_plugin_roots(self) -> List[Path]: ...
+
+        def openclaw_plugin_roots(self) -> List[Path]: ...
 
         def grok_plugin_roots(self) -> List[Path]: ...
 
@@ -310,6 +317,8 @@ class RepositoryProvenanceMixin:
             and not antigravity_marker_escapes(plugin_dir)
         ):
             ecosystems.add("antigravity")
+        if claims_plugin(plugin_dir):
+            ecosystems.add("openclaw")
         record = PluginProvenance(
             ecosystems=frozenset(ecosystems),
             installed=self.is_codex_installed_plugin(plugin_dir),
@@ -427,7 +436,8 @@ class RepositoryProvenanceMixin:
         """
         if self._contained_plugin_roots is None:
             self._contained_plugin_roots = (
-                set(self.codex_plugin_roots())
+                {p for p in self.openclaw_plugin_roots() if not self.provenance(p).claude}
+                | set(self.codex_plugin_roots())
                 | set(self._agent_plugin_root_set())
                 | {root for root in self.grok_plugin_roots() if self.provenance(root).grok_only}
                 | {
@@ -473,6 +483,7 @@ class RepositoryProvenanceMixin:
         return (
             self._codex_claims_possible()
             or bool(self._agent_plugin_root_set())
+            or bool(self.openclaw_plugin_roots())
             or bool(self.grok_plugin_roots())
             or bool(self.antigravity_plugin_roots())
         )
@@ -493,4 +504,9 @@ class RepositoryProvenanceMixin:
         containment contract.
         """
         record = self.provenance(path)
-        return record.codex_only or record.grok_only or record.antigravity_only
+        return (
+            record.codex_only
+            or record.grok_only
+            or record.antigravity_only
+            or (record.openclaw and not record.claude)
+        )

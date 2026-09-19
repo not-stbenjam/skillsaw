@@ -575,10 +575,27 @@ rules:
     # extra-handler-fields: []
     # extra-group-keys: []
 
+  # Native OpenClaw manifests must declare an id and object configSchema
+  openclaw-manifest-valid:
+    enabled: false
+    severity: error
+
   # Validate metadata.openclaw fields against the OpenClaw spec
   openclaw-metadata:
     enabled: auto
     severity: warning
+
+  # OpenClaw package metadata must declare valid extension entries
+  openclaw-package-valid:
+    enabled: false
+    severity: error
+
+  # OpenClaw resources should resolve inside their package and exist when loaded
+  openclaw-resources:
+    enabled: false
+    severity: warning
+    # check-skills-exist: true
+    # check-entrypoints-exist: false
 
   # opencode.json and opencode.jsonc must parse and use keys and MCP server shapes OpenCode reads
   opencode-config-valid:

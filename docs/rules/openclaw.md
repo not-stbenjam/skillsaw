@@ -3,9 +3,12 @@
 
 # OpenClaw
 
-Validates `metadata.openclaw` in SKILL.md frontmatter against the [OpenClaw spec](https://docs.openclaw.ai/tools/skills). Only fires when `metadata.openclaw` is present.
+Native plugin manifests, package entrypoints, resource paths, and skill metadata. Validates `metadata.openclaw` in SKILL.md frontmatter against the [OpenClaw spec](https://docs.openclaw.ai/tools/skills). Only fires when `metadata.openclaw` is present.
 
 | Rule ID | Description | Default Severity | Autofix |
 |---------|-------------|------------------|---------|
 | [`openclaw-metadata`](openclaw-metadata.md) | Validate metadata.openclaw fields against the OpenClaw spec | warning (auto) | - |
+| [`openclaw-manifest-valid`](openclaw-manifest-valid.md) | Native OpenClaw manifests must declare an id and object configSchema | error (disabled) | - |
+| [`openclaw-package-valid`](openclaw-package-valid.md) | OpenClaw package metadata must declare valid extension entries | error (disabled) | - |
+| [`openclaw-resources`](openclaw-resources.md) | OpenClaw resources should resolve inside their package and exist when loaded | warning (disabled) | - |
 

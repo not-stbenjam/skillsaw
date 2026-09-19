@@ -537,6 +537,28 @@ class GrokPluginConfigNode(LintTarget):
 
 
 @dataclass(eq=False)
+class OpenClawPluginNode(LintTarget):
+    """A native OpenClaw package container."""
+
+    def tree_label(self) -> str:
+        return f"{self.path.name} [openclaw]"
+
+
+@dataclass(eq=False)
+class OpenClawPluginConfigNode(LintTarget):
+    """Native manifest, separate from other ecosystems sharing its directory."""
+
+    @property
+    def plugin_dir(self) -> Path:
+        return self.path.parent
+
+
+@dataclass(eq=False)
+class OpenClawPackageConfigNode(OpenClawPluginConfigNode):
+    """OpenClaw package.json runtime entry declarations."""
+
+
+@dataclass(eq=False)
 class AgentPluginConfigNode(LintTarget):
     """The root ``plugin.json`` manifest for a portable Agent Plugin."""
 

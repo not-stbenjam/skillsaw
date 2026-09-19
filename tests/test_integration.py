@@ -5988,6 +5988,18 @@ class TestRuleCoverage:
         r = run_lint(repo, config=config)
         fired |= rule_ids(r)
 
+        repo = copy_fixture("openclaw/invalid", tmp_path / "openclaw_invalid")
+        r = run_lint(
+            repo,
+            "--rule",
+            "openclaw-manifest-valid",
+            "--rule",
+            "openclaw-package-valid",
+            "--rule",
+            "openclaw-resources",
+        )
+        fired |= rule_ids(r)
+
         missing = all_rule_ids - fired
         assert not missing, (
             f"Rules without test coverage ({len(missing)}): {sorted(missing)}\n"

@@ -1,0 +1,8 @@
+{
+  "name": "@example/weather",
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
+}

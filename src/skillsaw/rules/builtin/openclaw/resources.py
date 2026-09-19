@@ -1,0 +1,97 @@
+"""Report ignored or unavailable OpenClaw package resources."""
+
+from skillsaw.context import RepositoryContext
+from skillsaw.formats.openclaw import read_manifest, contained_file
+from skillsaw.lint_target import OpenClawPluginConfigNode, OpenClawPackageConfigNode
+from skillsaw.paths import contained_resolve, safe_resolve, safe_is_dir, safe_is_file
+from skillsaw.repository_types import RepositoryType
+from skillsaw.rule import Rule, Severity
+from skillsaw.utils import read_json
+
+
+class OpenClawResourcesRule(Rule):
+    """Inspect declared skills and optionally built runtime entrypoints."""
+
+    since = "0.20.0"
+    repo_types = frozenset({RepositoryType.OPENCLAW_PLUGIN})
+    default_enabled = False
+    config_schema = {
+        "check-skills-exist": {
+            "type": "bool",
+            "default": True,
+            "description": "Check skill directories after installing package dependencies",
+        },
+        "check-entrypoints-exist": {
+            "type": "bool",
+            "default": False,
+            "description": "Check runtime files after building the package; source checkouts may omit dist",
+        },
+    }
+
+    @property
+    def rule_id(self):
+        return "openclaw-resources"
+
+    @property
+    def description(self):
+        return "OpenClaw resources should resolve inside their package and exist when loaded"
+
+    def default_severity(self):
+        return Severity.WARNING
+
+    def check(self, context: RepositoryContext):
+        violations = []
+        check_entries = self.setting("check-entrypoints-exist")
+        check_skills = self.setting("check-skills-exist")
+        for node in context.lint_tree.find(OpenClawPluginConfigNode):
+            root = safe_resolve(node.plugin_dir)
+            if root is None or not contained_file(node.plugin_dir, node.path.name):
+                continue
+            package = isinstance(node, OpenClawPackageConfigNode)
+            data, error = read_json(node.path) if package else read_manifest(node.path)
+            if error or not isinstance(data, dict):
+                continue
+            if package:
+                metadata = data.get("openclaw")
+                values = metadata.get("extensions") if isinstance(metadata, dict) else None
+                field = "openclaw.extensions"
+            else:
+                values = data.get("skills")
+                field = "skills"
+            if values is None:
+                continue
+            if not isinstance(values, list):
+                if not package:
+                    violations.append(
+                        self.violation(
+                            "'skills' must be an array of non-empty paths; OpenClaw ignores this value",
+                            file_path=node.path,
+                        )
+                    )
+                continue
+            problems = []
+            for raw in values:
+                if not isinstance(raw, str) or not raw.strip():
+                    if not package:
+                        problems.append("non-string or empty path is ignored")
+                    continue
+                target = contained_resolve(node.plugin_dir / raw.strip(), root)
+                if target is None:
+                    problems.append(f"{raw!r} escapes the plugin directory")
+                elif not package and check_skills and not safe_is_dir(target):
+                    problems.append(
+                        f"{raw!r} is not an existing skill directory; install dependencies if provided by a package"
+                    )
+                elif package and check_entries and not safe_is_file(target):
+                    problems.append(
+                        f"{raw!r} is not an existing runtime file; build the package first"
+                    )
+            if package and values == []:
+                problems.append("empty extension list disables entrypoint discovery")
+            if problems:
+                violations.append(
+                    self.violation(
+                        f"'{field}': " + "; ".join(dict.fromkeys(problems)), file_path=node.path
+                    )
+                )
+        return violations

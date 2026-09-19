@@ -1,0 +1,8 @@
+// Native OpenClaw allows JSON5 syntax.
+{
+ id: 'weather', configSchema: {type: 'object', properties: {city: {type: 'string'}}},
+ skills: ['./guides'],
+ name: 'Weather Tools',
+ mcpServers: {weather: {command: 'weather-server', args: ['--local']}},
+ futureCapability: {enabled: true},
+}

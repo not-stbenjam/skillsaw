@@ -107,6 +107,7 @@ class RepositoryScan:
     skills_lock_files: Tuple[Path, ...]
     promptfoo_named_files: Tuple[Path, ...]
     promptfoo_eval_files: Dict[Path, Tuple[Path, ...]]
+    openclaw_manifest_files: Tuple[Path, ...] = ()
     walk_errors: Tuple[OSError, ...] = ()
 
 
@@ -126,6 +127,7 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
     legacy_editor: Dict[str, List[Path]] = {name: [] for name in LEGACY_EDITOR_FILES}
     mcp_registry_files: List[Path] = []
     package_json_files: List[Path] = []
+    openclaw_manifests: List[Path] = []
     skills_locks: List[Path] = []
     promptfoo_named: List[Path] = []
     promptfoo_evals: Dict[Path, List[Path]] = {}
@@ -164,6 +166,8 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
             found.update(here / name for name in filenames if devin.is_instruction_filename(name))
             if "server.json" in filenames:
                 mcp_registry_files.append(here / "server.json")
+            if "openclaw.plugin.json" in filenames:
+                openclaw_manifests.append(here / "openclaw.plugin.json")
             if "package.json" in filenames:
                 package_json_files.append(here / "package.json")
             if "skills-lock.json" in filenames:
@@ -181,6 +185,7 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
             if name in SCANNED_DIR_NAMES and not vendored:
                 tool_dirs[name].append(here / name)
     return RepositoryScan(
+        openclaw_manifest_files=tuple(sorted(openclaw_manifests)),
         walk_errors=tuple(walk_errors),
         instruction_files=tuple(sorted(found)),
         tool_dirs={name: tuple(sorted(paths)) for name, paths in tool_dirs.items()},
