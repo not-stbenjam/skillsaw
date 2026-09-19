@@ -25,11 +25,13 @@ class RepositoryCursorMixin:
             catalogs = discovery.catalogs(self.root_path, markers, self.is_path_excluded)
             entries = discovery.entries(catalogs)
             roots = discovery.plugins(self.root_path, markers, entries, self.is_path_excluded)
+            # A forced discovery root is not a filesystem ownership declaration.
+            claims = set(roots)
             if RepositoryType.CURSOR_PLUGIN in self._cursor_forced and not roots:
                 roots = discovery.plugins(
                     self.root_path, (), [self.root_path], self.is_path_excluded
                 )
-            self._cursor_cache = (catalogs, entries, roots, set(roots))
+            self._cursor_cache = (catalogs, entries, roots, claims)
         return self._cursor_cache
 
     def cursor_plugin_roots(self) -> list[Path]:

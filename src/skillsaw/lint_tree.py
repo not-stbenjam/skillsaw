@@ -754,6 +754,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     _contained_plugin_owner = context.contained_plugin_owning
     agent_plugin_roots = set(context.agent_plugin_roots())
     openclaw_plugin_roots = set(context.openclaw_plugin_roots())
+    cursor_plugin_roots = set(context.cursor_plugin_roots())
 
     def _shadowed_by_agent_plugin_mcp(path: Path, agent_plugin_mcp: Path | None) -> bool:
         """Whether *path* is the portable ``mcp.json`` under another name.
@@ -1437,6 +1438,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     for plugin_path in plugin_dirs:
         prov = context.provenance(plugin_path)
         is_pi = prov.pi or (context._pi_package_forced and plugin_path == context.root_path)
+        is_cursor = prov.cursor or plugin_path in cursor_plugin_roots
         # Compiled-output filtering is a Claude/APM concept; an explicit
         # Codex, Grok or Antigravity claim keeps the directory.
         # ``.agents/`` is both an APM compile target and Antigravity's
@@ -1444,7 +1446,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # ``.agents/plugins/<name>/`` would be discarded as generated output
         # in every APM repository with a Codex target.
         if _is_in_compiled_dir(plugin_path) and not (
-            prov.codex or prov.grok or prov.antigravity or prov.openclaw or prov.cursor
+            prov.codex or prov.grok or prov.antigravity or prov.openclaw or is_cursor
         ):
             continue
         resolved_plugin = safe_resolve(plugin_path)
@@ -1470,14 +1472,14 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             or prov.antigravity
             or is_openclaw
             or is_agent_plugin
-            or prov.cursor
+            or is_cursor
             or is_pi
         ):
             container = root
         elif prov.codex:
             container = CodexPluginNode(path=plugin_path)
             codex_plugin_nodes[resolved_plugin] = container
-        elif prov.cursor:
+        elif is_cursor:
             container = CursorPluginNode(path=plugin_path)
             cursor_plugin_nodes[resolved_plugin] = container
         elif prov.grok:
@@ -1557,18 +1559,18 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                     for field in ("rules", "commands", "agents")
                 },
             )
-            for origin, data in (context.cursor_views(resolved_plugin) if prov.cursor else [])
+            for origin, data in (context.cursor_views(resolved_plugin) if is_cursor else [])
         ]
         # Cursor overrides replace conventional directories. Attaching generic
         # prose here would lint unloaded defaults and assign Claude block types.
         # Mixed packages still retain the other ecosystems' conventional prose.
-        if prov.ecosystems != frozenset({"cursor"}):
+        if prov.ecosystems - {"cursor"} or not is_cursor:
             _add_plugin_prose(container, plugin_path, resolved_plugin)
         elif _inside_plugin(plugin_path / "README.md", resolved_plugin):
             state.add_block(
                 container, plugin_path / "README.md", ReadmeBlock, owner=resolved_plugin
             )
-        if prov.cursor:
+        if is_cursor:
             for origin, data, components in cursor_components:
                 manifest_path = plugin_path / cursor.MARKER / "plugin.json"
                 config = CursorPluginBlock(
@@ -1625,7 +1627,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # Conventional Claude configs belong only to Claude or legacy
         # unclaimed packages. Portable-only packages must not accidentally
         # inherit Claude's hooks, .mcp.json, or settings semantics.
-        if prov.claude or (not prov.ecosystems and not is_agent_plugin and not is_pi):
+        if prov.claude or (
+            not prov.ecosystems and not is_agent_plugin and not is_pi and not is_cursor
+        ):
             state.add_block(
                 container,
                 plugin_path / "hooks" / "hooks.json",
@@ -1639,7 +1643,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # counterpart: attached only for Claude-style directories, keeping
         # the generic attachment path away from content a hostile
         # Codex-only checkout controls.
-        if prov.claude or (not prov.ecosystems and not is_agent_plugin and not is_pi):
+        if prov.claude or (
+            not prov.ecosystems and not is_agent_plugin and not is_pi and not is_cursor
+        ):
             state.add_block(
                 container, plugin_path / "settings.json", SettingsBlock, owner=resolved_plugin
             )
