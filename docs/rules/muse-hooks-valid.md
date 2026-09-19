@@ -87,7 +87,7 @@ intended:
 **Info** — advisory notices:
 
 - Events present in Muse's binary but omitted from official documentation
-  (`Notification`, `PostToolUseFailure`, `StopFailure`, `PostToolBatch`).
+  (`StopFailure`, `PostToolBatch`).
   Be sure to test these in your environment before relying on them.
 
 When an unknown key appears across multiple groups or handlers — common
@@ -190,6 +190,10 @@ Unclosed groups/classes and unsupported look-around/backreferences are still
 reported in the checked subset. Extended-mode (`x`) patterns are left
 unresolved because comments change tokenization. No finding is a complete
 Rust regex validation guarantee.
+
+`Notification` and `PostToolUseFailure` are now documented Muse events and
+do not receive the undocumented-event advisory. Handler and group checks
+still apply to both events.
 
 ## Configuration
 

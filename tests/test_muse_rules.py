@@ -317,7 +317,7 @@ def broken(tmp_path) -> List[RuleViolation]:
     [
         # An event in Muse's enum but not its documented list: parsed, but
         # unproven, so advisory rather than a warning.
-        ("Hook event 'Notification' is not in Muse's documented event list", Severity.INFO),
+        ("Hook event 'StopFailure' is not in Muse's documented event list", Severity.INFO),
         # Event names are case-sensitive, so this is not `SessionStart`.
         ("Unknown hook event 'sessionstart'", Severity.WARNING),
         ("Hook event 'PostCompact' has an empty array", Severity.WARNING),
@@ -972,7 +972,7 @@ def test_extra_events_accepts_an_event_newer_than_this_release(tmp_path) -> None
 
     assert not [m for m in messages(silenced) if "'sessionstart'" in m]
     # Only the named event is accepted; the undocumented one still shows.
-    assert only(silenced, "Hook event 'Notification' is not in Muse's documented event list")
+    assert only(silenced, "Hook event 'StopFailure' is not in Muse's documented event list")
 
 
 def test_an_accepted_event_keeps_its_entries_shape_checked(tmp_path) -> None:
