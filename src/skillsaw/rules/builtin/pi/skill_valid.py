@@ -10,7 +10,7 @@ from skillsaw.rule import Rule, RuleViolation, Severity
 class PiSkillValidRule(Rule):
     """Report metadata that prevents Pi from loading a declared skill."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 
     @property

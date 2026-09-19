@@ -9,7 +9,7 @@ Literal Pi resource paths should exist in the assembled checkout
 |---|---|
 | **Severity** | warning (disabled) |
 | **Autofix** | - |
-| **Since** | v0.20.0 |
+| **Since** | v0.21.0 |
 | **Repo Types** | pi, pi-package |
 | **Category** | [Pi](pi.md) |
 

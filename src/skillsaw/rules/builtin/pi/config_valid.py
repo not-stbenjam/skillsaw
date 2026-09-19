@@ -11,7 +11,7 @@ from skillsaw.rule import Rule, RuleViolation, Severity
 class PiConfigValidRule(Rule):
     """Validate resource declarations without imposing an npm or settings schema."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 
     @property

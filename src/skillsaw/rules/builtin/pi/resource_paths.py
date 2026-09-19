@@ -13,7 +13,7 @@ from skillsaw.rule import Rule, RuleViolation, Severity
 class PiResourcePathsRule(Rule):
     """Find missing local paths when linting a fully assembled Pi package."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     default_enabled = False
     repo_types = frozenset({RepositoryType.PI, RepositoryType.PI_PACKAGE})
 

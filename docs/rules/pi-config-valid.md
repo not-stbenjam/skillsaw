@@ -9,7 +9,7 @@ Pi package and project resource declarations must have valid types
 |---|---|
 | **Severity** | warning (auto) |
 | **Autofix** | - |
-| **Since** | v0.20.0 |
+| **Since** | v0.21.0 |
 | **Repo Types** | pi, pi-package |
 | **Category** | [Pi](pi.md) |
 
