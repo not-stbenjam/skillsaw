@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
+from skillsaw.discovery.cursor_globs import contained_glob
 from skillsaw.paths import (
     contained_resolve,
     has_parent_traversal,
@@ -78,8 +79,7 @@ def component_paths(root: Path, data: dict, field: str) -> list[Path]:
             continue
         if any(char in item for char in "*?["):
             try:
-                matches = root.glob(item)
-                result.update(p for p in matches if contained_resolve(p, root) is not None)
+                result.update(contained_glob(root, item))
             except (OSError, ValueError, RecursionError):
                 continue
         else:

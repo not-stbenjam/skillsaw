@@ -1,0 +1,7 @@
+{
+  "name": "recursive-review",
+  "rules": [
+    "**/x/**/x/**/x/**/x/**/x/**/x/**/x/**/x/**/x/**/x/**/x/**/x/*.md",
+    "guidance/*"
+  ]
+}
