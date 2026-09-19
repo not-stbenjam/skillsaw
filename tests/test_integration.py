@@ -10225,3 +10225,47 @@ def test_fix_unknown_rule_advisories_neutralize_terminal_controls(tmp_path, flag
     assert "No auto-fixable violations found." in result.stdout
     assert not any((control in result.stdout for control in ("\x1b", "\x07", "\u202e")))
     assert config.read_bytes() == original
+
+
+def _pi_routing_findings(root, *options):
+    result = run_cli(
+        [
+            "lint",
+            str(root),
+            "--no-custom-rules",
+            "--rule",
+            "content-description-routing",
+            "--format",
+            "json",
+            *options,
+        ]
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)["violations"]
+
+
+def test_pi_prompt_descriptions_are_command_labels(tmp_path):
+    root = copy_fixture("pi/routing", tmp_path)
+    findings = _pi_routing_findings(root)
+    assert {finding["file_path"] for finding in findings} == {
+        "prompts/deploy.md",
+        "prompts/empty.md",
+        "skills/automatic/SKILL.md",
+    }
+    by_path = {finding["file_path"]: finding for finding in findings}
+    assert len(findings) == 3
+    assert "only restates the name" in by_path["prompts/deploy.md"]["message"]
+    assert "Description is empty" in by_path["prompts/empty.md"]["message"]
+    assert "does not say when to use this skill" in by_path["skills/automatic/SKILL.md"]["message"]
+    assert all((finding["line"] == 2 for finding in findings))
+
+
+def test_pi_user_only_skills_can_opt_into_routing_checks(tmp_path):
+    root = copy_fixture("pi/routing", tmp_path)
+    defaults = _pi_routing_findings(root)
+    configured = _pi_routing_findings(root, "--config", str(root / "check-user-only.yaml"))
+    manual = [finding for finding in configured if finding["file_path"] == "skills/manual/SKILL.md"]
+    assert len(manual) == 1
+    assert "does not say when to use this skill" in manual[0]["message"]
+    assert manual[0]["line"] == 2
+    assert [finding for finding in configured if finding not in manual] == defaults

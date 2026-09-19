@@ -223,7 +223,7 @@ class DescriptionRoutingRule(Rule):
                 if block_type is DevinSkillBlock and not block.has_frontmatter:
                     continue
                 if (
-                    block_type is SkillBlock
+                    block_type in (SkillBlock, PiSkillBlock)
                     and self.setting("check-user-only-skills") is not True
                     and block.field_value("disable-model-invocation") is True
                 ):
@@ -304,6 +304,7 @@ class DescriptionRoutingRule(Rule):
                 if (
                     block_type
                     not in (
+                        PiPromptBlock,
                         CommandBlock,
                         CopilotAgentBlock,
                         OpenCodeCommandBlock,
