@@ -1,0 +1,13 @@
+{
+  "pi": {
+    "skills": [
+      "missing"
+    ],
+    "prompts": [
+      "no-match/**/*.md"
+    ],
+    "extensions": [
+      "node_modules/pkg/index.js"
+    ]
+  }
+}

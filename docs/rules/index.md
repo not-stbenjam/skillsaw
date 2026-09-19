@@ -3,7 +3,7 @@
 
 # Rules Reference
 
-skillsaw includes **101** built-in rules organized into the following categories:
+skillsaw includes **104** built-in rules organized into the following categories:
 
 - [Agent Plugins](agent-plugins.md) (3 rules)
 - [agentskills.io](agentskills.md) (8 rules)
@@ -24,6 +24,7 @@ skillsaw includes **101** built-in rules organized into the following categories
 - [OpenAI Codex](codex.md) (6 rules)
 - [OpenClaw](openclaw.md) (1 rule)
 - [OpenCode](opencode.md) (1 rule)
+- [Pi](pi.md) (3 rules)
 - [Promptfoo Evals](promptfoo.md) (3 rules)
 - [Security](security.md) (4 rules)
 - [Vercel](vercel.md) (1 rule)
@@ -123,6 +124,9 @@ skillsaw includes **101** built-in rules organized into the following categories
 | [`codex-marketplace-registration`](codex-marketplace-registration.md) | Codex plugins must be registered in .agents/plugins/marketplace.json | error (auto) | auto | OpenAI Codex |
 | [`openclaw-metadata`](openclaw-metadata.md) | Validate metadata.openclaw fields against the OpenClaw spec | warning (auto) | - | OpenClaw |
 | [`opencode-config-valid`](opencode-config-valid.md) | opencode.json and opencode.jsonc must parse and use keys and MCP server shapes OpenCode reads | error (auto) | - | OpenCode |
+| [`pi-config-valid`](pi-config-valid.md) | Pi package and project resource declarations must have valid types | warning (auto) | - | Pi |
+| [`pi-skill-valid`](pi-skill-valid.md) | Pi skills need parseable frontmatter and a nonempty description | warning (auto) | - | Pi |
+| [`pi-resource-paths`](pi-resource-paths.md) | Literal Pi resource paths should exist in the assembled checkout | warning (disabled) | - | Pi |
 | [`promptfoo-valid`](promptfoo-valid.md) | Validate promptfoo eval YAML config structure and file references | error (auto) | - | Promptfoo Evals |
 | [`promptfoo-assertions`](promptfoo-assertions.md) | Require specific assertion types in all promptfoo eval tests | warning (disabled) | - | Promptfoo Evals |
 | [`promptfoo-metadata`](promptfoo-metadata.md) | Require specific metadata keys on all promptfoo eval tests | warning (disabled) | - | Promptfoo Evals |

@@ -31,6 +31,9 @@ class RepositoryScanMixin:
         root_path: Path
         instruction_files: List[Path]
         repo_types: Set[RepositoryType]
+        exclude_patterns: List[str]
+        _pi_package_forced: bool
+        _pi_packages_cache: Tuple[Tuple[str, ...], List[Path]]
         plugins: List[Path]
         codex_plugins: List[Path]
 
@@ -57,6 +60,29 @@ class RepositoryScanMixin:
         def _contained_plugin_claims_possible(self) -> bool: ...
 
         def _is_containment_plugin(self, path: Path) -> bool: ...
+
+    def pi_discovery_roots(self) -> List[Path]:
+        """Declared packages plus an explicitly selected conventional root."""
+        roots = self.pi_package_roots()
+        if self._pi_package_forced and self.root_path not in roots:
+            roots.append(self.root_path)
+        return roots
+
+    def pi_package_roots(self) -> List[Path]:
+        """Cached, declaration-invariant Pi package claims from the shared scan."""
+        from .discovery.pi import package_roots
+
+        key = tuple(self.exclude_patterns)
+        cached = getattr(self, "_pi_packages_cache", None)
+        if cached is None or cached[0] != key:
+            roots = package_roots(
+                self.root_path,
+                self._repository_scan().package_json_files,
+                (p / "settings.json" for p in self.agent_tool_dirs(".pi")),
+                self.is_path_excluded,
+            )
+            self._pi_packages_cache = (key, roots)
+        return list(self._pi_packages_cache[1])
 
     def _discover_instruction_files(self) -> List[Path]:
         """Discover root and nested instruction files read by supported tools.
@@ -139,7 +165,7 @@ class RepositoryScanMixin:
             if (provenance := self.provenance(plugin)).claude
             or (provenance.codex and portable_manifest(plugin) is None)
         ]
-        return claude_discovery.discover_skills(
+        skills = claude_discovery.discover_skills(
             self.root_path,
             agentskills=RepositoryType.AGENTSKILLS in self.repo_types,
             # A plugins/* layout can cause legacy Claude discovery to list an
@@ -183,3 +209,34 @@ class RepositoryScanMixin:
             ),
             is_excluded=self.is_path_excluded,
         )
+
+        # Pi owns selection inside its packages and .pi/skills. A dual package
+        # retains other consumers' discovery as well as Pi's own resources.
+        pi_roots = [
+            p for p in self.pi_discovery_roots() if not (self.provenance(p).ecosystems - {"pi"})
+        ]
+        from .discovery.pi import project_resources
+
+        native_skills = set()
+        for directory in self.agent_tool_dirs(".pi"):
+            native_skills.update(
+                project_resources(directory, "skills", self.root_path, self.is_path_excluded)
+            )
+
+        def owned_by_pi(path: Path) -> bool:
+            if path / "SKILL.md" in native_skills:
+                return True
+            if not any(path.is_relative_to(root) for root in pi_roots):
+                return False
+            # A Pi package does not own another tool's customization root or
+            # an independently declared nested package. Keep those consumers.
+            for ancestor in (path, *path.parents):
+                if ancestor.name.startswith(".") and ancestor.name != ".pi":
+                    return False
+                if self.provenance(ancestor).ecosystems - {"pi"}:
+                    return False
+                if ancestor in pi_roots:
+                    return True
+            return False
+
+        return [p for p in skills if not owned_by_pi(p)]

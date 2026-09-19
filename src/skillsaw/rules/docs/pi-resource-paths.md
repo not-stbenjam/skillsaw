@@ -1,0 +1,21 @@
+## Why
+
+Pi resolves package resources relative to `package.json`, and project resource
+paths and local package sources relative to `.pi/settings.json`. A missing
+literal path can silently omit content.
+
+## Activation
+
+This rule is opt-in because generated files and bundled npm dependencies may
+not exist in a source checkout. Enable it with `--rule pi-resource-paths` after
+assembling the package, or set `rules.pi-resource-paths.enabled: true`.
+
+## How to fix
+
+Correct paths relative to the file declaring them, or build/install the bundled
+resources before linting. Configure rule exclusions for intentionally absent
+resources. The rule never installs packages itself.
+
+Unmatched globs, exclusion patterns, template variables, remote package sources,
+home-relative paths, and paths outside the repository are skipped. It validates
+literal local existence, not runtime loading or the output of a future build.

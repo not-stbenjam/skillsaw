@@ -59,6 +59,8 @@ class RepositoryType(Enum):
     # Antigravity primitives (plugin with plugin.json, or project configuration)
     ANTIGRAVITY_PLUGIN = "antigravity-plugin"
     ANTIGRAVITY = "antigravity"
+    PI_PACKAGE = "pi-package"  # package.json#pi or a locally referenced Pi package
+    PI = "pi"  # .pi project resources
     UNKNOWN = "unknown"  # Not a recognized repo type
 
 
@@ -72,6 +74,8 @@ class RepositoryType(Enum):
 # the same reason as the Codex ones; GROK_PROJECT is not, because ``.grok/``
 # earns its skills through ``CONVENTIONAL_SKILL_DIRS`` instead.
 SKILL_REPO_TYPES = {
+    RepositoryType.PI_PACKAGE,
+    RepositoryType.PI,
     RepositoryType.AGENTSKILLS,
     RepositoryType.SINGLE_PLUGIN,
     RepositoryType.MARKETPLACE,
@@ -91,6 +95,7 @@ SKILL_REPO_TYPES = {
 #: after construction.
 TOOL_REPO_TYPES = frozenset(
     {
+        RepositoryType.PI,
         RepositoryType.CURSOR,
         RepositoryType.COPILOT,
         RepositoryType.CLINE,

@@ -83,6 +83,8 @@ class RepositoryContext(
         RepositoryType.GROK_PLUGIN,
         RepositoryType.ANTIGRAVITY_PLUGIN,
         RepositoryType.AGENT_PLUGIN,
+        RepositoryType.PI_PACKAGE,
+        RepositoryType.PI,
         RepositoryType.AGENTSKILLS,
         RepositoryType.MCP_REGISTRY,
         RepositoryType.CODERABBIT,
@@ -160,6 +162,7 @@ class RepositoryContext(
         self._excluded_cache_patterns: Tuple[str, ...] = ()
         self.has_apm = detect_discovery.has_apm(self.root_path)
         self._scan: Optional[detect_discovery.RepositoryScan] = None
+        self._pi_package_forced = repo_types is not None and RepositoryType.PI_PACKAGE in repo_types
         self._apm_compiled_roots: Optional[Set[Path]] = None
         self._apm_targets: Any = _UNSET  # frozenset once read; None = unknown
         self._codex_marketplace_paths: Optional[List[Path]] = None
@@ -279,6 +282,13 @@ class RepositoryContext(
             if t in self.repo_types:
                 return t
         return RepositoryType.UNKNOWN
+
+    @property
+    def skill_count(self) -> int:
+        """Portable directories and Pi's native skills, including flat files."""
+        from .blocks.pi import PiSkillBlock
+
+        return len(self.skills) + len(self.lint_tree.find(PiSkillBlock))
 
     def repo_type_names(self, include_unknown: bool = True) -> List[str]:
         """Sorted names of all detected repository types, builtin and plugin.
@@ -548,6 +558,8 @@ class RepositoryContext(
             types.add(RepositoryType.GROK_PLUGIN)
         if self.antigravity_plugin_roots():
             types.add(RepositoryType.ANTIGRAVITY_PLUGIN)
+        if self.pi_package_roots():
+            types.add(RepositoryType.PI_PACKAGE)
         if self.mcp_registry_server_paths():
             types.add(RepositoryType.MCP_REGISTRY)
 
@@ -728,6 +740,7 @@ class RepositoryContext(
             # else. ``merge_plugin_dirs`` dedupes by resolved path.
             self.antigravity_plugins,
             self.antigravity_plugin_roots(),
+            self.pi_discovery_roots(),
         )
 
     def codex_marketplace_paths(self) -> List[Path]:

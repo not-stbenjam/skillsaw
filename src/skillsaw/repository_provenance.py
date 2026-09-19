@@ -100,6 +100,10 @@ class PluginProvenance:
         return self.grok and not self.claude
 
     @property
+    def pi(self) -> bool:
+        return "pi" in self.ecosystems
+
+    @property
     def antigravity(self) -> bool:
         return "antigravity" in self.ecosystems
 
@@ -147,6 +151,8 @@ class RepositoryProvenanceMixin:
         marketplace_entries: Dict[Path, Dict[str, Any]]
 
         # Required host behavior.
+        def pi_package_roots(self) -> List[Path]: ...
+
         def _codex_catalog_files(self) -> List[Path]: ...
 
         def is_path_excluded(self, path: Path) -> bool: ...
@@ -283,6 +289,8 @@ class RepositoryProvenanceMixin:
             )
         ):
             ecosystems.add("codex")
+        if resolved is not None and resolved in self.pi_package_roots():
+            ecosystems.add("pi")
         if resolved is not None and resolved in self._agent_plugin_claim_set():
             ecosystems.add("agent-plugin")
         if grok_manifest_is_contained(plugin_dir) or (

@@ -373,6 +373,15 @@ RULE_GROUPS = [
         "content.",
     ),
     (
+        "Pi",
+        "pi",
+        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths"],
+        "Discovers Pi packages and `.pi/` project resources, validates resource "
+        "arrays and native skill metadata, and exposes prompts and flat skills "
+        "to content checks. Literal resource-path checks are opt-in. "
+        "Extensions are never executed and remote packages are not installed.",
+    ),
+    (
         "Promptfoo Evals",
         "promptfoo",
         ["promptfoo-valid", "promptfoo-assertions", "promptfoo-metadata"],

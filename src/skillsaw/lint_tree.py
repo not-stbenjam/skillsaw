@@ -93,6 +93,8 @@ from .formats.codex_manifest import codex_manifest_view
 from .discovery import AGENT_MEMORY_DIR, AGENT_MEMORY_INDEX
 from .discovery.excludes import is_root_or_ancestor_excluded
 from .discovery.opencode import contained_instruction_globs
+from .blocks.pi import PiPackageNode, PiPackageBlock
+from .pi_tree import attach_pi_resources, attach_pi_projects
 from .formats import antigravity, devin, grok, muse
 from .utils import has_apm_generated_header, read_text
 from .paths import (
@@ -1382,6 +1384,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         *context.grok_plugins,
         *context.antigravity_plugins,
         *context.agent_plugins,
+        *context.pi_discovery_roots(),
         *sorted(p for p in context._codex_claim_set() if not context.is_path_excluded(p)),
         *sorted(p for p in context._grok_claim_set() if not context.is_path_excluded(p)),
         *sorted(p for p in context._antigravity_claim_set() if not context.is_path_excluded(p)),
@@ -1405,6 +1408,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     root_plugin_owner: Path | None = None
     for plugin_path in plugin_dirs:
         prov = context.provenance(plugin_path)
+        is_pi = prov.pi or (context._pi_package_forced and plugin_path == context.root_path)
         # Compiled-output filtering is a Claude/APM concept; an explicit
         # Codex, Grok or Antigravity claim keeps the directory.
         # ``.agents/`` is both an APM compile target and Antigravity's
@@ -1430,7 +1434,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             container = PluginNode(path=plugin_path)
             plugin_nodes[resolved_plugin] = container
         elif resolved_plugin == root.resolved_path and (
-            prov.codex or prov.grok or prov.antigravity or is_agent_plugin
+            prov.codex or prov.grok or prov.antigravity or is_pi or is_agent_plugin
         ):
             container = root
         elif prov.codex:
@@ -1442,6 +1446,8 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         elif prov.antigravity:
             container = AntigravityPluginNode(path=plugin_path)
             antigravity_plugin_nodes[resolved_plugin] = container
+        elif is_pi:
+            container = PiPackageNode(path=plugin_path)
         elif is_agent_plugin:
             container = AgentPluginNode(path=plugin_path)
             agent_plugin_nodes[resolved_plugin] = container
@@ -1479,12 +1485,18 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        _add_plugin_prose(container, plugin_path, resolved_plugin)
+        if not is_pi or (prov.ecosystems - {"pi"}):
+            _add_plugin_prose(container, plugin_path, resolved_plugin)
+        if is_pi:
+            state.add_parser_block(
+                container, plugin_path / "package.json", PiPackageBlock, owner=resolved_plugin
+            )
+            attach_pi_resources(state, container, plugin_path)
 
         # Conventional Claude configs belong only to Claude or legacy
         # unclaimed packages. Portable-only packages must not accidentally
         # inherit Claude's hooks, .mcp.json, or settings semantics.
-        if prov.claude or (not prov.ecosystems and not is_agent_plugin):
+        if prov.claude or (not prov.ecosystems and not is_agent_plugin and not is_pi):
             state.add_block(
                 container,
                 plugin_path / "hooks" / "hooks.json",
@@ -1498,7 +1510,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # counterpart: attached only for Claude-style directories, keeping
         # the generic attachment path away from content a hostile
         # Codex-only checkout controls.
-        if prov.claude or (not prov.ecosystems and not is_agent_plugin):
+        if prov.claude or (not prov.ecosystems and not is_agent_plugin and not is_pi):
             state.add_block(
                 container, plugin_path / "settings.json", SettingsBlock, owner=resolved_plugin
             )
@@ -1906,6 +1918,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # Configured OpenCode instructions are ambient prose, but their
     # original semantic owner wins when a path is also a skill, command,
     # agent, editor rule, README, or plugin-contributed content block.
+    attach_pi_projects(state, root)
     _add_opencode_instructions()
 
     external_roots = context.externally_sourced_roots()

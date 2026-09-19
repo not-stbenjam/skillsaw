@@ -1,0 +1,20 @@
+{
+  "name": "pi-review",
+  "pi": {
+    "skills": [
+      "./custom/skills",
+      "!skip",
+      "+custom/skills/keep"
+    ],
+    "prompts": [
+      "./custom/prompts/**/*.md",
+      "!legacy.md"
+    ],
+    "extensions": [
+      "extensions"
+    ],
+    "themes": [
+      "themes"
+    ]
+  }
+}

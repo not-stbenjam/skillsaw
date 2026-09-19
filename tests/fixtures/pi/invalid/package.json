@@ -1,0 +1,9 @@
+{
+  "pi": {
+    "skills": "./skills",
+    "prompts": [
+      false
+    ],
+    "extensions": 42
+  }
+}

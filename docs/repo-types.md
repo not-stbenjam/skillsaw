@@ -64,6 +64,24 @@ historical list form for compatibility. Like Devin skills, nested Windsurf
 skill collections are discovered. A skill under `.agents/skills/` also remains
 a portable Agent Skill even when the repository contains Devin configuration.
 
+## Pi packages and projects
+
+`pi-package` detects `package.json#pi`, the `pi-package` npm keyword, and local
+package directories declared in `.pi/settings.json`. `pi` detects project
+resources under `.pi/`, including nested monorepo projects. Use `--type pi-package`
+for conventional-only packages or malformed manifests without an identifying key.
+
+Pi package resource arrays select extensions, skills, prompts and themes.
+Manifest paths and globs are package-relative; settings resource paths and local
+package sources are settings-relative. Flat Markdown skills and directory-form
+skills use Pi's native metadata contract, with optional names. Prompt and skill
+bodies receive shared content checks. See [pi-config-valid](rules/pi-config-valid.md)
+for discovery details and the pinned loader contract.
+
+Lints operate on repository-local authored resources. Remote packages are not
+installed, and extension code is never executed. Consumer package filters are
+validated without hiding the package's authored content from diagnostics.
+
 ## Agent Plugins
 
 Portable plugin packages following the [Agent Plugins v1

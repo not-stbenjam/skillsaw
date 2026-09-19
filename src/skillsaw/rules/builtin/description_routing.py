@@ -17,6 +17,7 @@ from skillsaw.rules.builtin.content_analysis import (
     SkillBlock,
 )
 from skillsaw.blocks import DevinSkillBlock
+from skillsaw.blocks.pi import PiPromptBlock, PiSkillBlock
 from skillsaw.rules.builtin.utils import read_frontmatter_commented
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -95,6 +96,8 @@ class DescriptionRoutingRule(Rule):
     since = "0.18.0"
     surface_dependencies = ("copilot-agent-valid",)
     repo_types = {
+        RepositoryType.PI,
+        RepositoryType.PI_PACKAGE,
         RepositoryType.AGENTSKILLS,
         RepositoryType.SINGLE_PLUGIN,
         RepositoryType.MARKETPLACE,
@@ -194,6 +197,8 @@ class DescriptionRoutingRule(Rule):
         """Find weak descriptions across discovered skills, agents, and commands."""
         violations: List[RuleViolation] = []
         for block_type in (
+            PiSkillBlock,
+            PiPromptBlock,
             SkillBlock,
             DevinSkillBlock,
             AgentBlock,
@@ -217,6 +222,8 @@ class DescriptionRoutingRule(Rule):
                     and self.setting("check-user-only-skills") is not True
                     and block.field_value("disable-model-invocation") is True
                 ):
+                    continue
+                if block_type is PiPromptBlock and block.field("description") is None:
                     continue
                 if not block.has_frontmatter:
                     violations.append(
