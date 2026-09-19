@@ -860,3 +860,35 @@ This determination is made at the repository root only — `apm_compiled_roots()
 looks for `<root>/.opencode`, nothing deeper. A nested `packages/x/.opencode/`
 is always authored content and is always linted in full, whatever `apm.yml`
 lists.
+
+## OpenClaw Plugin
+
+Native packages are discovered through `openclaw.plugin.json` or `openclaw.extensions`
+in `package.json`, including nested packages and `.openclaw/extensions/`.
+The `openclaw-plugin` repository type exposes manifests, package metadata,
+explicitly declared skill roots, and static MCP declarations in the lint tree.
+Shared skill, content, and MCP security rules apply automatically.
+
+Enable the new packaging checks explicitly:
+
+```yaml
+rules:
+  openclaw-manifest-valid:
+    enabled: true
+  openclaw-package-valid:
+    enabled: true
+  openclaw-resources:
+    enabled: true
+    check-skills-exist: true
+    check-entrypoints-exist: false
+```
+
+Native manifests accept JSON5. Package entrypoints may refer to generated
+files, so existence checks for those files are off until you enable them after
+building. Install dependencies before checking skill roots under `node_modules`,
+or set `check-skills-exist: false` in a source-only checkout.
+
+This support covers static plugin authoring: manifests, entrypoints, declared
+skills, and inline MCP servers. Runtime registrations, arbitrary schema
+compilation, gateway settings, and remote registries are outside its scope.
+Compatible Claude, Codex and Agent Plugins manifests retain their validators.

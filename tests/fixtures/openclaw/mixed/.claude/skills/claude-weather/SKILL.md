@@ -1,9 +1,9 @@
 ---
-name: inactive
-description: Explain why an inactive weather skill is unavailable when the user asks about plugin setup.
+name: claude-weather
+description: Retrieve local weather observations when the user asks for a weather report.
 ---
 
-# Inactive weather skill
+# Weather report
 
 Read the requested city from the user message. Query the weather service for
 current observations and report the temperature, conditions, and observation

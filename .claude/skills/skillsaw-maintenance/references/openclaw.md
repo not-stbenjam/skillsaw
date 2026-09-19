@@ -59,3 +59,37 @@ ARE the spec):
   aligned with the code, not the docs.
 - Complementary verification: the runtime validator `openclaw skills check --json` can
   cross-check a real skill against the installed OpenClaw version.
+
+## Native plugins
+
+Inspected September 18, 2026 at OpenClaw revision
+[`912b21b98581c0be3baad87fe3686b64d69fffeb`](https://github.com/openclaw/openclaw/tree/912b21b98581c0be3baad87fe3686b64d69fffeb).
+
+- `openclaw-manifest-valid`: `src/skillsaw/rules/builtin/openclaw/manifest_valid.py`;
+  documentation: `src/skillsaw/rules/docs/openclaw-manifest-valid.md`.
+- `openclaw-package-valid`: `src/skillsaw/rules/builtin/openclaw/package_valid.py`;
+  documentation: `src/skillsaw/rules/docs/openclaw-package-valid.md`.
+- `openclaw-resources`: `src/skillsaw/rules/builtin/openclaw/resources.py`;
+  documentation: `src/skillsaw/rules/docs/openclaw-resources.md`.
+- Discovery and normalization: `src/skillsaw/discovery/openclaw.py` and
+  `src/skillsaw/formats/openclaw.py`.
+- Regression coverage: `tests/test_integration_openclaw.py` and
+  `tests/fixtures/openclaw/`.
+
+On each maintenance pass, verify these native loader contracts:
+
+- `src/plugins/manifest.ts`: JSON5, the 256 KiB byte limit, non-empty `id`,
+  reserved case-insensitive `node-mcp` identity, and object `configSchema`.
+- `src/plugins/package-manifest.ts` and discovery: `openclaw.extensions`
+  detection, null/missing index fallback and empty-array suppression. Hook-only
+  packs are not native plugin claims.
+- `src/skills/loading/plugin-skills.ts`: explicitly declared skill roots,
+  containment and absence of a conventional `skills/` fallback.
+- `src/plugins/manifest-capability-normalizers.ts` and
+  `src/infra/prototype-keys.ts`: MCP names are trimmed; empty names, prototype
+  keys and non-object records are discarded by the host before runtime loading.
+
+All 155 bundled native plugins passed the required manifest and package-shape
+checks. This is one upstream repository, not 155 independent adoption samples;
+the new rules therefore remain opt-in. One declared dependency-provided skill
+root was absent before dependency installation. External plugin code was not run.

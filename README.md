@@ -36,43 +36,6 @@ automatically; everything else comes with precise, agent-friendly guidance.
 **[Browse the rules](https://skillsaw.org/rules/)** |
 **[Read the documentation](https://skillsaw.org/)**
 
-## OpenClaw plugins
-
-Native packages are discovered through `openclaw.plugin.json` or OpenClaw
-metadata in `package.json`, including nested packages and `.openclaw/extensions/`.
-The `openclaw-plugin` repository type exposes manifests, package metadata,
-explicitly declared skill roots, and static MCP declarations in the lint tree.
-Shared skill, content, and MCP security rules apply automatically.
-
-Enable the new packaging checks explicitly:
-
-```yaml
-rules:
-  openclaw-manifest-valid:
-    enabled: true
-  openclaw-package-valid:
-    enabled: true
-  openclaw-resources:
-    enabled: true
-    check-skills-exist: true
-    check-entrypoints-exist: false
-```
-
-Native manifests accept JSON5. Package entrypoints may refer to generated
-files, so existence checks for those files are off until you enable them after
-building. Install dependencies before checking skill roots under `node_modules`,
-or set `check-skills-exist: false` in a source-only checkout.
-
-This is static package-authoring support: it does not execute TypeScript,
-validate runtime registrations, compile arbitrary `configSchema` schemas,
-validate every optional capability field, or inspect personal gateway settings,
-remote ClawHub packages, and marketplace feeds. Compatible Claude, Codex and
-Agent Plugins bundles retain their own format validators; carrying an OpenClaw
-native manifest adds a separate validation surface. New native rules remain
-opt-in pending broader independent repository coverage. See the
-[manifest rule](src/skillsaw/rules/docs/openclaw-manifest-valid.md) for pinned
-loader evidence and validation scope.
-
 ## See it work
 
 [Watch an AI agent grade, fix, and configure a repository from

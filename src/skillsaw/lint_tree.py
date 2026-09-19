@@ -95,7 +95,7 @@ from .discovery.excludes import is_root_or_ancestor_excluded
 from .discovery.opencode import contained_instruction_globs
 from .lint_target import OpenClawPluginNode, OpenClawPluginConfigNode, OpenClawPackageConfigNode
 from .blocks.json_config import OpenClawInlineMcpBlock
-from .formats.openclaw import contained_file, read_manifest
+from .formats.openclaw import MANIFEST, contained_file, inline_mcp_servers
 from .formats import antigravity, devin, grok, muse
 from .utils import has_apm_generated_header, read_text
 from .paths import (
@@ -754,7 +754,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             | GrokPluginConfigNode
             | AgentPluginConfigNode
             | AntigravityPluginConfigNode
-            | OpenClawPluginConfigNode
         ),
         p: Path,
         block_cls: type,
@@ -1426,7 +1425,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         if resolved_plugin is None:
             continue
 
-        is_openclaw = plugin_path in openclaw_plugin_roots
+        is_openclaw = prov.openclaw or plugin_path in openclaw_plugin_roots
         is_agent_plugin = resolved_plugin in agent_plugin_roots
         agent_plugin_mcp = safe_resolve(plugin_path / "mcp.json") if is_agent_plugin else None
 
@@ -1452,12 +1451,12 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         elif prov.antigravity:
             container = AntigravityPluginNode(path=plugin_path)
             antigravity_plugin_nodes[resolved_plugin] = container
-        elif is_openclaw:
-            container = OpenClawPluginNode(path=plugin_path)
-            openclaw_plugin_nodes[resolved_plugin] = container
         elif is_agent_plugin:
             container = AgentPluginNode(path=plugin_path)
             agent_plugin_nodes[resolved_plugin] = container
+        elif is_openclaw:
+            container = OpenClawPluginNode(path=plugin_path)
+            openclaw_plugin_nodes[resolved_plugin] = container
         else:
             # Legacy unclaimed directories discovered by the Claude layout
             # retain their established container and validation behavior.
@@ -1492,22 +1491,14 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 elif isinstance(child, HooksBlock) and safe_resolve(child.path) in claimed_hooks:
                     child.plugin_owner = resolved_plugin
 
-        if prov.openclaw or plugin_path in openclaw_plugin_roots:
-            node = OpenClawPluginConfigNode(path=plugin_path / "openclaw.plugin.json")
+        if is_openclaw:
+            node = OpenClawPluginConfigNode(path=plugin_path / MANIFEST)
             node.plugin_owner = resolved_plugin
             if not _is_excluded(node.path):
                 container.children.append(node)
-            if contained_file(plugin_path, "openclaw.plugin.json") and not _is_excluded(node.path):
-                data, _ = read_manifest(node.path)
-                servers = data.get("mcpServers") if isinstance(data, dict) else None
-                if isinstance(servers, dict):
-                    payload = {
-                        key.strip(): value
-                        for key, value in servers.items()
-                        if key.strip()
-                        and key.strip() not in {"__proto__", "prototype", "constructor"}
-                        and isinstance(value, dict)
-                    }
+            if not _is_excluded(node.path):
+                payload = inline_mcp_servers(plugin_path)
+                if payload is not None:
                     block = OpenClawInlineMcpBlock(
                         path=node.path, inline_data={"mcpServers": payload}
                     )

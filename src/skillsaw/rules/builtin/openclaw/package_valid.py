@@ -3,29 +3,30 @@
 from skillsaw.context import RepositoryContext
 from skillsaw.lint_target import OpenClawPackageConfigNode
 from skillsaw.repository_types import RepositoryType
-from skillsaw.rule import Rule, Severity
+from skillsaw.rule import Rule, RuleViolation, Severity
+from typing import List
 from skillsaw.utils import read_json
 
 
 class OpenClawPackageValidRule(Rule):
     """Validate extension declaration shapes without assuming built files exist."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.OPENCLAW_PLUGIN})
     default_enabled = False
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "openclaw-package-valid"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "OpenClaw package metadata must declare valid extension entries"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         return Severity.ERROR
 
-    def check(self, context: RepositoryContext):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for node in context.lint_tree.find(OpenClawPackageConfigNode):
             data, error = read_json(node.path)

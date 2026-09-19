@@ -23,7 +23,6 @@ class RepositoryType(Enum):
     ``.muse/hooks.json`` reporting ``unknown``.
     """
 
-    OPENCLAW_PLUGIN = "openclaw-plugin"  # Native openclaw.plugin.json packages
     SINGLE_PLUGIN = "single-plugin"  # Single plugin at repo root
     MARKETPLACE = "marketplace"  # Marketplace with multiple plugins
     AGENTSKILLS = "agentskills"  # agentskills.io skill repo
@@ -60,6 +59,7 @@ class RepositoryType(Enum):
     # Antigravity primitives (plugin with plugin.json, or project configuration)
     ANTIGRAVITY_PLUGIN = "antigravity-plugin"
     ANTIGRAVITY = "antigravity"
+    OPENCLAW_PLUGIN = "openclaw-plugin"  # Native openclaw.plugin.json packages
     UNKNOWN = "unknown"  # Not a recognized repo type
 
 

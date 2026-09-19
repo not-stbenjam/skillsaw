@@ -8,6 +8,7 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
 from .repository_types import RepositoryType
+from .formats.openclaw import MANIFEST
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
@@ -158,9 +159,13 @@ class RepositoryScanMixin:
             # under unrelated --type overrides, just like their tree nodes.
             grok_plugins=self.grok_plugin_roots(),
             openclaw_plugins=[
+                p for p in self.openclaw_plugin_roots() if not self.is_path_excluded(p / MANIFEST)
+            ],
+            openclaw_exclusive_plugins=[
                 p
                 for p in self.openclaw_plugin_roots()
-                if not self.is_path_excluded(p / "openclaw.plugin.json")
+                if self.provenance(p).ecosystems == frozenset({"openclaw"})
+                and not self.is_path_excluded(p / MANIFEST)
             ],
             # The claim union, not the gated discovery list: a plugin a
             # ``plugins.json`` registry names has a container and its hooks

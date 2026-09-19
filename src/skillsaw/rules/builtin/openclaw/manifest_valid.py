@@ -2,36 +2,34 @@
 
 from skillsaw.context import RepositoryContext
 from skillsaw.formats.openclaw import read_manifest
-from skillsaw.lint_target import OpenClawPluginConfigNode, OpenClawPackageConfigNode
+from skillsaw.lint_target import OpenClawPluginConfigNode
 from skillsaw.paths import contained_resolve, safe_resolve
 from skillsaw.repository_types import RepositoryType
-from skillsaw.rule import Rule, Severity
+from skillsaw.rule import Rule, RuleViolation, Severity
+from typing import List
 
 
 class OpenClawManifestValidRule(Rule):
     """Check native manifest syntax, identity, and configuration schema."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.OPENCLAW_PLUGIN})
-    # Opt-in until independently sampled public package coverage is sufficient.
     default_enabled = False
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "openclaw-manifest-valid"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "Native OpenClaw manifests must declare an id and object configSchema"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         return Severity.ERROR
 
-    def check(self, context: RepositoryContext):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for node in context.lint_tree.find(OpenClawPluginConfigNode):
-            if isinstance(node, OpenClawPackageConfigNode):
-                continue
             root = safe_resolve(node.plugin_dir)
             if root is None or contained_resolve(node.path, root) is None:
                 violations.append(

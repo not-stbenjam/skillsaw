@@ -348,9 +348,7 @@ RULE_GROUPS = [
         "openclaw",
         ["openclaw-metadata", "openclaw-manifest-valid", "openclaw-package-valid", "openclaw-resources"],
         "Native plugin manifests, package entrypoints, resource paths, and skill metadata. "
-        "Validates `metadata.openclaw` in SKILL.md frontmatter against the "
-        "[OpenClaw spec](https://docs.openclaw.ai/tools/skills). Only fires "
-        "when `metadata.openclaw` is present.",
+        "The metadata rule applies only when `metadata.openclaw` is present in SKILL.md.",
     ),
     (
         "OpenCode",

@@ -72,15 +72,16 @@ def test_forced_type_reports_missing_manifest(tmp_path):
     assert [v["rule_id"] for v in violations] == ["openclaw-manifest-valid"]
 
 
-def test_nested_discovery_and_exclusions(tmp_path):
+@pytest.mark.parametrize("prefix", ["packages", ".openclaw/extensions"])
+def test_nested_discovery_and_exclusions(tmp_path, prefix):
     repo = tmp_path / "project"
-    plugin = repo / "packages" / "weather"
+    plugin = repo / prefix / "weather"
     shutil.copytree(FIXTURES / "valid", plugin)
     context = RepositoryContext(repo)
     assert context.repo_type == RepositoryType.OPENCLAW_PLUGIN
     assert len(context.lint_tree.find(OpenClawPluginNode)) == 1
     assert len(context.skills) == 1
-    context = RepositoryContext(repo, exclude_patterns=["packages/**"])
+    context = RepositoryContext(repo, exclude_patterns=[f"{prefix}/**"])
     assert not context.openclaw_plugin_roots()
     assert not context.skills
 
@@ -112,8 +113,14 @@ def test_external_symlinks_are_not_read(tmp_path, name):
     target.rename(external)
     target.symlink_to(external, target_is_directory=external.is_dir())
     context = RepositoryContext(repo)
-    assert not context.skills
-    assert lint(repo)[1]
+    assert all(path.is_relative_to(repo) for path in context.skills)
+    if name == "guides":
+        assert not context.skills
+        expected = ("openclaw-resources", "escapes the plugin directory")
+    else:
+        assert {path.name for path in context.skills} == {"weather-report", "inactive"}
+        expected = ("openclaw-manifest-valid", "Manifest escapes the plugin directory")
+    assert any(v["rule_id"] == expected[0] and expected[1] in v["message"] for v in lint(repo)[1])
 
 
 def test_entrypoint_check_is_optional(tmp_path):
@@ -152,7 +159,7 @@ def test_schema_and_optional_fields_remain_forward_compatible(tmp_path):
     repo = copy_fixture("valid", tmp_path)
     (repo / "openclaw.plugin.json").write_text('{"id":"MixedCase","configSchema":{},"future":17}')
     assert lint(repo) == (0, [])
-    assert not RepositoryContext(repo).skills
+    assert [path.name for path in RepositoryContext(repo).skills] == ["weather-report"]
 
 
 def test_single_skill_root_and_deduplication(tmp_path):
@@ -173,7 +180,8 @@ def test_manifest_exclusion_is_respected_with_package_claim(tmp_path):
     repo = copy_fixture("invalid", tmp_path)
     context = RepositoryContext(repo, exclude_patterns=["openclaw.plugin.json"])
     nodes = context.lint_tree.find(OpenClawPluginConfigNode)
-    assert all(isinstance(n, OpenClawPackageConfigNode) for n in nodes)
+    assert not nodes
+    assert len(context.lint_tree.find(OpenClawPackageConfigNode)) == 1
 
 
 def test_late_directory_exclusion_prunes_tree_and_skills(tmp_path):
@@ -193,3 +201,177 @@ def test_mcp_policy_reaches_native_manifest(tmp_path):
     (repo / ".skillsaw.yaml").write_text("rules:\n  mcp-prohibited:\n    enabled: true\n")
     result = run_cli(["lint", str(repo), "--format", "json", "--rule", "mcp-prohibited"])
     assert any(v["rule_id"] == "mcp-prohibited" for v in json.loads(result.stdout)["violations"])
+
+
+@pytest.mark.parametrize("prefix", [""])
+def test_native_claim_preserves_other_hosts_and_portable_skills(tmp_path, prefix):
+    repo = tmp_path / "repo"
+    plugin = repo / prefix
+    shutil.copytree(FIXTURES / "mixed", plugin)
+    context = RepositoryContext(repo)
+    assert {p.name for p in context.skills} == {
+        "claude-weather",
+        "shared-weather",
+        "portable-weather",
+    }
+    assert RepositoryType.AGENTSKILLS in context.repo_types
+    assert plugin in context.openclaw_plugin_roots()
+
+
+@pytest.mark.parametrize(
+    "metadata, claimed",
+    [
+        ({"extensions": ["index.ts"]}, True),
+        (None, False),
+        ({}, False),
+        ({"hooks": ["hooks"]}, False),
+    ],
+)
+def test_package_evidence_preserves_portable_skills(tmp_path, metadata, claimed):
+    repo = copy_fixture("package-only", tmp_path)
+    shutil.copytree(
+        FIXTURES / "valid" / "guides" / "weather-report", repo / "skills" / "weather-report"
+    )
+    (repo / "package.json").write_text(json.dumps({"openclaw": metadata}))
+    context = RepositoryContext(repo)
+    assert [p.name for p in context.skills] == ["weather-report"]
+    assert context.provenance(repo).openclaw is claimed
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ['{"id":"weather","configSchema":{},"padding":"', "{id:'weather',configSchema:{},padding:'"],
+)
+def test_manifest_byte_limit_rejects_before_json5(tmp_path, monkeypatch, prefix):
+    from skillsaw.formats import openclaw
+
+    repo = copy_fixture("valid", tmp_path)
+    (repo / "openclaw.plugin.json").write_text(prefix + "é" * (openclaw.MAX_MANIFEST_BYTES // 2))
+
+    def unexpected_parse(*args, **kwargs):
+        pytest.fail("oversized manifests must not reach JSON5")
+
+    monkeypatch.setattr(openclaw.json5, "loads", unexpected_parse)
+    rc, violations = lint(repo)
+    assert rc == 1
+    assert any(
+        v["rule_id"] == "openclaw-manifest-valid" and "262144-byte limit" in v["message"]
+        for v in violations
+    )
+
+
+def test_jsonc_fast_path_and_exact_byte_limit(tmp_path, monkeypatch):
+    from skillsaw.formats import openclaw
+
+    path = tmp_path / openclaw.MANIFEST
+    content = '// comment\n{"id":"weather","configSchema":{},}'
+    path.write_text(content + " " * (openclaw.MAX_MANIFEST_BYTES - len(content)))
+
+    def unexpected_parse(*args, **kwargs):
+        pytest.fail("JSONC must not reach JSON5")
+
+    monkeypatch.setattr(openclaw.json5, "loads", unexpected_parse)
+    assert openclaw.read_manifest(path) == ({"id": "weather", "configSchema": {}}, None)
+
+
+def test_mcp_normalization_matches_native_loader_boundary(tmp_path):
+    from skillsaw.formats.openclaw import inline_mcp_servers
+
+    repo = copy_fixture("valid", tmp_path)
+    manifest = {
+        "id": "weather",
+        "configSchema": {},
+        "mcpServers": {
+            " weather ": {"command": "weather"},
+            "__proto__": {"command": "ignored"},
+            "prototype": {"command": "ignored"},
+            "constructor": {"command": "ignored"},
+            " ": {"command": "ignored"},
+            "bad": 4,
+        },
+    }
+    (repo / "openclaw.plugin.json").write_text(json.dumps(manifest))
+    assert inline_mcp_servers(repo) == {"weather": {"command": "weather"}}
+    assert len(RepositoryContext(repo).lint_tree.find(McpBlock)) == 1
+
+
+@pytest.mark.parametrize(
+    "package, message",
+    [
+        ("{", "Invalid package.json"),
+        ("[]", "expected an object"),
+        ('{"openclaw":42}', "'openclaw' must be an object"),
+        ('{"openclaw":{"extensions":[42]}}', "array of non-empty strings"),
+        ('{"openclaw":{"extensions":[]}}', "empty extension list"),
+        ('{"openclaw":{"extensions":["../outside.js"]}}', "escapes the plugin directory"),
+    ],
+)
+def test_package_diagnostics(tmp_path, package, message):
+    repo = copy_fixture("valid", tmp_path)
+    (repo / "package.json").write_text(package)
+    assert any(message in v["message"] for v in lint(repo)[1])
+
+
+def test_config_activation_and_optional_skill_existence(tmp_path):
+    repo = copy_fixture("valid", tmp_path)
+    (repo / "openclaw.plugin.json").write_text(
+        '{"id":"weather","configSchema":{},"skills":["missing"]}'
+    )
+    (repo / ".skillsaw.yaml").write_text(
+        "rules:\n  openclaw-resources:\n    enabled: true\n    check-skills-exist: false\n"
+    )
+    result = run_cli(["lint", str(repo), "--format", "json"])
+    assert not any(
+        v["rule_id"] == "openclaw-resources" for v in json.loads(result.stdout)["violations"]
+    )
+    (repo / "openclaw.plugin.json").write_text('{"id":"weather","configSchema":{},"skills":42}')
+    result = run_cli(["lint", str(repo), "--format", "json"])
+    assert any(
+        v["rule_id"] == "openclaw-resources" and "must be an array" in v["message"]
+        for v in json.loads(result.stdout)["violations"]
+    )
+
+
+def test_nested_package_claim_preserves_portable_skill(tmp_path):
+    repo = tmp_path / "repo"
+    plugin = repo / "packages" / "weather"
+    shutil.copytree(FIXTURES / "package-only", plugin)
+    shutil.copytree(
+        FIXTURES / "valid" / "guides" / "weather-report", plugin / "skills" / "weather-report"
+    )
+    context = RepositoryContext(repo)
+    assert [p.name for p in context.skills] == ["weather-report"]
+    assert plugin in context.openclaw_plugin_roots()
+
+
+def test_native_claim_preserves_root_skill(tmp_path):
+    repo = copy_fixture("valid", tmp_path)
+    shutil.copyfile(repo / "guides/weather-report/SKILL.md", repo / "SKILL.md")
+    assert repo in RepositoryContext(repo).skills
+
+
+def test_dual_agent_plugin_container_retains_identity(tmp_path):
+    from skillsaw.lint_target import AgentPluginNode
+
+    root = tmp_path / "project"
+    repo = root / "plugins" / "weather"
+    shutil.copytree(FIXTURES / "valid", repo)
+    (repo / "plugin.json").write_text(
+        '{"$schema":"https://agent-plugins.org/schemas/v1/plugin.schema.json","name":"weather"}'
+    )
+    context = RepositoryContext(root)
+    assert context.provenance(repo).ecosystems == frozenset({"openclaw", "agent-plugin"})
+    assert len(context.lint_tree.find(AgentPluginNode)) == 1
+    assert len(context.lint_tree.find(OpenClawPluginConfigNode)) == 1
+
+
+def test_multi_root_counts_native_plugins(tmp_path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    shutil.copytree(FIXTURES / "valid", first)
+    shutil.copytree(FIXTURES / "valid", second)
+    result = run_cli(
+        ["lint", str(first), str(second), "--format", "json", "--rule", "openclaw-manifest-valid"]
+    )
+    data = json.loads(result.stdout)
+    assert data["stats"]["plugins"] == 2

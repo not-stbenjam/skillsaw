@@ -20,6 +20,7 @@ from skillsaw.discovery.antigravity import (
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
 from skillsaw.formats.promptfoo import is_promptfoo_config
 from skillsaw.formats import antigravity, codex, devin, grok, muse
+from skillsaw.formats.openclaw import MANIFEST as OPENCLAW_MANIFEST
 from skillsaw.paths import contained_resolve, safe_resolve
 from skillsaw.utils import read_yaml
 
@@ -166,8 +167,8 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
             found.update(here / name for name in filenames if devin.is_instruction_filename(name))
             if "server.json" in filenames:
                 mcp_registry_files.append(here / "server.json")
-            if "openclaw.plugin.json" in filenames:
-                openclaw_manifests.append(here / "openclaw.plugin.json")
+            if OPENCLAW_MANIFEST in filenames:
+                openclaw_manifests.append(here / OPENCLAW_MANIFEST)
             if "package.json" in filenames:
                 package_json_files.append(here / "package.json")
             if "skills-lock.json" in filenames:

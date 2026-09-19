@@ -2,48 +2,49 @@
 
 from skillsaw.context import RepositoryContext
 from skillsaw.formats.openclaw import read_manifest, contained_file
-from skillsaw.lint_target import OpenClawPluginConfigNode, OpenClawPackageConfigNode
+from skillsaw.lint_target import OpenClawConfigNode, OpenClawPackageConfigNode
 from skillsaw.paths import contained_resolve, safe_resolve, safe_is_dir, safe_is_file
 from skillsaw.repository_types import RepositoryType
-from skillsaw.rule import Rule, Severity
+from skillsaw.rule import Rule, RuleViolation, Severity
+from typing import List
 from skillsaw.utils import read_json
 
 
 class OpenClawResourcesRule(Rule):
     """Inspect declared skills and optionally built runtime entrypoints."""
 
-    since = "0.20.0"
+    since = "0.21.0"
     repo_types = frozenset({RepositoryType.OPENCLAW_PLUGIN})
     default_enabled = False
     config_schema = {
         "check-skills-exist": {
             "type": "bool",
             "default": True,
-            "description": "Check skill directories after installing package dependencies",
+            "description": "Report declared skill roots that are not existing directories",
         },
         "check-entrypoints-exist": {
             "type": "bool",
             "default": False,
-            "description": "Check runtime files after building the package; source checkouts may omit dist",
+            "description": "Report declared entrypoints that are not existing files; enable after building",
         },
     }
 
     @property
-    def rule_id(self):
+    def rule_id(self) -> str:
         return "openclaw-resources"
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "OpenClaw resources should resolve inside their package and exist when loaded"
 
-    def default_severity(self):
+    def default_severity(self) -> Severity:
         return Severity.WARNING
 
-    def check(self, context: RepositoryContext):
+    def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         check_entries = self.setting("check-entrypoints-exist")
         check_skills = self.setting("check-skills-exist")
-        for node in context.lint_tree.find(OpenClawPluginConfigNode):
+        for node in context.lint_tree.find(OpenClawConfigNode):
             root = safe_resolve(node.plugin_dir)
             if root is None or not contained_file(node.plugin_dir, node.path.name):
                 continue

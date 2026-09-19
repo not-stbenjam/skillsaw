@@ -2,6 +2,7 @@
 
 OpenClaw reads `openclaw.plugin.json` before executing a native plugin. Missing
 or invalid JSON5, an empty/non-string `id`, the reserved `node-mcp` identity,
+a manifest exceeding 262,144 bytes,
 or a missing/non-object `configSchema` prevents the native manifest from loading.
 An empty schema object is valid. Optional unknown fields remain forward compatible.
 
@@ -9,7 +10,7 @@ An empty schema object is valid. Optional unknown fields remain forward compatib
 
 Opt-in: enable `openclaw-manifest-valid` in configuration or with `--rule`.
 Discovery and shared content/security inspection do not require this rule.
-Severity defaults to error and honors user overrides. Findings are file-level.
+Native packaging checks are opt-in while ecosystem coverage expands.
 
 ## How to fix
 
@@ -17,21 +18,16 @@ Ship a native manifest in the package root, with a non-empty string `id` and
 an object `configSchema`. Keep the file inside the package; escaping symlinks
 are reported without reading their target. This rule makes no autofixes.
 
-## Evidence and scope
+## Upstream source
 
 Pinned to OpenClaw revision
 [`912b21b98581c0be3baad87fe3686b64d69fffeb`](https://github.com/openclaw/openclaw/tree/912b21b98581c0be3baad87fe3686b64d69fffeb),
-inspected September 18, 2026:
+for the native loader contract:
 
 - [`manifest.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/plugins/manifest.ts): JSON5 parsing, required fields, reserved identity.
 - [`package-manifest.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/plugins/package-manifest.ts): extension entry types and defaults.
 - [`plugin-skills.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/skills/loading/plugin-skills.ts): explicit skill roots and containment.
 - [`manifest-capability-normalizers.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/plugins/manifest-capability-normalizers.ts): static MCP normalization.
-
-All 155 bundled native plugins passed the required manifest and package-shape
-checks. This is one upstream repository, not 155 independent adoption samples;
-the new rules therefore remain opt-in. One declared dependency-provided skill
-root was absent before dependency installation. External plugin code was not run.
 
 The rule validates the stable native loading core. Optional runtime capability
 metadata, schema compilation, export/manifest identity agreement, gateway

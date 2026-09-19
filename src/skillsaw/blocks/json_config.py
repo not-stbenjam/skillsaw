@@ -1503,7 +1503,13 @@ class OpenCodeMcpBlock(McpBlock):
 
 @dataclass(eq=False)
 class OpenClawInlineMcpBlock(_InlineJsonPayload, McpBlock):
-    """Static native MCP entries, with dialect-neutral security inspection."""
+    """Static native MCP entries, with dialect-neutral security inspection.
+
+    OpenClaw's manifest loader accepts arbitrary object-valued server records;
+    runtime registration owns their transport validation. Claude's shape rules
+    would reject host-specific fields here. The deferral retains shared secret
+    and command-policy checks while leaving runtime shape validation to OpenClaw.
+    """
 
     inline_data: Optional[Dict[str, Any]] = None
     shape_deferral: ClassVar[Optional[McpShapeDeferral]] = McpShapeDeferral()

@@ -15,6 +15,7 @@ from skillsaw.discovery import (
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
 from skillsaw.formats.codex import codex_declared_skill_dirs
 from skillsaw.formats.grok import grok_declared_skill_dirs
+from skillsaw.formats.openclaw import MANIFEST, contained_file, skill_roots
 from skillsaw.paths import contained_resolve, safe_exists, safe_is_dir, safe_resolve
 from skillsaw.utils import read_json
 
@@ -218,14 +219,17 @@ def discover_skills(
     containment_claims_possible: Callable[[], bool],
     is_containment_plugin: Callable[[Path], bool],
     openclaw_plugins: Iterable[Path] = (),
+    openclaw_exclusive_plugins: Iterable[Path] = (),
     additional_skill_dirs: Iterable[Path] = (),
     is_excluded: Callable[[Path], bool] = lambda _: False,
 ) -> List[Path]:
     """Discover contained Agent Skill directories across repository roots."""
-    from skillsaw.formats.openclaw import skill_roots
-
     openclaw_packages = list(openclaw_plugins)
-    openclaw_roots = {safe_resolve(p) for p in openclaw_packages}
+    openclaw_roots = {
+        resolved
+        for p in openclaw_exclusive_plugins
+        if contained_file(p, MANIFEST) and (resolved := safe_resolve(p)) is not None
+    }
     skills: List[Path] = []
     discovered: Set[Path] = set()
     agent_plugin_packages = list(agent_plugins)
@@ -249,9 +253,15 @@ def discover_skills(
     ) -> None:
         """Walk one skill collection without crossing its claim boundary."""
         resolved_parent = safe_resolve(parent)
-        if resolved_parent in openclaw_roots and boundary != resolved_parent:
-            return
         skip_subtrees: Set[Path] = set()
+        if resolved_parent is not None and resolved_parent in openclaw_roots:
+            # A native-only plugin owns its conventional skills/ directory,
+            # but never another host's skill roots or adjacent portable skills.
+            # Explicit native declarations are walked separately below.
+            boundary = resolved_parent
+            skills_component = safe_resolve(parent / "skills")
+            if skills_component is not None:
+                skip_subtrees.add(skills_component)
         if resolved_parent is not None and resolved_parent in agent_plugin_immediate_only:
             if visited is not None:
                 # Mid-walk descent into a portable package: Agent Plugins has
@@ -279,11 +289,7 @@ def discover_skills(
                 resolved = safe_resolve(item)
                 if resolved is None or resolved in discovered or resolved in visited:
                     continue
-                if (
-                    resolved in openclaw_roots
-                    or resolved in agent_plugin_immediate_only
-                    or resolved in skip_subtrees
-                ):
+                if resolved in agent_plugin_immediate_only or resolved in skip_subtrees:
                     continue
                 if boundary is not None and not resolved.is_relative_to(boundary):
                     continue
@@ -312,7 +318,6 @@ def discover_skills(
     if agentskills:
         if (
             repo_root is not None
-            and repo_root not in openclaw_roots
             and exact_name_exists(root, "SKILL.md")
             and contained_resolve(root / "SKILL.md", repo_root) is not None
             and not is_excluded(root / "SKILL.md")
@@ -320,9 +325,9 @@ def discover_skills(
         ):
             skills.append(root)
             discovered.add(root)
-        elif repo_root is not None and repo_root not in openclaw_roots:
+        elif repo_root is not None:
             walk(root, repo_root)
-        for rel in (() if repo_root in openclaw_roots else CONVENTIONAL_SKILL_DIRS):
+        for rel in CONVENTIONAL_SKILL_DIRS:
             path = root / rel
             if (
                 repo_root is not None
@@ -354,9 +359,9 @@ def discover_skills(
         Codex, Grok Build and Antigravity share this contract: the
         conventional ``skills/`` directory plus whatever the manifest
         declares, every resolved path forced back inside the plugin root.
-        One body for all three so a containment fix cannot land on only one
-        ecosystem. Antigravity declares no skill paths in its manifest —
-        the four fields it carries are metadata — so it passes none.
+        OpenClaw passes conventional=False: only its declared directories
+        load as native skills. Antigravity declares no skill paths, so it
+        supplies an empty declaration list and uses the conventional root.
         """
         plugin_root = safe_resolve(plugin)
         if plugin_root is None:
