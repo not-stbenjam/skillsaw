@@ -250,11 +250,17 @@ def discover_skills(
         parent: Path,
         boundary: Optional[Path] = None,
         visited: Optional[Set[Path]] = None,
+        *,
+        explicit_native_root: bool = False,
     ) -> None:
         """Walk one skill collection without crossing its claim boundary."""
         resolved_parent = safe_resolve(parent)
         skip_subtrees: Set[Path] = set()
-        if resolved_parent is not None and resolved_parent in openclaw_roots:
+        if (
+            not explicit_native_root
+            and resolved_parent is not None
+            and resolved_parent in openclaw_roots
+        ):
             # A native-only plugin owns its conventional skills/ directory,
             # but never another host's skill roots or adjacent portable skills.
             # Explicit native declarations are walked separately below.
@@ -383,7 +389,7 @@ def discover_skills(
                     skills.append(path)
                     discovered.add(resolved)
             else:
-                walk(path, plugin_root)
+                walk(path, plugin_root, explicit_native_root=not conventional)
 
     for plugin in openclaw_packages:
         contained_plugin_skills(plugin, skill_roots(plugin), conventional=False)

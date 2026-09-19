@@ -417,3 +417,167 @@ def test_package_evidence_symlink_containment(tmp_path, outside):
     package.rename(target)
     package.symlink_to(target)
     assert discover_plugins([], [package], lambda _: False) == ([] if outside else [repo])
+
+
+@pytest.mark.parametrize("terminator", ["\n", "\r", "\u2028", "\u2029"])
+def test_json5_line_comments_preserve_mcp_policy(tmp_path, terminator):
+    repo = copy_fixture("valid", tmp_path)
+    (repo / "openclaw.plugin.json").write_text(
+        '{"id":"weather","configSchema":{},// comment'
+        + terminator
+        + '"mcpServers":{"weather":{"command":"echo"}}\n}'
+    )
+    result = run_cli(["lint", str(repo), "--format", "json", "--rule", "mcp-prohibited"])
+    assert result.returncode == 1, result.stderr
+    assert [v["rule_id"] for v in json.loads(result.stdout)["violations"]] == ["mcp-prohibited"]
+
+
+def test_unterminated_json5_block_comment_is_rejected(tmp_path):
+    repo = copy_fixture("valid", tmp_path)
+    (repo / "openclaw.plugin.json").write_text('{"id":"weather","configSchema":{}} /* unfinished')
+    rc, violations = lint(repo)
+    assert rc == 1
+    assert any(
+        v["rule_id"] == "openclaw-manifest-valid" and "Cannot parse JSON5" in v["message"]
+        for v in violations
+    )
+
+
+def test_explicit_plugin_root_keeps_declared_skills_child(tmp_path):
+    repo = copy_fixture("declared-root", tmp_path)
+    assert RepositoryContext(repo).skills == [repo / "skills"]
+    result = run_cli(["lint", str(repo), "--format", "json", "--rule", "agentskill-name"])
+    assert result.returncode == 1, result.stderr
+    assert any(v["rule_id"] == "agentskill-name" for v in json.loads(result.stdout)["violations"])
+
+
+@pytest.mark.parametrize("output_format", ["json", "sarif", "text"])
+@pytest.mark.parametrize("resource", ["skill", "entrypoint", "escape"])
+def test_resource_diagnostics_redact_url_credentials(tmp_path, output_format, resource):
+    repo = copy_fixture("valid", tmp_path)
+    value = "https://reader:credential-canary@private.example.org/resource"
+    manifest = {"id": "weather", "configSchema": {}}
+    if resource == "entrypoint":
+        (repo / "package.json").write_text(json.dumps({"openclaw": {"extensions": [value]}}))
+        (repo / ".skillsaw.yaml").write_text(
+            "rules:\n  openclaw-resources:\n    check-entrypoints-exist: true\n"
+        )
+    else:
+        manifest["skills"] = [("/" if resource == "escape" else "") + value]
+    (repo / "openclaw.plugin.json").write_text(json.dumps(manifest))
+    result = run_cli(["lint", str(repo), "--format", output_format, "--rule", "openclaw-resources"])
+    assert result.stdout, result.stderr
+    assert "credential-canary" not in result.stdout
+    assert "[redacted]" in result.stdout
+
+
+def test_oversized_resource_values_have_bounded_diagnostics(tmp_path):
+    repo = copy_fixture("valid", tmp_path)
+    value = "https://reader:" + "credential" * 1000 + "@private.example.org/resource"
+    (repo / "openclaw.plugin.json").write_text(
+        json.dumps({"id": "weather", "configSchema": {}, "skills": [value]})
+    )
+    violations = lint(repo)[1]
+    assert len(violations) == 1
+    assert "credential" not in violations[0]["message"]
+    assert len(violations[0]["message"]) < 650
+
+
+@pytest.mark.parametrize("credential_url", [False, True])
+def test_native_mcp_shape_deferral_retains_credential_checks(tmp_path, credential_url):
+    repo = copy_fixture("valid", tmp_path)
+    url = (
+        "https://example.org/mcp"
+        if not credential_url
+        else "https://user:credential-canary@example.org/mcp"
+    )
+    (repo / "openclaw.plugin.json").write_text(
+        json.dumps(
+            {
+                "id": "weather",
+                "configSchema": {},
+                "mcpServers": {"weather": {"type": "native-host-field", "url": url}},
+            }
+        )
+    )
+    result = run_cli(["lint", str(repo), "--format", "json", "--rule", "mcp-valid-json"])
+    assert result.stdout, result.stderr
+    violations = json.loads(result.stdout)["violations"]
+    if credential_url:
+        assert len(violations) == 1
+        assert violations[0]["rule_id"] == "mcp-valid-json"
+        assert "credential-canary" not in result.stdout
+    else:
+        assert violations == []
+
+
+@pytest.mark.parametrize(
+    "name, retained",
+    [
+        ("0", True),
+        ("1", True),
+        ("4294967294", True),
+        ("4294967295", False),
+        ("01", False),
+        ("-0", False),
+        ("１", False),
+    ],
+)
+def test_mcp_name_collisions_follow_host_property_order(tmp_path, name, retained):
+    from skillsaw.formats.openclaw import inline_mcp_servers
+
+    repo = copy_fixture("valid", tmp_path)
+    credential_url = "https://user:credential-canary@example.org/mcp"
+    clean_url = "https://example.org/mcp"
+    (repo / "openclaw.plugin.json").write_text(
+        json.dumps(
+            {
+                "id": "weather",
+                "configSchema": {},
+                "mcpServers": {" " + name + " ": {"url": credential_url}, name: {"url": clean_url}},
+            }
+        )
+    )
+    assert inline_mcp_servers(repo)[name]["url"] == (credential_url if retained else clean_url)
+    result = run_cli(["lint", str(repo), "--format", "json", "--rule", "mcp-valid-json"])
+    violations = json.loads(result.stdout)["violations"]
+    assert len(violations) == int(retained)
+    assert "credential-canary" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "content, claimed",
+    [
+        (b'{"\\u006fpenclaw":{"extensions":["index.js"]}}', True),
+        (b'{"name":"ordinary"}', False),
+        (b"\xff", False),
+    ],
+)
+def test_package_probe_handles_escaped_keys_and_invalid_utf8(tmp_path, content, claimed):
+    repo = copy_fixture("package-only", tmp_path)
+    (repo / "package.json").write_bytes(content)
+    assert RepositoryContext(repo).provenance(repo).openclaw is claimed
+
+
+def test_oversized_package_probe_is_bounded_and_reported(tmp_path, monkeypatch):
+    from skillsaw.formats import openclaw
+    from skillsaw.discovery.openclaw import declares_extensions
+
+    repo = copy_fixture("valid", tmp_path)
+    package = repo / "package.json"
+    with package.open("wb") as stream:
+        stream.write(b'{"openclaw":{"extensions":[]},"padding":"')
+        stream.seek(openclaw.MAX_PACKAGE_BYTES)
+        stream.write(b'"}')
+
+    def unexpected_json(*args, **kwargs):
+        pytest.fail("oversized packages must not reach the JSON parser")
+
+    monkeypatch.setattr(openclaw.json, "loads", unexpected_json)
+    assert openclaw.read_package(package)[1].endswith("16777216-byte limit")
+    assert not declares_extensions(package)
+    monkeypatch.undo()
+    assert any(
+        v["rule_id"] == "openclaw-package-valid" and "16777216-byte limit" in v["message"]
+        for v in lint(repo)[1]
+    )

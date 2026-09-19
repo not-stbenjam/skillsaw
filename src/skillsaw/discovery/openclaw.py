@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Iterable
 
-from skillsaw.formats.openclaw import MANIFEST, contained_file
+from skillsaw.formats.openclaw import MANIFEST, contained_file, read_package, read_package_text
 from skillsaw.paths import safe_exists, safe_is_symlink, safe_resolve, contained_resolve
-from skillsaw.utils import read_json
 
 
 def declares_extensions(path: Path) -> bool:
@@ -15,14 +14,13 @@ def declares_extensions(path: Path) -> bool:
     # This one-shot evidence probe rejects ordinary packages without filling
     # the parsed-file cache or resolving every negative cache key. The context
     # caches discovery results; positive candidates use the shared JSON reader.
-    try:
-        content = path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+    content, error = read_package_text(path)
+    if error:
         return False
     # Escaped keys are legal JSON too, so a backslash requires parsing.
     if not content or ('"openclaw"' not in content and "\\" not in content):
         return False
-    data, _ = read_json(path)
+    data, _ = read_package(path)
     metadata = data.get("openclaw") if isinstance(data, dict) else None
     return isinstance(metadata, dict) and "extensions" in metadata
 

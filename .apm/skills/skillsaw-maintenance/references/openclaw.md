@@ -93,3 +93,7 @@ All 155 bundled native plugins passed the required manifest and package-shape
 checks. This is one upstream repository, not 155 independent adoption samples;
 the new rules therefore remain opt-in. One declared dependency-provided skill
 root was absent before dependency installation. External plugin code was not run.
+
+Native package metadata uses the host’s 16 MiB read limit from
+`src/plugins/plugin-cache-files.ts`. Recheck it alongside the manifest’s
+256 KiB limit when updating the pinned loader contract.

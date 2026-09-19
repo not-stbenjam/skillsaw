@@ -498,7 +498,7 @@ class RepositoryProvenanceMixin:
     def _declares_containment(self, path: Path) -> bool:
         """Whether an ecosystem that contains its package files owns *path*.
 
-        Codex, Grok or Antigravity with no Claude declaration. The
+        Codex, Grok, Antigravity or OpenClaw with no Claude declaration. The
         ``_only`` half is what keeps a dual-manifest directory on Claude's
         looser reading, where a supplied file has no package-wide
         containment contract.

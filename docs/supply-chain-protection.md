@@ -163,6 +163,7 @@ be defined:
 | `.codex/config.toml` `[mcp_servers]` (repo root or any package) | mcp-prohibited, mcp-valid-json |
 | Codex manifest-declared or inline `hooks` | hooks-dangerous, hooks-prohibited |
 | Codex manifest-declared or inline `mcpServers` | mcp-prohibited, mcp-valid-json |
+| OpenClaw manifest inline `mcpServers` | `mcp-prohibited`, `mcp-valid-json` (credential and URL checks) |
 | `.muse/hooks.json` | hooks-dangerous, hooks-prohibited |
 | `.grok/hooks/*.json` (repo root or any package) | hooks-dangerous, hooks-prohibited |
 | `.grok/config.toml` `[mcp_servers]` (repo root or any package) | mcp-prohibited, mcp-valid-json, grok-config-valid |

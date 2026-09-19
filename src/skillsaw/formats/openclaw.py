@@ -18,6 +18,8 @@ from skillsaw.utils import cached_file_read, strip_jsonc
 MANIFEST = "openclaw.plugin.json"
 # MAX_PLUGIN_MANIFEST_BYTES in the pinned native loader, before any parsing.
 MAX_MANIFEST_BYTES = 256 * 1024
+# DEFAULT_PLUGIN_METADATA_MAX_BYTES in plugin-cache-files.ts; packages use it.
+MAX_PACKAGE_BYTES = 16 * 1024 * 1024
 
 
 @cached_file_read
@@ -42,18 +44,46 @@ def read_manifest(path: Path) -> tuple[object | None, str | None]:
         return None, "Manifest nesting exceeds the parser limit"
     except ValueError:
         pass
-    try:
-        # Reuse the JSONC scanner on the already bounded input. Calling
-        # read_jsonc(path) here would reopen the file with an unbounded read.
-        return json.loads(strip_jsonc(content)), None
-    except RecursionError:
-        return None, "Manifest nesting exceeds the parser limit"
-    except ValueError:
-        pass
+    # The JSONC scanner tolerates unfinished block comments and only treats
+    # LF as a line-comment terminator. Other forms need the native parser.
+    if not any(marker in content for marker in ("/*", "\r", "\u2028", "\u2029")):
+        try:
+            return json.loads(strip_jsonc(content)), None
+        except RecursionError:
+            return None, "Manifest nesting exceeds the parser limit"
+        except ValueError:
+            pass
     try:
         return json5.loads(content), None
     except (ValueError, RecursionError, OverflowError) as exc:
         return None, f"Cannot parse JSON5 manifest: {exc}"
+
+
+def read_package_text(path: Path) -> tuple[str | None, str | None]:
+    """Bound package probes without caching ordinary, negative candidates."""
+    try:
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_PACKAGE_BYTES + 1)
+    except OSError:
+        return None, "Cannot read package.json"
+    if len(raw) > MAX_PACKAGE_BYTES:
+        return None, f"package.json exceeds OpenClaw's {MAX_PACKAGE_BYTES}-byte limit"
+    try:
+        return raw.decode("utf-8-sig"), None
+    except UnicodeDecodeError:
+        return None, "package.json must be UTF-8 text"
+
+
+@cached_file_read
+def read_package(path: Path) -> tuple[object | None, str | None]:
+    """Read native package metadata within the host's size bound."""
+    content, error = read_package_text(path)
+    if error:
+        return None, error
+    try:
+        return json.loads(content), None
+    except (ValueError, RecursionError) as exc:
+        return None, f"Cannot parse package.json: {exc}"
 
 
 def contained_file(root: Path, name: str) -> bool:
@@ -76,6 +106,16 @@ def skill_roots(plugin: Path) -> list[Path]:
     return [plugin / value.strip() for value in raw if isinstance(value, str) and value.strip()]
 
 
+def _property_order(key: str) -> int:
+    """Object.entries visits array-index properties first, in numeric order."""
+    if key.isascii() and key.isdecimal() and len(key) <= 10:
+        number = int(key)
+        if str(number) == key and number < 2**32 - 1:
+            return number
+    # Stable sorting preserves insertion order for all other string keys.
+    return 2**32
+
+
 def inline_mcp_servers(plugin: Path) -> dict[str, Any] | None:
     """Expose exactly the servers retained by normalizeManifestMcpServers.
 
@@ -91,7 +131,7 @@ def inline_mcp_servers(plugin: Path) -> dict[str, Any] | None:
         return None
     return {
         key.strip(): value
-        for key, value in servers.items()
+        for key, value in sorted(servers.items(), key=lambda item: _property_order(item[0]))
         if key.strip()
         and key.strip() not in {"__proto__", "prototype", "constructor"}
         and isinstance(value, dict)

@@ -1,13 +1,14 @@
 """Report ignored or unavailable OpenClaw package resources."""
 
 from skillsaw.context import RepositoryContext
+from skillsaw.diagnostics import safe_display
 from skillsaw.formats.openclaw import read_manifest, contained_file
 from skillsaw.lint_target import OpenClawConfigNode, OpenClawPackageConfigNode
 from skillsaw.paths import contained_resolve, safe_resolve, safe_is_dir, safe_is_file
 from skillsaw.repository_types import RepositoryType
 from skillsaw.rule import Rule, RuleViolation, Severity
 from typing import List
-from skillsaw.utils import read_json
+from skillsaw.formats.openclaw import read_package
 
 
 class OpenClawResourcesRule(Rule):
@@ -49,7 +50,7 @@ class OpenClawResourcesRule(Rule):
             if root is None or not contained_file(node.plugin_dir, node.path.name):
                 continue
             package = isinstance(node, OpenClawPackageConfigNode)
-            data, error = read_json(node.path) if package else read_manifest(node.path)
+            data, error = read_package(node.path) if package else read_manifest(node.path)
             if error or not isinstance(data, dict):
                 continue
             if package:
@@ -78,14 +79,14 @@ class OpenClawResourcesRule(Rule):
                     continue
                 target = contained_resolve(node.plugin_dir / raw.strip(), root)
                 if target is None:
-                    problems.append(f"{raw!r} escapes the plugin directory")
+                    problems.append(f"{safe_display(raw)!r} escapes the plugin directory")
                 elif not package and check_skills and not safe_is_dir(target):
                     problems.append(
-                        f"{raw!r} is not an existing skill directory; install dependencies if provided by a package"
+                        f"{safe_display(raw)!r} is not an existing skill directory; install dependencies if provided by a package"
                     )
                 elif package and check_entries and not safe_is_file(target):
                     problems.append(
-                        f"{raw!r} is not an existing runtime file; build the package first"
+                        f"{safe_display(raw)!r} is not an existing runtime file; build the package first"
                     )
             if package and values == []:
                 problems.append("empty extension list disables entrypoint discovery")

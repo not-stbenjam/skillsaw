@@ -5,7 +5,7 @@ from skillsaw.lint_target import OpenClawPackageConfigNode
 from skillsaw.repository_types import RepositoryType
 from skillsaw.rule import Rule, RuleViolation, Severity
 from typing import List
-from skillsaw.utils import read_json
+from skillsaw.formats.openclaw import read_package
 
 
 class OpenClawPackageValidRule(Rule):
@@ -29,7 +29,7 @@ class OpenClawPackageValidRule(Rule):
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         for node in context.lint_tree.find(OpenClawPackageConfigNode):
-            data, error = read_json(node.path)
+            data, error = read_package(node.path)
             message = None
             if error or not isinstance(data, dict):
                 message = f"Invalid package.json: {error or 'expected an object'}"

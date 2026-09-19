@@ -1492,11 +1492,11 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                     child.plugin_owner = resolved_plugin
 
         if is_openclaw:
+            # Keep missing manifests in the tree so forced/package claims diagnose them.
             node = OpenClawPluginConfigNode(path=plugin_path / MANIFEST)
             node.plugin_owner = resolved_plugin
             if not _is_excluded(node.path):
                 container.children.append(node)
-            if not _is_excluded(node.path):
                 payload = inline_mcp_servers(plugin_path)
                 if payload is not None:
                     block = OpenClawInlineMcpBlock(
