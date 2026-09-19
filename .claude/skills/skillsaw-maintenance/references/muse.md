@@ -63,10 +63,12 @@ false-positive rate, and these samples do not meet the ten-repository auto-rule 
     `if`/`condition`/`shell`/`rewakeMessage`/`rewakeSummary` with a string value;
     `once: true` or `asyncRewake: true`. `once: false`, `asyncRewake: false` and
     `silent` with any value are accepted silently.
-- **Events** (13 documented): `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+- **Events** (15 documented): `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
   `PermissionRequest`, `PostToolUse`, `PreLLMCall`, `PostLLMCall`, `PreCompact`,
-  `PostCompact`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd`. Four more —
-  `Notification`, `PostToolUseFailure`, `StopFailure`, `PostToolBatch` — are in the
+  `PostCompact`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd`,
+  `Notification`, `PostToolUseFailure`. The last two joined the official lifecycle
+  list by 2026-09-18; their documentation status is confirmed, not their runtime
+  dispatch. Two more — `StopFailure`, `PostToolBatch` — are in the
   binary's `HookEventKind` enum but not the documented list and could not be exercised
   headlessly, so skillsaw reports them at `info`. `Setup` is a Claude Code event the
   binary recognises and deliberately does not run ("Claude hook event `Setup` is
@@ -114,7 +116,7 @@ false-positive rate, and these samples do not meet the ten-repository auto-rule 
 ## Sync notes
 Hand-copied value sets that drift — re-check each against the docs, or re-verify
 empirically if the docs still omit an example:
-- `HOOK_EVENTS` (13 documented events, above) in `formats/muse.py`.
+- `HOOK_EVENTS` (15 documented events, above) in `formats/muse.py`.
 - `UNDOCUMENTED_HOOK_EVENTS` and `RECOGNIZED_UNRUN_EVENTS` — the enum names and the
   `Setup` diagnostic, both read out of the binary rather than the docs.
 - `HOOK_HANDLER_TYPES` = `{"command"}`.
