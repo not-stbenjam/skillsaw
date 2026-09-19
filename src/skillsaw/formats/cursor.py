@@ -59,7 +59,13 @@ def source_path(root: Path, prefix: str, source: str) -> Path | None:
         return None
     if prefix and safe_component(root, prefix) is None:
         return None
-    return safe_component(root, f"{prefix}/{source}" if prefix else source)
+    if prefix:
+        prefix = prefix.replace("\\", "/").rstrip("/")
+        source = source.replace("\\", "/")
+        # Cursor's template accepts sources that already include pluginRoot.
+        if source != prefix and not source.startswith(f"{prefix}/"):
+            source = f"{prefix}/{source}"
+    return safe_component(root, source)
 
 
 def component_paths(root: Path, data: dict, field: str) -> list[Path]:

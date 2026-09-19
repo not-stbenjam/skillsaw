@@ -1,0 +1,6 @@
+{
+  "name": "review-tools",
+  "owner": {"name": "Review Team"},
+  "metadata": {"pluginRoot": "plugins"},
+  "plugins": [{"name": "review", "source": "plugins/review"}]
+}
