@@ -5,14 +5,17 @@ Reviews test coverage and quality:
 - **Coverage gaps**: For each new or modified function with non-trivial logic,
   verify that tests exist. Flag public/exported functions that lack tests entirely.
   Actually check the `tests/` directory — do not guess.
-- **Untested error paths**: Identify error branches, edge cases, and failure modes
-  in the new code that have no corresponding test.
+- **Untested error paths**: Identify realistic or high-impact error branches
+  and failure modes in the new code that have no corresponding test.
 - **Test quality**: Are tests asserting meaningful behavior or just achieving line
   coverage? Look for tests that pass trivially, assert nothing, or test
   implementation details rather than behavior.
-- **Edge cases**: Suggest specific test scenarios with example inputs:
+- **Edge cases**: Apply the panel's proportional-review guidance. Suggest
+  specific scenarios when likelihood or impact warrants coverage, with inputs:
   empty inputs, None values, boundary values, malformed YAML/JSON, large inputs,
-  missing files, permission errors.
+  missing files, permission errors. Accept rule disabling, scoped suppressions,
+  or bulk file exclusions for extreme false-positive cases when practical;
+  do not demand exhaustive tests or complex handling for those cases.
 - **Regression coverage**: If the change fixes a bug, is there a test that would
   have caught the original bug?
 - **Fixture usage**: Does the test use the project's existing `temp_dir` fixture
