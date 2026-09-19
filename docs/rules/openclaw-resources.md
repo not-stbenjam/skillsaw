@@ -38,6 +38,13 @@ to verify `package.json` runtime files too. The latter defaults to false because
 compiled distribution files are often absent from a source checkout. Containment
 checks remain active independently of both existence settings.
 
+When `openclaw.runtimeExtensions` supplies a valid nonempty array corresponding
+to `openclaw.extensions`, the existence check uses those explicit runtime files.
+The source files may be absent from a built package. Both source and runtime
+paths must remain inside the package, even with existence checking disabled.
+Without an explicit mapping, the check continues to inspect `extensions`;
+it does not infer compiled filenames.
+
 See [manifest sources](openclaw-manifest-valid.md) for upstream contracts.
 No autofix is offered: creating missing resources or rewriting declared paths
 requires author intent.

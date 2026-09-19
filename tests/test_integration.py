@@ -10347,6 +10347,7 @@ def test_comment_like_string_scanning_is_bounded(tmp_path, monkeypatch):
     assert data["future"] == "[//" * 80000
     assert elapsed < 1.0, f"manifest scan took {elapsed:.2f}s; likely superlinear"
 
+
 @pytest.mark.integration
 class TestPiLegacySettings:
     def test_legacy_skills_are_selected_and_filtered(self, tmp_path):
@@ -10430,3 +10431,123 @@ class TestPiLegacySettings:
         assert len(findings) == 1
         assert "skills: '../missing'" in findings[0]["message"]
 
+
+@pytest.mark.integration
+class TestOpenClawExplicitRuntime:
+    def _lint(self, repo):
+        return run_lint(
+            repo,
+            "--no-custom-rules",
+            "--rule",
+            "openclaw-resources",
+            "--rule",
+            "openclaw-package-valid",
+        )
+
+    def _metadata(self, repo, **changes):
+        path = repo / "package.json"
+        data = json.loads(path.read_text())
+        data["openclaw"].update(changes)
+        path.write_text(json.dumps(data))
+
+    def test_built_only_package_does_not_require_sources(self, tmp_path):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(repo, runtimeExtensions=["  ./lib/index.js  "])
+        result = self._lint(repo)
+        assert result["rc"] == 0
+        assert result["out"]["violations"] == []
+
+    @pytest.mark.parametrize("check_exists", [False, True])
+    def test_existing_source_does_not_hide_missing_runtime(self, tmp_path, check_exists):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(repo, extensions=["./lib/index.js"], runtimeExtensions=["./lib/missing.js"])
+        (repo / ".skillsaw.yaml").write_text(
+            "rules:\n  openclaw-resources:\n    check-entrypoints-exist: "
+            + str(check_exists).lower()
+            + "\n"
+        )
+        result = self._lint(repo)
+        findings = result["out"]["violations"]
+        assert len(findings) == int(check_exists)
+        if check_exists:
+            assert "openclaw.runtimeExtensions" in findings[0]["message"]
+            assert "./lib/missing.js" in findings[0]["message"]
+            assert findings[0]["severity"] == "warning"
+
+    @pytest.mark.parametrize("runtime", [None, [], "./lib/index.js", {}])
+    def test_no_explicit_mapping_preserves_source_check(self, tmp_path, runtime):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(repo, runtimeExtensions=runtime)
+        findings = self._lint(repo)["out"]["violations"]
+        assert len(findings) == 1
+        assert "'openclaw.extensions'" in findings[0]["message"]
+        assert "not an existing runtime file" in findings[0]["message"]
+
+    @pytest.mark.parametrize("runtime", [[None], [" "], ["./lib/index.js", "./lib/extra.js"]])
+    def test_invalid_mapping_reports_shape_without_source_existence_noise(self, tmp_path, runtime):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(repo, runtimeExtensions=runtime)
+        result = self._lint(repo)
+        findings = result["out"]["violations"]
+        assert result["rc"] == 1
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == "openclaw-package-valid"
+        assert "runtimeExtensions" in findings[0]["message"]
+
+    @pytest.mark.parametrize("field", ["extensions", "runtimeExtensions"])
+    @pytest.mark.parametrize("escape", ["parent", "symlink"])
+    def test_containment_is_checked_without_existence_options(self, tmp_path, field, escape):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        external = repo.parent / "outside.js"
+        external.write_text("export default {};\n")
+        if escape == "symlink":
+            (repo / "outside.js").symlink_to(external)
+            entry = "./outside.js"
+        else:
+            entry = "../outside.js"
+        self._metadata(repo, **{field: [entry]})
+        (repo / ".skillsaw.yaml").write_text(
+            "rules:\n  openclaw-resources:\n    check-entrypoints-exist: false\n    check-skills-exist: false\n"
+        )
+        findings = self._lint(repo)["out"]["violations"]
+        assert len(findings) == 1
+        assert f"'openclaw.{field}'" in findings[0]["message"]
+        assert "escapes the plugin directory" in findings[0]["message"]
+
+    def test_each_explicit_runtime_is_checked(self, tmp_path):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(
+            repo,
+            extensions=["./src/index.ts", "./src/extra.ts"],
+            runtimeExtensions=["./lib/index.js", "./lib/missing.js"],
+        )
+        findings = self._lint(repo)["out"]["violations"]
+        assert len(findings) == 1
+        assert "./lib/missing.js" in findings[0]["message"]
+        assert "./src/" not in findings[0]["message"]
+
+    def test_invalid_mapping_does_not_hide_containment(self, tmp_path):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        self._metadata(repo, extensions=["../source.ts"], runtimeExtensions=[None, "../runtime.js"])
+        findings = self._lint(repo)["out"]["violations"]
+        assert {v["rule_id"] for v in findings} == {"openclaw-package-valid", "openclaw-resources"}
+        escapes = [v for v in findings if "escapes the plugin directory" in v["message"]]
+        assert len(escapes) == 2
+
+    @pytest.mark.parametrize("sources", ["absent", None, []])
+    @pytest.mark.parametrize("runtime", [["../ignored.js"], [None]])
+    def test_runtime_metadata_is_ignored_without_explicit_sources(self, tmp_path, sources, runtime):
+        repo = copy_fixture("openclaw/explicit-runtime", tmp_path / "repo")
+        shutil.copyfile(repo / "lib/index.js", repo / "index.js")
+        metadata = {"runtimeExtensions": runtime}
+        if sources != "absent":
+            metadata["extensions"] = sources
+        (repo / "package.json").write_text(json.dumps({"name": "weather", "openclaw": metadata}))
+        result = self._lint(repo)
+        assert result["rc"] == 0
+        findings = result["out"]["violations"]
+        if sources == []:
+            assert len(findings) == 1
+            assert "empty extension list" in findings[0]["message"]
+        else:
+            assert findings == []
