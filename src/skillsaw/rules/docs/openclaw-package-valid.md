@@ -3,7 +3,7 @@
 OpenClaw reads runtime entrypoint metadata from `package.json`, separately from
 its native manifest. A non-object `openclaw` or non-array `openclaw.extensions`
 rejects entrypoint discovery. Every array item must be a non-empty string.
-Missing or null extensions permit conventional index entrypoint fallback.
+Missing or null `openclaw` metadata or extensions permit conventional index entrypoint fallback.
 
 ## Activation
 
@@ -14,7 +14,8 @@ plugin coverage expands.
 
 Use an object for `openclaw`, and an array of non-empty path strings for
 `extensions` when declaring explicit entrypoints. `package.json` uses JSON,
-while the native manifest also accepts JSON5. A package.json is not mandatory
+while the native manifest also accepts JSON5. Keep package metadata within
+the native loader’s 16 MiB limit. A package.json is not mandatory
 for a native plugin with a conventional index entrypoint. No autofix is provided.
 
 See [manifest sources](openclaw-manifest-valid.md) for the pinned loader source.

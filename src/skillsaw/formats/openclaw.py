@@ -63,7 +63,11 @@ def read_package_text(path: Path) -> tuple[str | None, str | None]:
     """Bound package probes without caching ordinary, negative candidates."""
     try:
         with path.open("rb") as stream:
-            raw = stream.read(MAX_PACKAGE_BYTES + 1)
+            # Most package probes are tiny negative candidates. Avoid reserving
+            # a 16 MiB read buffer for every ordinary package in a monorepo.
+            raw = stream.read(64 * 1024)
+            if len(raw) == 64 * 1024:
+                raw += stream.read(MAX_PACKAGE_BYTES + 1 - len(raw))
     except OSError:
         return None, "Cannot read package.json"
     if len(raw) > MAX_PACKAGE_BYTES:

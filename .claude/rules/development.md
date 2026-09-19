@@ -303,7 +303,7 @@ helpers in
 `src/skillsaw/discovery/<ecosystem>.py`; add its evidence probe to
 `provenance()` in `repository_provenance.py`, and its
 cached, type-gated wrappers in `context.py` or a
-`repository_<ecosystem>.py` mixin;
+`repository_<ecosystem>.py` mixin when its line cap bites;
 a `RepositoryType` member per packaging claim, in `SKILL_REPO_TYPES` when
 its plugins carry skills — which turns the `agentskill-*` rules on but
 discovers none until `discover_skills` and `context._discover_skills` gain

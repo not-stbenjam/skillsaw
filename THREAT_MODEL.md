@@ -10,7 +10,7 @@ developer tool or in CI pipelines (GitHub Actions). It has no network
 listeners and no daemon mode.
 
 skillsaw reads files from a target repository, parses them (Markdown,
-YAML, JSON, JSONC, and TOML), evaluates them against 101 built-in lint rules,
+YAML, JSON, JSONC, JSON5, and TOML), evaluates them against built-in lint rules,
 and reports violations. It also validates some metadata against bundled
 JSON Schemas. It can automatically fix violations via deterministic
 rewrites. A GitHub Action mode posts lint results as PR review comments.
@@ -29,7 +29,7 @@ are outside skillsaw's trust boundary.
   level is not necessarily the target repository's.
 - Custom-rule paths may be absolute or relative to that config. Loading one
   executes unsandboxed Python by design, so the operator must trust it.
-- Dependencies (PyYAML, ruamel.yaml, markdown-it-py, jsonschema, and
+- Dependencies (PyYAML, ruamel.yaml, markdown-it-py, jsonschema, json5, and
   `tomli` on Python 3.9/3.10 only) are sourced from PyPI. We delegate
   parsing and schema-validation correctness to those libraries. `tomli`
   is the same parser CPython vendored as `tomllib` in 3.11, so 3.11+

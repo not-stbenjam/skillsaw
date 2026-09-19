@@ -423,7 +423,7 @@ class RepositoryProvenanceMixin:
     def contained_plugin_owning(self, path: Path) -> Optional[Path]:
         """Nearest plugin root whose package files have containment semantics.
 
-        Codex, Agent Plugins, Grok and Antigravity all require supplied
+        Codex, Agent Plugins, Grok, Antigravity and OpenClaw require supplied
         files to resolve inside the package — Grok's enforcement is
         measured, a declared path whose target exists outside the plugin
         loaded nothing; Antigravity's is skillsaw's own deliberate

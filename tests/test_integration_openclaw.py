@@ -581,3 +581,11 @@ def test_oversized_package_probe_is_bounded_and_reported(tmp_path, monkeypatch):
         v["rule_id"] == "openclaw-package-valid" and "16777216-byte limit" in v["message"]
         for v in lint(repo)[1]
     )
+
+
+def test_package_probe_reads_metadata_after_initial_chunk(tmp_path):
+    repo = copy_fixture("package-only", tmp_path)
+    (repo / "package.json").write_text(
+        json.dumps({"padding": "x" * (64 * 1024), "openclaw": {"extensions": ["index.js"]}})
+    )
+    assert RepositoryContext(repo).provenance(repo).openclaw
