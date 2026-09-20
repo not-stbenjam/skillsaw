@@ -67,7 +67,7 @@ badge: $(VENV_EXTRAS_STAMP)
 	$(VENV)/bin/skillsaw badge --large .
 
 self-lint: $(VENV_EXTRAS_STAMP) badge
-	$(VENV)/bin/skillsaw lint .
+	$(VENV)/bin/skillsaw lint . --strict
 
 update: apm generate-example generate-docs generate-site-content format self-lint
 
