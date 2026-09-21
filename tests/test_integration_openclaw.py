@@ -43,7 +43,8 @@ def test_native_json5_and_declared_skills(tmp_path):
     repo = copy_fixture("valid", tmp_path)
     context = RepositoryContext(repo)
     assert context.repo_type == RepositoryType.OPENCLAW_PLUGIN
-    assert [p.name for p in context.skills] == ["weather-report"]
+    # guides/ loads natively; the undeclared skills/ is still portable content.
+    assert {p.name for p in context.skills} == {"weather-report", "inactive"}
     assert context.provenance(repo).ecosystems == frozenset({"openclaw"})
     assert len(context.lint_tree.find(OpenClawPackageConfigNode)) == 1
     assert len(context.lint_tree.find(McpBlock)) == 1
@@ -80,7 +81,10 @@ def test_nested_discovery_and_exclusions(tmp_path, prefix):
     context = RepositoryContext(repo)
     assert context.repo_type == RepositoryType.OPENCLAW_PLUGIN
     assert len(context.lint_tree.find(OpenClawPluginNode)) == 1
-    assert len(context.skills) == 1
+    # The undeclared skills/ is portable content, which the conventional
+    # walk reaches only outside hidden tool directories.
+    expected = {"weather-report"} if prefix.startswith(".") else {"weather-report", "inactive"}
+    assert {p.name for p in context.skills} == expected
     context = RepositoryContext(repo, exclude_patterns=[f"{prefix}/**"])
     assert not context.openclaw_plugin_roots()
     assert not context.skills
@@ -115,7 +119,7 @@ def test_external_symlinks_are_not_read(tmp_path, name):
     context = RepositoryContext(repo)
     assert all(path.is_relative_to(repo) for path in context.skills)
     if name == "guides":
-        assert not context.skills
+        assert {path.name for path in context.skills} == {"inactive"}
         expected = ("openclaw-resources", "escapes the plugin directory")
     else:
         assert {path.name for path in context.skills} == {"weather-report", "inactive"}
@@ -159,7 +163,7 @@ def test_schema_and_optional_fields_remain_forward_compatible(tmp_path):
     repo = copy_fixture("valid", tmp_path)
     (repo / "openclaw.plugin.json").write_text('{"id":"MixedCase","configSchema":{},"future":17}')
     assert lint(repo) == (0, [])
-    assert [path.name for path in RepositoryContext(repo).skills] == ["weather-report"]
+    assert {path.name for path in RepositoryContext(repo).skills} == {"weather-report", "inactive"}
 
 
 def test_single_skill_root_and_deduplication(tmp_path):
@@ -173,7 +177,9 @@ def test_single_skill_root_and_deduplication(tmp_path):
             }
         )
     )
-    assert len(RepositoryContext(repo).skills) == 1
+    names = [p.name for p in RepositoryContext(repo).skills]
+    assert names.count("weather-report") == 1
+    assert set(names) == {"weather-report", "inactive"}
 
 
 def test_manifest_exclusion_is_respected_with_package_claim(tmp_path):
@@ -694,3 +700,48 @@ def test_pi_and_openclaw_preserve_native_and_portable_skill_roles(tmp_path, nest
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["violations"] == []
+
+
+def _lint_json(repo, *args):
+    """Verbose JSON report: INFO findings are hidden from the default one."""
+    result = run_cli(["lint", str(repo), "--format", "json", "--no-baseline", "-v", *args])
+    assert result.stdout, result.stderr
+    return json.loads(result.stdout)
+
+
+def _skill_count(repo, *args):
+    result = run_cli(["lint", str(repo), "--format", "json", "--no-baseline", *args])
+    assert result.stdout, result.stderr
+    return json.loads(result.stdout)["stats"]["skills"]
+
+
+@pytest.mark.parametrize("args", [(), ("--type", "agentskills")])
+def test_undeclared_skills_dir_keeps_portable_discovery(tmp_path, args):
+    """A native-only manifest with no ``skills`` key never loads ``skills/``
+    natively, but the directory is still the portable Agent Skills layout
+    that 0.20.0 linted; #619 dropped it from discovery entirely."""
+    repo = copy_fixture("undeclared-skills", tmp_path)
+    context = RepositoryContext(repo)
+    assert context.provenance(repo).ecosystems == frozenset({"openclaw"})
+    assert context.skills == [repo / "skills" / "browser-session"]
+    assert _skill_count(repo, *args) == 1
+    violations = _lint_json(repo, *args)["violations"]
+    unlinked = [
+        v
+        for v in violations
+        if v["rule_id"] == "content-unlinked-internal-reference"
+        and v["file_path"] == "skills/browser-session/SKILL.md"
+    ]
+    assert len(unlinked) == 1, violations
+
+
+def test_declared_root_owns_skills_once(tmp_path):
+    """A manifest declaring the root walks ``skills/`` natively exactly once:
+    the conventional walk must not rediscover it or duplicate its findings."""
+    repo = copy_fixture("declared-root", tmp_path)
+    assert RepositoryContext(repo).skills == [repo / "skills"]
+    assert _skill_count(repo) == 1
+    violations = _lint_json(repo)["violations"]
+    keys = [(v["rule_id"], v["file_path"], v.get("line"), v["message"]) for v in violations]
+    assert len(keys) == len(set(keys)), keys
+    assert sum(1 for k in keys if k[0] == "content-unlinked-internal-reference") == 1

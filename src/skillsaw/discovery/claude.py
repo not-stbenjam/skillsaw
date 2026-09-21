@@ -225,11 +225,24 @@ def discover_skills(
 ) -> List[Path]:
     """Discover contained Agent Skill directories across repository roots."""
     openclaw_packages = list(openclaw_plugins)
-    openclaw_roots = {
-        resolved
-        for p in openclaw_exclusive_plugins
-        if contained_file(p, MANIFEST) and (resolved := safe_resolve(p)) is not None
-    }
+    openclaw_roots: Set[Path] = set()
+    # The conventional skills/ directories a native-only manifest actually
+    # declares (directly, or through an ancestor such as "."). Only those are
+    # OpenClaw's to walk; an undeclared skills/ never loads natively, but it
+    # is still the portable Agent Skills layout and keeps recursive discovery.
+    openclaw_native_skills_dirs: Set[Path] = set()
+    for p in openclaw_exclusive_plugins:
+        if not contained_file(p, MANIFEST) or (resolved := safe_resolve(p)) is None:
+            continue
+        openclaw_roots.add(resolved)
+        skills_component = contained_resolve(p / "skills", resolved)
+        if skills_component is None:
+            continue
+        for declared in skill_roots(p):
+            declared_root = contained_resolve(declared, resolved)
+            if declared_root is not None and skills_component.is_relative_to(declared_root):
+                openclaw_native_skills_dirs.add(skills_component)
+                break
     skills: List[Path] = []
     discovered: Set[Path] = set()
     agent_plugin_packages = list(agent_plugins)
@@ -261,12 +274,14 @@ def discover_skills(
             and resolved_parent is not None
             and resolved_parent in openclaw_roots
         ):
-            # A native-only plugin owns its conventional skills/ directory,
-            # but never another host's skill roots or adjacent portable skills.
-            # Explicit native declarations are walked separately below.
+            # A native-only plugin owns its conventional skills/ directory
+            # when the manifest declares it, but never another host's skill
+            # roots or adjacent portable skills. Explicit native declarations
+            # are walked separately below; an undeclared skills/ stays on
+            # the conventional walk so its portable skills are still linted.
             boundary = resolved_parent
             skills_component = safe_resolve(parent / "skills")
-            if skills_component is not None:
+            if skills_component is not None and skills_component in openclaw_native_skills_dirs:
                 skip_subtrees.add(skills_component)
         if resolved_parent is not None and resolved_parent in agent_plugin_immediate_only:
             if visited is not None:
@@ -366,8 +381,10 @@ def discover_skills(
         conventional ``skills/`` directory plus whatever the manifest
         declares, every resolved path forced back inside the plugin root.
         OpenClaw passes conventional=False: only its declared directories
-        load as native skills. Antigravity declares no skill paths, so it
-        supplies an empty declaration list and uses the conventional root.
+        load as native skills, and an undeclared skills/ is left to the
+        conventional portable walk above. Antigravity declares no skill
+        paths, so it supplies an empty declaration list and uses the
+        conventional root.
         """
         plugin_root = safe_resolve(plugin)
         if plugin_root is None:

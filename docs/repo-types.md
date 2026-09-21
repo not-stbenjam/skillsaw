@@ -659,6 +659,8 @@ Native packages are discovered through `openclaw.plugin.json` or `openclaw.exten
 in `package.json`, including nested packages and `.openclaw/extensions/`.
 The `openclaw-plugin` repository type exposes manifests, package metadata,
 explicitly declared skill roots, and static MCP declarations in the lint tree.
+A conventional `skills/` directory the manifest does not declare never loads
+natively, but it is still linted as portable Agent Skills.
 Shared skill, content, and MCP security rules apply automatically.
 
 Enable the new packaging checks explicitly:
