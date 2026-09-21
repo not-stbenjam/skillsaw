@@ -38,6 +38,21 @@ class PiPromptBlock(FrontmatteredBlock):
 
 
 @dataclass(eq=False)
+class PiSkillNode(LintTarget):
+    """A directory-style Pi skill: SKILL.md plus its bundled support files.
+
+    Pi loads a skill directory the way Agent Skills does, so the
+    ``references/`` prose is agent context and the bundled files are
+    subject to the same reachability check. Deliberately not SkillNode:
+    the ``agentskill-*`` authoring rules read that container and would
+    hold Pi's optional-name dialect to another host's convention.
+    """
+
+    def tree_label(self) -> str:
+        return f"{self.path.name}/ [pi skill]"
+
+
+@dataclass(eq=False)
 class PiSkillBlock(FrontmatteredBlock):
     """Pi skill dialect, including flat Markdown and optional names.
 

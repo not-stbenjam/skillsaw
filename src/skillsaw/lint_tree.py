@@ -348,6 +348,34 @@ class _TreeBuildState:
         elif issubclass(block_cls, McpBlock):
             self.mcp_paths.add(resolved)
 
+    def add_skill_references(
+        self,
+        skill_node: LintTarget,
+        skill_path: Path,
+        *,
+        containment_root: Path | None = None,
+        owner: Path | None = None,
+    ) -> None:
+        """Attach a skill directory's ``references/*.md`` as skill-ref prose.
+
+        The one seam every skill container uses — portable, APM and Pi —
+        so a host that loads a skill directory the Agent Skills way lints
+        the same support files. When *containment_root* is given, a
+        reference resolving outside it is skipped: rules both read and
+        rewrite these files, so a symlink out of the owning package is a
+        read *and* a write outside the checkout.
+        """
+        refs_dir = skill_path / "references"
+        if not refs_dir.is_dir():
+            return
+        root = safe_resolve(containment_root) if containment_root is not None else None
+        for ref_file in sorted(refs_dir.glob("*.md")):
+            if root is not None:
+                resolved = safe_resolve(ref_file)
+                if resolved is None or not resolved.is_relative_to(root):
+                    continue
+            self.add_block(skill_node, ref_file, SkillRefBlock, owner=owner)
+
     def add_openai_metadata(
         self,
         parent: LintTarget,
@@ -531,10 +559,7 @@ def _attach_apm_skills(
             continue
         skill_node = SkillNode(path=skill_path)
         state.add_block(skill_node, skill_path / "SKILL.md", SkillBlock)
-        refs_dir = skill_path / "references"
-        if refs_dir.is_dir():
-            for ref_file in sorted(refs_dir.glob("*.md")):
-                state.add_block(skill_node, ref_file, SkillRefBlock)
+        state.add_skill_references(skill_node, skill_path)
         apm_node.children.append(skill_node)
 
 
@@ -1917,17 +1942,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             containment_root=ref_root or skill_path,
         )
 
-        def _contained_in_plugin(candidate: Path, ref_root: Path | None = ref_root) -> bool:
-            if ref_root is None:
-                return True
-            resolved = safe_resolve(candidate)
-            return resolved is not None and resolved.is_relative_to(ref_root)
-
-        refs_dir = skill_path / "references"
-        if refs_dir.is_dir():
-            for ref_file in sorted(refs_dir.glob("*.md")):
-                if _contained_in_plugin(ref_file):
-                    state.add_block(skill_node, ref_file, SkillRefBlock)
+        state.add_skill_references(skill_node, skill_path, containment_root=ref_root)
 
         # Nearest plugin ancestor via dict lookups — iterating all plugins
         # with is_relative_to() is O(skills x plugins) and dominated tree

@@ -123,7 +123,8 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext
-from skillsaw.lint_target import SkillNode
+from skillsaw.blocks.pi import PiSkillNode
+from skillsaw.lint_target import LintTarget, SkillNode
 from skillsaw.markdown_doc import MarkdownDoc
 from skillsaw.blocks import ContentBlock
 from skillsaw.utils import read_text
@@ -358,7 +359,12 @@ class AgentSkillUnreferencedFilesRule(Rule):
         ]
 
         violations: List[RuleViolation] = []
-        for skill_node in context.lint_tree.find(SkillNode):
+        # Pi loads a skill directory the Agent Skills way, so a native Pi
+        # skill's bundled files are subject to the same reachability check;
+        # its container is not a SkillNode only so the authoring rules
+        # leave Pi's frontmatter dialect alone.
+        skill_nodes = [*context.lint_tree.find(SkillNode), *context.lint_tree.find(PiSkillNode)]
+        for skill_node in skill_nodes:
             skill_path = skill_node.path
             skill_md = skill_path / "SKILL.md"
             if not skill_md.is_file():
@@ -576,7 +582,7 @@ class AgentSkillUnreferencedFilesRule(Rule):
 
     def _reachable_files(
         self,
-        skill_node: SkillNode,
+        skill_node: LintTarget,
         skill_path: Path,
         roots: List[Path],
         all_files: List[Path],

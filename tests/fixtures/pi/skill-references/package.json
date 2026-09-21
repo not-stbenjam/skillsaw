@@ -1,0 +1,10 @@
+{
+  "name": "pi-release-notes",
+  "version": "0.3.1",
+  "description": "Pi skills for drafting and reviewing release notes",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "pi": {
+    "skills": ["./skills"]
+  }
+}

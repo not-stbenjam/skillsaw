@@ -10357,7 +10357,7 @@ class TestPiLegacySettings:
         assert result["out"]["violations"] == []
         assert {Path(p).relative_to(repo).as_posix() for p in result["out"]["stats"]["skills"]} == {
             "native/review.md",
-            ".pi/skills/automatic/SKILL.md",
+            ".pi/skills/automatic",
         }
 
         # The modern spelling must select exactly the same resources.
@@ -10591,7 +10591,7 @@ def test_pi_nan_metadata_retains_declared_and_flat_skills(tmp_path):
     assert result["out"]["violations"] == []
     assert {Path(p).relative_to(repo).as_posix() for p in result["out"]["stats"]["skills"]} == {
         "flat/review.md",
-        "skills/review/SKILL.md",
+        "skills/review",
     }
 
 

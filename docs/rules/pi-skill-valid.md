@@ -35,8 +35,10 @@ than diagnosed as an invalid skill. An explicit `SKILL.md` without a description
 is reported because its filename declares a skill that Pi will skip.
 
 Native Pi skill bodies and descriptions receive the shared content and security
-checks. Dual-format packages retain the other host's portable skill checks for
-its own discovered skills. This rule follows the loader pinned by
+checks, and a skill directory's `references/` files are checked the same way
+as in a portable skill, including the unreferenced-file check. Dual-format
+packages retain the other host's portable skill checks for its own discovered
+skills. This rule follows the loader pinned by
 [pi-config-valid](pi-config-valid.md).
 
 ## Configuration

@@ -68,10 +68,17 @@ class RepositoryScanMixin:
 
     @property
     def skill_paths(self) -> List[Path]:
-        """Display paths for portable directories and native Pi skill files."""
+        """Display paths for portable and native skills.
+
+        A directory-style skill is its directory in both dialects; only a
+        flat Pi skill is reported as a file.
+        """
         from .blocks.pi import PiSkillBlock
 
-        return list(self.skills) + [b.path for b in self.lint_tree.find(PiSkillBlock)]
+        return list(self.skills) + [
+            b.path.parent if b.path.name == "SKILL.md" else b.path
+            for b in self.lint_tree.find(PiSkillBlock)
+        ]
 
     @property
     def skill_count(self) -> int:

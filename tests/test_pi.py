@@ -7,18 +7,24 @@ from pathlib import Path
 
 import pytest
 
-from skillsaw.blocks import SkillBlock
+from skillsaw.blocks import SkillBlock, SkillRefBlock
 from skillsaw.blocks.pi import (
     PiPackageBlock,
     PiSettingsBlock,
     PiSkillBlock,
+    PiSkillNode,
     PiPromptBlock,
     PiExtensionNode,
 )
 from skillsaw.context import RepositoryContext, RepositoryType
+from skillsaw.lint_target import SkillNode
+from skillsaw.rules.builtin.agentskills.unreferenced_files import (
+    AgentSkillUnreferencedFilesRule,
+)
 from skillsaw.rules.builtin.pi.config_valid import PiConfigValidRule
 from skillsaw.rules.builtin.pi.resource_paths import PiResourcePathsRule
 from tests.cli_runner import run_cli
+from tests.test_integration import run_lint
 from skillsaw.utils import invalidate_read_caches
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pi"
@@ -595,3 +601,50 @@ def test_late_catalog_exclusion_preserves_surviving_pi_skills(host, marker, forc
     ctx.exclude_patterns.append("packages/demo/skills/**")
     ctx.apply_excludes()
     assert not paths(ctx, SkillBlock)
+
+
+def test_selected_skill_directory_attaches_support_files(tmp_path):
+    """A directory-style Pi skill lints its references/ like Agent Skills does.
+
+    Regression: 0.21 attached the selected SKILL.md as a lone block and the
+    sibling support prose fell out of the tree (0.20.0 linted it).
+    """
+    ctx = RepositoryContext(copy_fixture("skill-references", tmp_path))
+    assert paths(ctx, PiSkillNode) == {"skills/demo"}
+    assert paths(ctx, PiSkillBlock) == {"skills/demo/SKILL.md", "skills/notes.md"}
+    assert paths(ctx, SkillRefBlock) == {
+        "skills/demo/references/guide.md",
+        "skills/demo/references/orphan.md",
+    }
+    # The entry stays on Pi's dialect: no portable container, no portable block.
+    assert not paths(ctx, SkillNode)
+    assert not paths(ctx, SkillBlock)
+    ref_node = ctx.lint_tree.find(PiSkillNode)[0]
+    assert {type(child) for child in ref_node.children} == {PiSkillBlock, SkillRefBlock}
+    assert not ctx.lint_tree_errors
+
+    violations = AgentSkillUnreferencedFilesRule().check(ctx)
+    assert [str(v.file_path.relative_to(ctx.root_path)) for v in violations] == [
+        "skills/demo/references/orphan.md"
+    ]
+
+
+def test_cli_selected_skill_directory_reports_references_and_directory_stats(tmp_path):
+    root = copy_fixture("skill-references", tmp_path)
+    result = run_lint(root, "--no-custom-rules")
+    assert result["rc"] == 0, result["stderr"]
+    data = result["out"]
+    findings = {(v["rule_id"], v["file_path"], v.get("line")) for v in data["violations"]}
+    assert ("content-weak-language", "skills/demo/references/guide.md", 10) in findings
+    assert ("agentskill-unreferenced-files", "skills/demo/references/orphan.md", None) in findings
+    assert not {rule for rule, _, _ in findings if rule.startswith("agentskill-")} - {
+        "agentskill-unreferenced-files"
+    }
+    # Directory-style skills report as their directory; flat skills as the file.
+    assert [str(Path(p).relative_to(root)) for p in data["stats"]["skills"]] == [
+        "skills/demo",
+        "skills/notes.md",
+    ]
+
+    summary = run_lint(root, "--no-custom-rules", verbose=False)["out"]
+    assert summary["stats"]["skills"] == 2
