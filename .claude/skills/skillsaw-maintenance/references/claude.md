@@ -40,7 +40,7 @@ layout. Each format below maps to its own skillsaw rules.
 - Hooks — `src/skillsaw/rules/builtin/hooks/`: `claude-hooks-valid`, `hooks-dangerous`,
   `hooks-prohibited`.
 - MCP — `src/skillsaw/rules/builtin/mcp/`: `mcp-valid-json`, `mcp-prohibited`.
-- Skills — `src/skillsaw/rules/builtin/skills/frontmatter.py`: `skill-frontmatter`.
+- Skills — `src/skillsaw/rules/builtin/agentskills/valid.py`: `agentskill-valid`.
 - Agents — `src/skillsaw/rules/builtin/agents/frontmatter.py`: `claude-agent-frontmatter`.
 
 ## Sync notes
