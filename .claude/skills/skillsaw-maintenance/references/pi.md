@@ -34,7 +34,12 @@ Pi combines a packaging claim with a project tool layer. Its marker is a
 `package.json` key or keyword, discovered by the shared repository scan rather
 than a marker directory. Resource selection uses the scan mixin;
 selected native skills use `PiSkillBlock`, while unselected portable skills
-keep their Agent Skills role. Report formatters use `skill_paths` and
+keep their Agent Skills role. A selected `SKILL.md` sits in a `PiSkillNode`
+with its `references/*.md` attached through the tree builder's
+`add_skill_references` seam, so the support prose and
+`agentskill-unreferenced-files` cover it as they cover a portable skill;
+the container is not a `SkillNode`, which keeps the `agentskill-*`
+authoring rules off Pi's dialect. Report formatters use `skill_paths` and
 `skill_count` so flat native skills are included in single- and multi-path
 reports. Add `.pi/skills` through Pi's resource selection, not through the
 unfiltered conventional skill directory lists.
