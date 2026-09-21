@@ -3,6 +3,7 @@ Tests for `skillsaw explain <rule-id>` and the rule documentation helpers.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 
@@ -226,6 +227,28 @@ def test_explain_pager_flag_forced_with_empty_pager_env(temp_dir):
     ]
     result = subprocess.run(args, capture_output=True, text=True, timeout=60, env=env)
     assert result.returncode == 0
+    assert "content-weak-language" in result.stdout
+
+
+def test_explain_pager_less_without_term_still_prints(temp_dir):
+    if not shutil.which("less"):
+        pytest.skip("less is not installed")
+    env = dict(os.environ)
+    env["PAGER"] = "less"
+    env["MANPAGER"] = ""
+    env.pop("TERM", None)
+    args = [
+        sys.executable,
+        "-m",
+        "skillsaw",
+        "explain",
+        "content-weak-language",
+        str(temp_dir),
+        "--pager",
+    ]
+    result = subprocess.run(args, capture_output=True, text=True, timeout=60, env=env)
+    assert result.returncode == 0
+    assert "unknown terminal type" not in result.stderr
     assert "content-weak-language" in result.stdout
 
 

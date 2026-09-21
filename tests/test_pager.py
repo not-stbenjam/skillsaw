@@ -443,3 +443,22 @@ def test_display_paged_default_stream(capsys):
     display_paged("hello default stream\n", args)
     captured = capsys.readouterr()
     assert "hello default stream" in captured.out
+
+
+def test_resolve_pager_less_sets_dumb_term_when_term_missing(monkeypatch):
+    monkeypatch.delenv("MANPAGER", raising=False)
+    monkeypatch.delenv("PAGER", raising=False)
+    monkeypatch.delenv("TERM", raising=False)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/less" if name == "less" else None)
+    cmd_parts, env = resolve_pager_command()
+    assert cmd_parts == ["less"]
+    assert env["TERM"] == "dumb"
+
+
+def test_resolve_pager_less_keeps_existing_term(monkeypatch):
+    monkeypatch.delenv("MANPAGER", raising=False)
+    monkeypatch.delenv("PAGER", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/less" if name == "less" else None)
+    _cmd_parts, env = resolve_pager_command()
+    assert env["TERM"] == "xterm-256color"

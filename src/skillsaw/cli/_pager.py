@@ -128,6 +128,10 @@ def resolve_pager_command(
         if "LESS" not in env:
             env["LESS"] = "-R"
         env.setdefault("LESSCHARSET", "utf-8")
+        # less exits with "unknown terminal type" and shows nothing when TERM
+        # is unset or empty; a dumb terminal still pages plain text.
+        if not env.get("TERM"):
+            env["TERM"] = "dumb"
 
     return cmd_parts, env
 
