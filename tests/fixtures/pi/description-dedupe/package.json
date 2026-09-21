@@ -1,0 +1,8 @@
+{
+  "name": "pi-description-examples",
+  "version": "1.0.0",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["skills"]
+  }
+}

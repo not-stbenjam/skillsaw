@@ -10593,3 +10593,46 @@ def test_pi_nan_metadata_retains_declared_and_flat_skills(tmp_path):
         "flat/review.md",
         "skills/review/SKILL.md",
     }
+
+
+def _pi_description_findings(root, *extra):
+    result = run_cli(
+        [
+            "lint",
+            str(root),
+            "--no-custom-rules",
+            "--no-baseline",
+            "--format",
+            "json",
+            *extra,
+        ]
+    )
+    data = json.loads(result.stdout)
+    return [
+        (finding["rule_id"], finding["file_path"])
+        for finding in data["violations"]
+        if finding["rule_id"] in ("content-description-routing", "pi-skill-valid")
+        and "description" in finding["message"].lower()
+    ]
+
+
+def test_pi_skill_description_defect_reported_once(tmp_path):
+    root = copy_fixture("pi/description-dedupe", tmp_path)
+    findings = _pi_description_findings(root)
+    assert sorted(findings) == [
+        ("pi-skill-valid", "skills/empty/SKILL.md"),
+        ("pi-skill-valid", "skills/listed/SKILL.md"),
+        ("pi-skill-valid", "skills/missing/SKILL.md"),
+        ("pi-skill-valid", "skills/nulled/SKILL.md"),
+    ]
+
+
+def test_pi_skill_description_routing_fallback_when_native_rule_disabled(tmp_path):
+    root = copy_fixture("pi/description-dedupe", tmp_path)
+    findings = _pi_description_findings(root, "--skip-rule", "pi-skill-valid")
+    assert sorted(findings) == [
+        ("content-description-routing", "skills/empty/SKILL.md"),
+        ("content-description-routing", "skills/listed/SKILL.md"),
+        ("content-description-routing", "skills/missing/SKILL.md"),
+        ("content-description-routing", "skills/nulled/SKILL.md"),
+    ]

@@ -230,7 +230,16 @@ class DescriptionRoutingRule(Rule):
                     continue
                 if block_type is PiPromptBlock and block.field("description") is None:
                     continue
+                # pi-skill-valid owns a missing or empty description on a
+                # native Pi skill: Pi skips the skill outright, so one
+                # finding per defect is enough. Routing keeps the check when
+                # that rule is off.
+                pi_owns_description = block_type is PiSkillBlock and self.surface_rule_enabled(
+                    "pi-skill-valid"
+                )
                 if not block.has_frontmatter:
+                    if pi_owns_description:
+                        continue
                     violations.append(
                         self.violation(
                             f"Description is missing; add frontmatter describing this "
@@ -242,6 +251,8 @@ class DescriptionRoutingRule(Rule):
                     continue
                 description_field = block.field("description")
                 if description_field is None:
+                    if pi_owns_description:
+                        continue
                     violations.append(
                         self.violation(
                             f"Description is missing; explain what this {block.category} does",
@@ -274,6 +285,8 @@ class DescriptionRoutingRule(Rule):
                         and self.surface_rule_enabled("copilot-agent-valid")
                     ):
                         continue
+                    if pi_owns_description:
+                        continue
                     violations.append(
                         self.violation(
                             "Description is empty; explain what the building block does",
@@ -284,6 +297,8 @@ class DescriptionRoutingRule(Rule):
                     )
                     continue
                 if not description.strip():
+                    if pi_owns_description:
+                        continue
                     violations.append(
                         self.violation(
                             "Description is empty; explain what the building block does",
