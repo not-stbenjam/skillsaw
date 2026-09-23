@@ -799,7 +799,9 @@ class Linter:
         warnings.extend(self._deprecation_violations())
         for rule_id in self.config.rules:
             if rule_id not in self._known_rule_ids:
-                if skip_unknown:
+                # A removed builtin can't belong to an unloaded plugin, so
+                # its notice survives the unknown-rule suppression below.
+                if skip_unknown and rule_id not in REMOVED_RULES:
                     logger.info(
                         "Rule %-30s unknown in config; may be a custom rule "
                         "(skipped due to --no-custom-rules)",
