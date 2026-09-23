@@ -10252,6 +10252,19 @@ class TestCursorNativePlugins:
             "hooks-dangerous",
         } <= rules
 
+    def test_missing_sources_report_once_per_marketplace(self, tmp_path):
+        repo = copy_fixture("cursor-plugins/marketplace-missing-sources", tmp_path)
+        result = run_lint(repo, "--rule", "cursor-marketplace-json-valid")
+        assert result["rc"] == 1, result
+        messages = sorted(v["message"] for v in result["out"]["violations"])
+        assert messages == [
+            "3 plugin entries have no local plugin directory: 'release-notes', "
+            "'incident-response', 'migration-helper'; point each source at an "
+            "existing directory inside this marketplace",
+            "Plugin 'shared-rules': source must be a relative path that stays "
+            "inside this marketplace",
+        ]
+
 
 @pytest.mark.integration
 @pytest.mark.parametrize("flags", [[], ["--dry-run"]])

@@ -185,6 +185,19 @@ def test_cursor_source_containment_and_remote_sources(tmp_path, source):
     assert bool(findings) == (not source.startswith("https://"))
 
 
+def test_cursor_missing_sources_truncate_long_lists(tmp_path):
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    plugins = [{"name": f"plugin-{i}", "source": f"missing-{i}"} for i in range(8)]
+    catalog.write_text(json.dumps({"name": "catalog", "plugins": plugins}))
+    findings = CursorMarketplaceValidRule().check(RepositoryContext(repo))
+    assert [v.message for v in findings] == [
+        "8 plugin entries have no local plugin directory: 'plugin-0', 'plugin-1', "
+        "'plugin-2', 'plugin-3', 'plugin-4', and 3 more; point each source at an "
+        "existing directory inside this marketplace"
+    ]
+
+
 def test_cursor_plugin_mcp_duplicate_keys_keep_last_value(tmp_path):
     repo = copy_fixture("cursor-plugins/clean", tmp_path)
     path = repo / "packages/review/config/mcp.json"

@@ -30,8 +30,9 @@ can supply component declarations without a separate plugin manifest.
 ## How to fix
 
 Correct the field or local source named in the finding. Give each entry a
-unique name and keep local source paths inside the marketplace. Findings
-are file-level and have no automatic fix.
+unique name and keep local source paths inside the marketplace. Entries
+whose source names no directory are reported together, once per
+marketplace. Findings are file-level and have no automatic fix.
 
 See the [Cursor marketplace reference](https://cursor.com/docs/reference/plugins).
 
