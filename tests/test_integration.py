@@ -10277,6 +10277,18 @@ class TestCursorNativePlugins:
         assert "Hook PreToolUse[0] is missing 'command'" in messages
         assert not any("Claude Code's format" in m for m in messages)
 
+    @pytest.mark.parametrize("group", [{}, []], ids=["object", "empty"])
+    def test_malformed_group_keeps_entry_checks(self, tmp_path, group):
+        """A bad event group beside Claude groups is not hidden by the summary."""
+        repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
+        hooks = repo / "hooks/hooks.json"
+        data = json.loads(hooks.read_text())
+        data["hooks"]["afterFileEdit"] = group
+        hooks.write_text(json.dumps(data))
+        messages = [v["message"] for v in by_rule(run_lint(repo))["cursor-hooks-valid"]]
+        assert any("afterFileEdit" in m for m in messages), messages
+        assert not any("Claude Code's format" in m for m in messages)
+
     def test_missing_sources_report_once_per_marketplace(self, tmp_path):
         repo = copy_fixture("cursor-plugins/marketplace-missing-sources", tmp_path)
         result = run_lint(repo, "--rule", "cursor-marketplace-json-valid")

@@ -343,13 +343,16 @@ def _is_claude_shaped(data: dict) -> bool:
 
     A Cursor entry names its own ``command`` or ``prompt`` and never nests a
     ``hooks`` array, so the shape alone tells the formats apart. A file that
-    mixes both keeps the per-entry checks, which report the stray groups.
+    mixes both, or has a malformed or empty event group, keeps the per-entry
+    checks, which report the stray groups.
     """
     hooks = data.get("hooks")
     if not isinstance(hooks, dict) or not hooks:
         return False
-    entries = [e for group in hooks.values() if isinstance(group, list) for e in group]
-    return bool(entries) and all(
+    if not all(isinstance(group, list) and group for group in hooks.values()):
+        return False
+    entries = [e for group in hooks.values() for e in group]
+    return all(
         isinstance(e, dict)
         and isinstance(e.get("hooks"), list)
         and "command" not in e
