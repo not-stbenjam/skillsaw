@@ -149,6 +149,10 @@ def skill_dirs(root: Path, data: dict, excluded=lambda _: False) -> list[Path]:
             )
         except OSError:
             return []
-    return sorted(
-        {p.parent for p in component_files(root, data, "skills", excluded) if p.name == "SKILL.md"}
-    )
+    found = {
+        p.parent for p in component_files(root, data, "skills", excluded) if p.name == "SKILL.md"
+    }
+    # A skill's own subdirectories are its content: a SKILL.md below one
+    # (phase or reference files) is not another skill, as in the default
+    # one-level walk and the portable walk.
+    return sorted(p for p in found if not any(parent in found for parent in p.parents))

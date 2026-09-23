@@ -615,3 +615,20 @@ def test_cursor_undeclared_skills_stay_portable(tmp_path, args):
         "shared/skills/changelog-draft/SKILL.md",
         "skills/pr-summary/SKILL.md",
     ]
+
+
+def test_cursor_declared_skills_stop_at_a_skill_directory(tmp_path):
+    """A declared ``skills`` path must not turn a skill's phase files into
+    skills of their own: the default one-level walk and the portable walk
+    both stop at a directory holding SKILL.md (microsoft/skills
+    azure-app-onboard ships deploy/, prepare/ and scaffold/ phases)."""
+    repo = copy_fixture("cursor-plugins/nested-skill-phases", tmp_path)
+    skill = repo / "skills/app-onboard"
+    phases = [skill / "prepare/SKILL.md", skill / "deploy/SKILL.md"]
+    before = [p.read_bytes() for p in phases]
+    assert RepositoryContext(repo).skills == [skill]
+    result = run_cli(["lint", str(repo), "--no-custom-rules", "--format", "json", "-v"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["violations"] == []
+    run_cli(["fix", "--suggest", "--no-custom-rules", str(repo)])
+    assert [p.read_bytes() for p in phases] == before
