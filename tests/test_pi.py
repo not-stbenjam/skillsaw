@@ -543,11 +543,13 @@ def test_local_package_symlink_has_canonical_provenance(tmp_path):
 
 
 def test_transient_compile_failure_is_not_cached(monkeypatch):
+    from wcmatch import glob
+
     from skillsaw import pi_patterns
     from skillsaw.timeouts import RegexTimeout
 
     pi_patterns._compile_glob.cache_clear()
-    original = pi_patterns.glob.compile
+    original = glob.compile
     calls = 0
 
     def compile_once(pattern, **kwargs):
@@ -557,7 +559,7 @@ def test_transient_compile_failure_is_not_cached(monkeypatch):
             raise RegexTimeout("transient load")
         return original(pattern, **kwargs)
 
-    monkeypatch.setattr(pi_patterns.glob, "compile", compile_once)
+    monkeypatch.setattr(glob, "compile", compile_once)
     assert not pi_patterns._globmatch("review.md", "*.md")
     assert pi_patterns._globmatch("review.md", "*.md")
     assert calls == 2

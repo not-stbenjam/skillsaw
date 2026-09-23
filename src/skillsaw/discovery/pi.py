@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Callable, Iterable
-
-from pathspec import GitIgnoreSpec
+from typing import TYPE_CHECKING, Callable, Iterable
 
 from skillsaw.discovery.detect import WALK_SKIP_DIRS, VENDOR_DIR_NAMES
 
@@ -20,7 +18,10 @@ from skillsaw.paths import (
     safe_exists,
 )
 from skillsaw.utils import read_json, read_text
-from skillsaw.pi_patterns import _globmatch, _ignore_patterns, _ignored, _MAX_IGNORE_PATTERNS
+from skillsaw.pi_patterns import _globmatch, _ignore_patterns, _ignore_spec, _ignored
+
+if TYPE_CHECKING:
+    from pathspec import GitIgnoreSpec
 
 _SKIP_DIRS = WALK_SKIP_DIRS | VENDOR_DIR_NAMES
 
@@ -223,7 +224,7 @@ def collect(
                     raw = prefix + "/" + raw.lstrip("/")
                 lines.append(("!" if neg else "") + raw)
             patterns.extend(_ignore_patterns(lines))
-        ignore = GitIgnoreSpec(patterns[-_MAX_IGNORE_PATTERNS:], backend="simple")
+        ignore = _ignore_spec(patterns)
 
         def ignored(p: Path) -> bool:
             rel = (relative_to_str(p, path) or p.name) + ("/" if safe_is_dir(p) else "")
@@ -255,7 +256,7 @@ def collect(
         # Explicit files have no suffix restriction in Pi's loader.
         return [path]
     try:
-        return walk(path, True, GitIgnoreSpec([], backend="simple"))
+        return walk(path, True, _ignore_spec())
     except RecursionError:
         # Deep repository trees must not escape the constructor's discovery leg.
         return []
