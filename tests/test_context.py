@@ -1666,3 +1666,57 @@ def test_hostile_marketplace_manifest_is_a_parse_error_not_a_traceback(temp_dir)
 
     assert context.repo_type is not None
     assert context.lint_tree is not None
+
+
+def test_resolve_memo_is_per_context_and_cleared_on_rebuild(tmp_path):
+    """Provenance probes share one realpath per path through the context memo.
+
+    The memo must never outlive the filesystem state it describes: a ``fix``
+    pass that relinks a directory calls ``rebuild_lint_tree()``, and a second
+    context over the same checkout starts empty.
+    """
+    (tmp_path / "first").mkdir()
+    (tmp_path / "second").mkdir()
+    link = tmp_path / "current"
+    link.symlink_to(tmp_path / "first", target_is_directory=True)
+    context = RepositoryContext(tmp_path)
+
+    assert context.resolve_path(link) == (tmp_path / "first").resolve()
+    link.unlink()
+    link.symlink_to(tmp_path / "second", target_is_directory=True)
+    # Within one build the answer is stable ...
+    assert context.resolve_path(link) == (tmp_path / "first").resolve()
+    # ... a fresh context never sees another's memo ...
+    assert RepositoryContext(tmp_path).resolve_path(link) == (tmp_path / "second").resolve()
+    # ... and a rebuild re-reads the filesystem.
+    context.rebuild_lint_tree()
+    assert context.resolve_path(link) == (tmp_path / "second").resolve()
+
+
+def test_lint_tree_rebuild_sees_relinked_plugin_directory(tmp_path):
+    """A fix that replaces an escaping symlink is visible to the next build.
+
+    The tree's containment checks resolve through the context memo, so a
+    stale entry would keep rejecting the now-contained command after the
+    rebuild a ``fix`` pass performs.
+    """
+    from skillsaw.blocks import CommandBlock
+
+    outside = tmp_path / "outside"
+    (outside / "commands").mkdir(parents=True)
+    command = "---\ndescription: Greet the user\n---\n\n## Name\n\nhello\n"
+    (outside / "commands" / "hello.md").write_text(command)
+    repo = tmp_path / "repo"
+    (repo / ".claude-plugin").mkdir(parents=True)
+    (repo / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "greeter"}))
+    (repo / "commands").symlink_to(outside / "commands", target_is_directory=True)
+
+    context = RepositoryContext(repo)
+    assert context.lint_tree.find(CommandBlock) == []
+
+    (repo / "commands").unlink()
+    (repo / "commands").mkdir()
+    (repo / "commands" / "hello.md").write_text(command)
+    context.rebuild_lint_tree()
+
+    assert [block.path.name for block in context.lint_tree.find(CommandBlock)] == ["hello.md"]

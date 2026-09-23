@@ -71,7 +71,7 @@ class RepositoryCursorMixin:
             p
             for root in self.cursor_plugin_roots()
             for _, data in self.cursor_views(root)
-            for p in cursor.skill_dirs(root, data, self.is_path_excluded)
+            for p in cursor.skill_dirs(root, data, self.is_path_excluded, resolve=self.resolve_path)
             if not self.is_path_excluded(p)
             and not self.is_path_excluded(p / "SKILL.md")
             and next((parent for parent in (p, *p.parents) if parent in roots), None) == root
