@@ -16,9 +16,16 @@ Pi package and project resource declarations must have valid types
 ## Why
 
 Pi reads resource declarations from `package.json#pi` and project
-`.pi/settings.json`. A string where an array belongs silently drops resources
-in the current package loader. This rule identifies the field and expected type
-before the package is installed.
+`.pi/settings.json`, and handles a malformed field differently in each file.
+
+- **`.pi/settings.json`** is not sanitized. A number or object where an array
+  belongs, or a non-string entry, stops Pi at startup with a `TypeError`. A
+  string is iterated character by character, so `"skills": "./x"` makes Pi scan
+  the filesystem root.
+- **`package.json#pi`** fields that are not arrays of strings are ignored, so
+  that resource type silently loads nothing.
+
+This rule names the field and the expected type before Pi runs.
 
 ## Checks
 
@@ -30,7 +37,7 @@ before the package is installed.
 
 Unknown npm fields, Pi gallery metadata, and unrelated settings are accepted.
 Empty resource lists are valid. Findings are consolidated by file and default to
-warning: current Pi ignores malformed manifest fields instead of failing startup.
+warning, because the same checks cover `package.json#pi` fields that Pi ignores.
 
 Legacy project settings such as `"skills": {"customDirectories": ["../skills"]}`
 are normalized before validation and discovery, as in Pi's settings loader.
@@ -54,7 +61,9 @@ Use arrays for resource paths:
 {"pi": {"skills": ["./skills"], "prompts": ["./prompts"]}}
 ```
 
-A string such as `"skills": "./skills"` is invalid and drops that resource type.
+A string such as `"skills": "./skills"` is invalid. In a package manifest it
+drops that resource type; in `.pi/settings.json` Pi reads each character as
+a path and scans from the filesystem root.
 
 ## Discovery and boundaries
 

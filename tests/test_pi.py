@@ -130,7 +130,14 @@ def test_cli_native_pi_metadata_valid(fixture, tmp_path):
 def test_cli_invalid_metadata(tmp_path):
     root = copy_fixture("invalid", tmp_path)
     result = run_cli(["lint", str(root), "--rule", "pi-config-valid", "--format", "json"])
-    assert len(json.loads(result.stdout)["violations"]) == 2
+    violations = json.loads(result.stdout)["violations"]
+    assert len(violations) == 2
+    by_file = {Path(v["file_path"]).name: v for v in violations}
+    # Pi spreads settings fields unchecked and crashes at startup (pi 0.84.2:
+    # TypeError), while readPiManifest drops malformed package.json#pi fields.
+    assert "Pi can fail at startup" in by_file["settings.json"]["message"]
+    assert "Pi ignores these fields" in by_file["package.json"]["message"]
+    assert {v["severity"] for v in violations} == {"warning"}
 
 
 def test_unrelated_npm_package_is_not_pi(tmp_path):
