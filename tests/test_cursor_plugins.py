@@ -10,6 +10,7 @@ from skillsaw.blocks.cursor import CursorAgentBlock, CursorPluginBlock
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.rules.builtin.cursor.plugin_valid import CursorPluginValidRule
 from skillsaw.rules.builtin.cursor.marketplace_valid import CursorMarketplaceValidRule
+from tests.cli_runner import run_cli
 from tests.test_integration import copy_fixture
 
 
@@ -23,13 +24,18 @@ def test_cursor_native_components(tmp_path):
         CursorRuleBlock,
         CursorCommandBlock,
         CursorAgentBlock,
-        SkillBlock,
         CursorPluginBlock,
     ):
         assert len(tree.find(cls)) == 1, cls
     assert len(tree.find(HooksBlock)) == 1
     assert len(tree.find(McpBlock)) == 2
-    assert all("ignored" not in str(b.path) for b in tree.find(SkillBlock))
+    # Cursor loads capabilities/ only; the default skills/ it overrides
+    # stays on the portable walk.
+    plugin = repo / "packages/review"
+    assert {b.path.parent for b in tree.find(SkillBlock)} == {
+        plugin / "capabilities/review",
+        plugin / "skills/ignored",
+    }
     assert all("ignored" not in str(b.path) for b in tree.find(CursorCommandBlock))
     assert not CursorPluginValidRule().check(context)
     assert not CursorMarketplaceValidRule().check(context)
@@ -103,7 +109,8 @@ def test_cursor_default_and_root_skill(tmp_path):
     manifest = plugin / ".cursor-plugin/plugin.json"
     manifest.write_text('{"name":"review"}')
     context = RepositoryContext(plugin)
-    assert context.skills == [plugin / "skills/ignored"]
+    # capabilities/ is no longer declared, so it is portable content only.
+    assert context.skills == [plugin / "capabilities/review", plugin / "skills/ignored"]
     # With no default directory, use the root skill.
     (plugin / "skills").rename(plugin / "unused-skills")
     (plugin / "SKILL.md").write_text((plugin / "capabilities/review/SKILL.md").read_text())
@@ -113,7 +120,8 @@ def test_cursor_default_and_root_skill(tmp_path):
     from skillsaw.utils import invalidate_read_caches
 
     invalidate_read_caches(manifest)
-    assert not RepositoryContext(plugin).skills
+    # Cursor loads no skills, but the root SKILL.md is still a portable skill.
+    assert RepositoryContext(plugin).skills == [plugin]
 
 
 def test_cursor_nested_marketplace_and_excluded_component(tmp_path):
@@ -451,13 +459,21 @@ def test_cursor_default_skill_directory_is_one_level(tmp_path):
     grouped = plugin / "skills/group/nested"
     grouped.mkdir(parents=True)
     (grouped / "SKILL.md").write_text((plugin / "skills/ignored/SKILL.md").read_text())
-    assert RepositoryContext(plugin).skills == [plugin / "skills/ignored"]
+    # Cursor's default skills/ is one level deep; capabilities/ is portable.
+    assert RepositoryContext(plugin).skills == [
+        plugin / "capabilities/review",
+        plugin / "skills/ignored",
+    ]
     # Explicit component directories are recursively expanded by the host.
     manifest.write_text('{"name":"review","skills":"skills"}')
     from skillsaw.utils import invalidate_read_caches
 
     invalidate_read_caches(manifest)
-    assert set(RepositoryContext(plugin).skills) == {plugin / "skills/ignored", grouped}
+    assert set(RepositoryContext(plugin).skills) == {
+        plugin / "capabilities/review",
+        plugin / "skills/ignored",
+        grouped,
+    }
 
 
 @pytest.mark.parametrize(
@@ -570,3 +586,32 @@ def test_cursor_component_override_keeps_skill_role(tmp_path, component):
     assert len([b for b in context.lint_tree.find(BodyContent) if b.path == path]) == 1
     if component == "rules":
         assert len([b for b in context.lint_tree.find(CursorRuleBlock) if b.path == path]) == 1
+
+
+@pytest.mark.parametrize("args", [(), ("--type", "agentskills")])
+def test_cursor_undeclared_skills_stay_portable(tmp_path, args):
+    """A declared ``skills`` path replaces Cursor's folder discovery, but a
+    SKILL.md elsewhere in the package is still portable Agent Skills content
+    that 0.20.0 linted; only skills under Cursor's own roots are replaced."""
+    repo = copy_fixture("cursor-plugins/undeclared-skills", tmp_path)
+    context = RepositoryContext(repo)
+    assert context.provenance(repo).ecosystems == frozenset({"cursor"})
+    assert context.skills == [
+        repo / "shared/skills/changelog-draft",
+        repo / "skills/pr-summary",
+    ]
+    result = run_cli(
+        ["lint", str(repo), "--no-custom-rules", "--no-baseline", "--format", "json", "-v", *args]
+    )
+    report = json.loads(result.stdout)
+    # Verbose reports list the skill directories rather than counting them.
+    assert len(report["stats"]["skills"]) == 2
+    unlinked = sorted(
+        v["file_path"]
+        for v in report["violations"]
+        if v["rule_id"] == "content-unlinked-internal-reference"
+    )
+    assert unlinked == [
+        "shared/skills/changelog-draft/SKILL.md",
+        "skills/pr-summary/SKILL.md",
+    ]
