@@ -10416,6 +10416,8 @@ class TestPiLegacySettings:
             {"customDirectories": []},
             {"customDirectories": None},
             {"customDirectories": "../native"},
+            # Pi reads `skills: null` as `?? []`, the same as omitting it.
+            None,
         ],
     )
     def test_legacy_object_without_directory_array_keeps_autoload(self, tmp_path, legacy):
@@ -10428,7 +10430,6 @@ class TestPiLegacySettings:
     @pytest.mark.parametrize(
         "skills",
         [
-            None,
             "../native",
             {"customDirectories": ["../native", None]},
             {"customDirectories": [12]},

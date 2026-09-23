@@ -34,6 +34,9 @@ This rule names the field and the expected type before Pi runs.
 - `extensions`, `skills`, `prompts`, and `themes` must be arrays of strings.
 - Project `packages` must contain source strings or objects with a nonempty
   `source`, optional resource filter arrays, and an optional boolean `autoload`.
+- `null` is accepted where Pi reads it as absent: top-level settings resource
+  fields and `packages`, a package entry's `autoload`, and `pi` resource fields.
+  A `null` package filter still warns, because Pi drops that package.
 
 Unknown npm fields, Pi gallery metadata, and unrelated settings are accepted.
 Empty resource lists are valid. Findings are consolidated by file and default to
