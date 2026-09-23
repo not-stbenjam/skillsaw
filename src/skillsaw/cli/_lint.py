@@ -18,6 +18,7 @@ from ._helpers import (
     _resolve_lint_paths,
     color_enabled,
     hyperlinks_enabled,
+    warn_removed_skip_rules,
 )
 from skillsaw.paths import safe_resolve
 
@@ -135,6 +136,7 @@ def _run_lint(args):
     if rule_ids and skip_rule_ids:
         print("Error: --rule and --skip-rule cannot be combined", file=sys.stderr)
         sys.exit(1)
+    warn_removed_skip_rules(skip_rule_ids)
 
     lint_started = time.perf_counter()
     all_violations = []

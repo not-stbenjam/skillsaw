@@ -5462,12 +5462,12 @@ class TestConfigFeatures:
         repo = copy_fixture("config/unknown-rules", tmp_path)
         result = run_cli(["fix", str(repo)])
         assert result.returncode == 0, result.stderr
-        for rule in (
-            "skill-frontmatter",
-            "content-critical-position",
-            "misspelled-or-removed-rule",
-        ):
-            assert f"Unknown rule '{rule}'" in result.stdout
+        assert (
+            "Rule 'skill-frontmatter' was removed in 0.21.0 (use 'agentskill-valid' instead)"
+            in result.stdout
+        )
+        assert "Rule 'content-critical-position' was removed in 0.21.0" in result.stdout
+        assert "Unknown rule 'misspelled-or-removed-rule'" in result.stdout
 
     def test_unknown_rules_do_not_hide_invalid_options(self, tmp_path):
         repo = copy_fixture("config/unknown-rules", tmp_path)
@@ -5551,6 +5551,47 @@ class TestCliOverrides:
         assert r["rc"] == 1
         assert r["out"] is None
         assert "Unknown repository type 'unknown'" in r["stderr"]
+
+    @pytest.mark.parametrize("command", ["lint", "fix"])
+    def test_skip_rule_removed_rule_warns_and_continues(self, tmp_path, command):
+        """Skipping a rule that no longer exists is already satisfied, so
+        an old CI script keeps running instead of failing on upgrade."""
+        repo = copy_fixture("cli-overrides/removed-rule-ids", tmp_path)
+
+        result = run_cli([command, str(repo), "--skip-rule", "skill-frontmatter"])
+
+        assert result.returncode == 0, result.stderr
+        assert result.stderr.count("--skip-rule skill-frontmatter has no effect") == 1
+        assert (
+            "Rule 'skill-frontmatter' was removed in 0.21.0 (use 'agentskill-valid' instead)"
+            in result.stderr
+        )
+
+    def test_rule_removed_rule_names_the_removal(self, tmp_path):
+        repo = copy_fixture("cli-overrides/removed-rule-ids", tmp_path)
+
+        r = run_lint(repo, "--rule", "content-critical-position")
+
+        assert r["rc"] == 1
+        assert r["out"] is None
+        assert "Rule 'content-critical-position' was removed in 0.21.0" in r["stderr"]
+        assert "Unknown rule" not in r["stderr"]
+
+    @pytest.mark.parametrize(
+        "flag, error",
+        [
+            ("--rule", "Unknown rule(s): skill-frontmater"),
+            ("--skip-rule", "Unknown rule(s) in --skip-rule: skill-frontmater"),
+        ],
+    )
+    def test_misspelled_rule_ids_still_fail(self, tmp_path, flag, error):
+        repo = copy_fixture("cli-overrides/removed-rule-ids", tmp_path)
+
+        r = run_lint(repo, flag, "skill-frontmater")
+
+        assert r["rc"] == 1
+        assert error in r["stderr"]
+        assert "removed" not in r["stderr"]
 
 
 # ── Exit Codes ───────────────────────────────────────────────────
@@ -10221,7 +10262,7 @@ def test_fix_unknown_rule_advisories_neutralize_terminal_controls(tmp_path, flag
     result = run_cli(["fix", str(repo), "--no-custom-rules", "--no-color", *flags])
     assert result.returncode == 0, result.stderr
     assert "Unknown rule 'terminal�[2J�[H���spoof'" in result.stdout
-    assert "Unknown rule 'skill-frontmatter'" in result.stdout
+    assert "Rule 'skill-frontmatter' was removed in 0.21.0" in result.stdout
     assert "No auto-fixable violations found." in result.stdout
     assert not any((control in result.stdout for control in ("\x1b", "\x07", "\u202e")))
     assert config.read_bytes() == original

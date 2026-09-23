@@ -15,6 +15,7 @@ from ._helpers import (
     _ansi_colors,
     _resolve_lint_paths,
     color_enabled,
+    warn_removed_skip_rules,
 )
 
 
@@ -32,6 +33,7 @@ def _run_fix(args):
     if rule_ids and skip_rule_ids:
         print("Error: --rule and --skip-rule cannot be combined", file=sys.stderr)
         sys.exit(1)
+    warn_removed_skip_rules(skip_rule_ids)
 
     # Resolving a named leaf symlink erases the identity needed by the
     # autofix policy. Admit inputs before resolving them, including dangling
