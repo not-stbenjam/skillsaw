@@ -19,7 +19,9 @@ Cursor discovers multi-plugin repositories through
 `.cursor-plugin/marketplace.json`. This rule validates catalog metadata,
 entry shapes, unique plugin names, and local sources. A local source must
 resolve to a directory within its marketplace root, including when
-`metadata.pluginRoot` prefixes the source.
+`metadata.pluginRoot` prefixes the source. A source that already starts
+with `pluginRoot`, with or without a leading `./`, is not prefixed twice,
+and a root-relative source is accepted when only it names a directory.
 
 String and object sources with a `path` are supported. Remote URLs are
 validated as metadata without fetching or executing their contents. Entries

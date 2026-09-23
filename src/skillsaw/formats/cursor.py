@@ -60,13 +60,27 @@ def source_path(root: Path, prefix: str, source: str) -> Path | None:
         return None
     if prefix and safe_component(root, prefix) is None:
         return None
-    if prefix:
-        prefix = prefix.replace("\\", "/").rstrip("/")
-        source = source.replace("\\", "/")
-        # Cursor's template accepts sources that already include pluginRoot.
-        if source != prefix and not source.startswith(f"{prefix}/"):
-            source = f"{prefix}/{source}"
-    return safe_component(root, source)
+    prefix, source = _relative(prefix), _relative(source)
+    # Cursor's template accepts sources that already include pluginRoot.
+    if not prefix or source == prefix or source.startswith(f"{prefix}/"):
+        return safe_component(root, source)
+    composed = safe_component(root, f"{prefix}/{source}")
+    if composed is not None and safe_is_dir(composed):
+        return composed
+    # Marketplaces also write root-relative sources beside a pluginRoot;
+    # prefer the composed path, but fall back when only this one exists.
+    direct = safe_component(root, source)
+    return direct if direct is not None and safe_is_dir(direct) else composed
+
+
+def _relative(value: str) -> str:
+    """Compare ``./plugins/x`` and ``plugins/x`` as the same path."""
+    if not value:
+        return value
+    value = value.replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:].lstrip("/")
+    return value.rstrip("/") or "."
 
 
 def component_paths(root: Path, data: dict, field: str) -> list[Path]:
