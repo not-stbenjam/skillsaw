@@ -10252,6 +10252,31 @@ class TestCursorNativePlugins:
             "hooks-dangerous",
         } <= rules
 
+    def test_claude_format_plugin_hooks_report_once(self, tmp_path):
+        """A dual plugin's Claude hooks.json sits at Cursor's default path."""
+        repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
+        result = run_lint(repo)
+        found = by_rule(result)
+        assert [(v["severity"], v["message"]) for v in found["cursor-hooks-valid"]] == [
+            (
+                "error",
+                "Hooks use Claude Code's format (matcher groups nesting a 'hooks' "
+                "array), not Cursor's; point .cursor-plugin/plugin.json 'hooks' at "
+                "a Cursor-format hooks file",
+            )
+        ]
+        assert "claude-hooks-valid" not in found
+
+    def test_mixed_format_plugin_hooks_keep_entry_checks(self, tmp_path):
+        repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
+        hooks = repo / "hooks/hooks.json"
+        data = json.loads(hooks.read_text())
+        data["hooks"]["afterFileEdit"] = [{"command": "./scripts/check-format.sh"}]
+        hooks.write_text(json.dumps(data))
+        messages = [v["message"] for v in by_rule(run_lint(repo))["cursor-hooks-valid"]]
+        assert "Hook PreToolUse[0] is missing 'command'" in messages
+        assert not any("Claude Code's format" in m for m in messages)
+
     def test_missing_sources_report_once_per_marketplace(self, tmp_path):
         repo = copy_fixture("cursor-plugins/marketplace-missing-sources", tmp_path)
         result = run_lint(repo, "--rule", "cursor-marketplace-json-valid")

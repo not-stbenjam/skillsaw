@@ -198,6 +198,22 @@ def test_cursor_missing_sources_truncate_long_lists(tmp_path):
     ]
 
 
+def test_cursor_inline_claude_format_hooks_report_once(tmp_path):
+    from skillsaw.rules.builtin.cursor.hooks_valid import CursorHooksValidRule
+
+    repo = copy_fixture("cursor-plugins/clean", tmp_path)
+    catalog = repo / ".cursor-plugin/marketplace.json"
+    data = json.loads(catalog.read_text())
+    group = {"matcher": "Bash", "hooks": [{"type": "command", "command": "./check.sh"}]}
+    data["plugins"][0]["hooks"] = {"hooks": {"PreToolUse": [group, group]}}
+    catalog.write_text(json.dumps(data))
+    findings = CursorHooksValidRule().check(RepositoryContext(repo))
+    assert [v.message for v in findings] == [
+        "Hooks use Claude Code's format (matcher groups nesting a 'hooks' array), "
+        "not Cursor's; rewrite each hook as {command, matcher?} directly under a Cursor event"
+    ]
+
+
 def test_cursor_plugin_mcp_duplicate_keys_keep_last_value(tmp_path):
     repo = copy_fixture("cursor-plugins/clean", tmp_path)
     path = repo / "packages/review/config/mcp.json"
