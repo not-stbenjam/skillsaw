@@ -14,7 +14,7 @@ from typing import Any
 import json5
 
 from skillsaw.paths import Resolver, contained_resolve, safe_is_file, safe_resolve
-from skillsaw.utils import cached_file_read, strip_jsonc
+from skillsaw.utils import _reject_non_finite, cached_file_read, strip_jsonc
 
 MANIFEST = "openclaw.plugin.json"
 # MAX_PLUGIN_MANIFEST_BYTES in the pinned native loader, before any parsing.
@@ -104,7 +104,8 @@ def read_package_text(path: Path) -> tuple[str | None, str | None]:
     if len(raw) > MAX_PACKAGE_BYTES:
         return None, f"package.json exceeds OpenClaw's {MAX_PACKAGE_BYTES}-byte limit"
     try:
-        return raw.decode("utf-8-sig"), None
+        # The native package loader calls JSON.parse without stripping a BOM.
+        return raw.decode("utf-8"), None
     except UnicodeDecodeError:
         return None, "package.json must be UTF-8 text"
 
@@ -116,7 +117,7 @@ def read_package(path: Path) -> tuple[object | None, str | None]:
     if error:
         return None, error
     try:
-        return json.loads(content), None
+        return json.loads(content, parse_constant=_reject_non_finite), None
     except (ValueError, RecursionError) as exc:
         return None, f"Cannot parse package.json: {exc}"
 
