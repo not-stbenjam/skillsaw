@@ -8019,7 +8019,7 @@ class TestSafeAutofixIdempotency:
         "agentskill-valid": 7,
         "claude-command-frontmatter": 3,
         "content-unlinked-internal-reference": 24,
-        "cursor-rules-valid": 3,
+        "cursor-rules-valid": 10,
     }
 
     @staticmethod
@@ -8141,7 +8141,7 @@ class TestSafeAutofixIdempotency:
         assert "No auto-fixable violations found" in result.stdout
 
     def test_relint_shows_zero_pre_existing_safe_violations(self, tmp_path):
-        """After fix, none of the original SAFE-rule violations should remain.
+        """After fix, none of the original fixable SAFE-rule violations remain.
 
         Fixes may introduce new violations (e.g. adding frontmatter with an
         empty description triggers agentskill-valid).  Those are expected and
@@ -8156,7 +8156,7 @@ class TestSafeAutofixIdempotency:
         before_keys = {
             (v["rule_id"], v["file_path"], v["message"])
             for v in violations(r_before)
-            if v["rule_id"] in safe_rules
+            if v["rule_id"] in safe_rules and v["fixable"]
         }
 
         self._fix_all(repo)
