@@ -22,7 +22,7 @@ def test_local_alias_has_one_skill_and_no_missing_entrypoint(tmp_path, dual_pi):
     nodes = context.lint_tree.find(SkillNode)
     assert len(nodes) == 1
     assert len(context.skills) == 1
-    assert context.skills == [root / "review"]
+    assert context.skills[0].resolve() == root / "skills/review"
     assert len(nodes[0].find(SkillBlock)) == 1
     assert not context.lint_tree.find(PiSkillBlock)
     if dual_pi:
@@ -32,6 +32,25 @@ def test_local_alias_has_one_skill_and_no_missing_entrypoint(tmp_path, dual_pi):
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["violations"] == []
+
+
+def test_pi_canonical_declaration_preserves_portable_alias_role(tmp_path, monkeypatch):
+    root = copy_fixture("cursor-plugins/skill-alias", tmp_path)
+    (root / "package.json").write_text('{"pi":{"skills":["./skills/review"]}}')
+    # Generic discovery retains whichever spelling the filesystem walk finds
+    # first. Force the alias case so Pi's canonical declaration must defer to
+    # the portable owner regardless of checkout directory enumeration order.
+    monkeypatch.setattr(
+        "skillsaw.repository_scan.claude_discovery.discover_skills",
+        lambda *_args, **_kwargs: [root / "review"],
+    )
+    context = RepositoryContext(root)
+    assert context.skills == [root / "review"]
+    nodes = context.lint_tree.find(SkillNode)
+    assert len(nodes) == 1
+    assert [block.path for block in nodes[0].find(SkillBlock)] == [root / "review/SKILL.md"]
+    assert not context.lint_tree.find(PiSkillBlock)
+    assert AgentSkillValidRule().check(context) == []
 
 
 def test_missing_entrypoint_is_still_reported(tmp_path):
