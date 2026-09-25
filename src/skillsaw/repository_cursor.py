@@ -131,12 +131,22 @@ class RepositoryCursorMixin:
             for p in self.cursor_plugin_roots()
             if self.provenance(p).ecosystems == frozenset({"cursor"})
         }
-        if not skill_roots:
-            return sorted(set(discovered) | self.cursor_skills())
-        roots = set(self.distinct_plugin_dirs())
+        candidates = list(discovered)
+        if skill_roots:
+            roots = set(self.distinct_plugin_dirs())
 
-        def resolved_by_cursor(path: Path) -> bool:
-            owner = next((p for p in (path, *path.parents) if p in roots), None)
-            return any(path.is_relative_to(c) for c in skill_roots.get(owner, ()))
+            def resolved_by_cursor(path: Path) -> bool:
+                owner = next((p for p in (path, *path.parents) if p in roots), None)
+                return any(path.is_relative_to(c) for c in skill_roots.get(owner, ()))
 
-        return sorted({p for p in discovered if not resolved_by_cursor(p)} | self.cursor_skills())
+            candidates = [p for p in candidates if not resolved_by_cursor(p)]
+        candidates.extend(sorted(self.cursor_skills()))
+        # Different hosts can select an alias and its canonical directory.
+        # Deduplicate containers as well as their physical SKILL.md children,
+        # or the tree gains an empty SkillNode reporting a missing entrypoint.
+        by_resolved: dict[Path, Path] = {}
+        for path in candidates:
+            resolved = self.resolve_path(path)
+            if resolved is not None:
+                by_resolved.setdefault(resolved, path)
+        return sorted(by_resolved.values())

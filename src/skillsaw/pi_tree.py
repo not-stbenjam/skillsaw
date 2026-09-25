@@ -46,7 +46,7 @@ def _attach(
             state.pi_prompts.append((parent, path, owner))
             continue
         if kind == "skills" and path.name == "SKILL.md":
-            if path.parent in state.context.skills:
+            if state.context.resolve_path(path.parent) in state.portable_skill_dirs:
                 # Other consumers retain their portable skill role in dual packages.
                 continue
             _attach_skill_directory(state, parent, path, owner)

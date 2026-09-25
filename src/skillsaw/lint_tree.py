@@ -7,6 +7,7 @@ from __future__ import annotations
 import fnmatch
 import logging
 import os
+from functools import cached_property
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, TYPE_CHECKING, Tuple
@@ -250,6 +251,15 @@ class _TreeBuildState:
     openai_seen: Set[Tuple[Path, Path]] = field(default_factory=set)
     opencode_configs: List[OpenCodeConfigBlock] = field(default_factory=list)
     pi_prompts: List[Tuple[LintTarget, Path, Optional[Path]]] = field(default_factory=list)
+
+    @cached_property
+    def portable_skill_dirs(self) -> Set[Path]:
+        """Physical skill identities retained for non-Pi consumers."""
+        return {
+            resolved
+            for path in self.context.skills
+            if (resolved := self.context.resolve_path(path)) is not None
+        }
 
     def resolve_repo_path(self, path: Path) -> Path | None:
         """Resolve *path* only when repository containment is safe."""
