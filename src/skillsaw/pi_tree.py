@@ -116,6 +116,6 @@ def attach_pi_projects(state: _TreeBuildState, root: LintTarget) -> None:
             for entry in data["packages"]:
                 source = entry.get("source") if isinstance(entry, dict) else entry
                 if isinstance(source, str):
-                    path = local_path(directory, source, context.root_path)
+                    path = local_path(directory, source, context.root_path, settings=True)
                     if path is not None and safe_is_file(path):
                         _attach(state, root, [path], "extensions")
