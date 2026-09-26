@@ -552,7 +552,7 @@ def test_config_entry_for_unloaded_plugin_rule_not_flagged(fake_plugin, repo):
 
 
 def test_removed_builtin_rule_noticed_with_plugins_skipped(fake_plugin, repo):
-    """A removed builtin can't be an unloaded plugin's rule, so it still warns."""
+    """Known builtin removals remain advisory when plugin loading is disabled."""
     fake_plugin("fake_lenient", module_attrs={"SKILLSAW_RULES": [AlwaysFiresRule]})
     config = LinterConfig.default()
     config.rules["plugin-always-fires"] = {"severity": "error"}
