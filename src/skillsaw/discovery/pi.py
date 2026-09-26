@@ -49,7 +49,12 @@ def local_path(base: Path, value: str, boundary: Path, *, settings: bool = False
             try:
                 url = urlsplit(value)
                 # Match fileURLToPath's local-host and encoded-separator guards.
-                if url.netloc.lower() not in {"", "localhost"} or "%2f" in url.path.lower():
+                encoded_path = url.path.lower()
+                if (
+                    url.netloc.lower() not in {"", "localhost"}
+                    or "%2f" in encoded_path
+                    or (os.name == "nt" and "%5c" in encoded_path)
+                ):
                     return None
                 if any(
                     len(part) < 2 or any(char not in "0123456789abcdefABCDEF" for char in part[:2])
@@ -57,6 +62,17 @@ def local_path(base: Path, value: str, boundary: Path, *, settings: bool = False
                 ):
                     return None
                 value = unquote(url.path, errors="strict")
+                if os.name == "nt":
+                    # A local Windows file URL must name a drive, not a rooted
+                    # path relative to the current drive or a network share.
+                    if (
+                        len(value) < 4
+                        or value[0] != "/"
+                        or value[1].lower() not in "abcdefghijklmnopqrstuvwxyz"
+                        or value[2:4] != ":/"
+                    ):
+                        return None
+                    value = value[1:]
             except (ValueError, UnicodeError):
                 return None
     if not value or value.startswith(("~", *REMOTE_PREFIXES)) or "\x00" in value:

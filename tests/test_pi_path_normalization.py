@@ -1,14 +1,17 @@
 """Pi project paths normalize independently of literal manifest paths."""
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
+from types import SimpleNamespace
+from urllib.parse import quote
 
 import pytest
 
 from skillsaw.blocks.pi import PiExtensionNode, PiPromptBlock
 from skillsaw.context import RepositoryContext
 from skillsaw.discovery.pi import local_path
+from skillsaw.discovery import pi
 from tests.cli_runner import run_cli
 
 
@@ -109,4 +112,48 @@ def test_file_url_symlink_escape_is_not_loaded(tmp_path):
 def test_invalid_file_url_encoding_is_rejected_inside_checkout(tmp_path, suffix):
     root = copy_fixture(tmp_path)
     entry = root.as_uri() + "/" + suffix
+    assert local_path(root / ".pi", entry, root, settings=True) is None
+
+
+@pytest.mark.parametrize("relative", ["prompts/review notes.md", "package", "extensions/direct.ts"])
+def test_windows_file_url_uses_drive_absolute_path(monkeypatch, relative):
+    import ntpath
+
+    root = PureWindowsPath("C:/repo")
+    target = root / relative
+    checked = []
+
+    def contained(path, boundary):
+        checked.append((path, boundary))
+        return path
+
+    monkeypatch.setattr(pi, "os", SimpleNamespace(name="nt", path=ntpath))
+    monkeypatch.setattr(pi, "Path", PureWindowsPath)
+    monkeypatch.setattr(pi, "contained_resolve", contained)
+
+    uri = "file:///C:/repo/" + quote(relative)
+    assert local_path(root / ".pi", uri, root, settings=True) == target
+    assert checked == [(target, root)]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "file:///repo/prompt.md",
+        "file:////server/share/prompt.md",
+        "file:///C:/repo/prompts%5Creview.md",
+        "file:///C:/repo/prompts%5creview.md",
+    ],
+)
+def test_windows_file_urls_reject_invalid_roots_and_encoded_backslashes(monkeypatch, entry):
+    import ntpath
+
+    root = PureWindowsPath("C:/repo")
+    monkeypatch.setattr(pi, "os", SimpleNamespace(name="nt", path=ntpath))
+    monkeypatch.setattr(pi, "Path", PureWindowsPath)
+
+    def unexpected_resolve(*args):
+        pytest.fail("Invalid file URL reached filesystem resolution")
+
+    monkeypatch.setattr(pi, "contained_resolve", unexpected_resolve)
     assert local_path(root / ".pi", entry, root, settings=True) is None
