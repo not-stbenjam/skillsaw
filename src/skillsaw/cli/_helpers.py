@@ -302,7 +302,7 @@ def install_warning_display() -> None:
 
 
 def warn_removed_skip_rules(skip_rule_ids) -> None:
-    """Warn once per run that skipping a removed rule changes nothing."""
+    """Warn for retired skips absent from the loaded rules in every input path."""
     from ..linter import REMOVED_RULES, removed_rule_note
 
     for rule_id in sorted(set(skip_rule_ids or ()) & REMOVED_RULES.keys()):

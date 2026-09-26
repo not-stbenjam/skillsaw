@@ -283,6 +283,11 @@ class Linter:
                 formatted = ", ".join(sorted(unknown))
                 raise ValueError(f"Unknown rule(s) in --skip-rule: {formatted}")
 
+    @property
+    def removed_skip_rule_ids(self) -> Set[str]:
+        """Skipped retired IDs that no loaded builtin, plugin or custom rule owns."""
+        return (self._skip_rule_ids - self._known_rule_ids) & REMOVED_RULES.keys()
+
     def _enabled_builtin_surfaces(self) -> frozenset:
         """Builtin format surfaces available independently of CLI selection.
 
