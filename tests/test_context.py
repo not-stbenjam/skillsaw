@@ -1668,7 +1668,8 @@ def test_hostile_marketplace_manifest_is_a_parse_error_not_a_traceback(temp_dir)
     assert context.lint_tree is not None
 
 
-def test_resolve_memo_is_per_context_and_cleared_on_rebuild(tmp_path):
+@pytest.mark.parametrize("refresh", ["rebuild_lint_tree", "apply_excludes"])
+def test_resolve_memo_is_per_context_and_cleared_on_rebuild(tmp_path, refresh):
     """Provenance probes share one realpath per path through the context memo.
 
     The memo must never outlive the filesystem state it describes: a ``fix``
@@ -1689,11 +1690,12 @@ def test_resolve_memo_is_per_context_and_cleared_on_rebuild(tmp_path):
     # ... a fresh context never sees another's memo ...
     assert RepositoryContext(tmp_path).resolve_path(link) == (tmp_path / "second").resolve()
     # ... and a rebuild re-reads the filesystem.
-    context.rebuild_lint_tree()
+    getattr(context, refresh)()
     assert context.resolve_path(link) == (tmp_path / "second").resolve()
 
 
-def test_lint_tree_rebuild_sees_relinked_plugin_directory(tmp_path):
+@pytest.mark.parametrize("refresh", ["rebuild_lint_tree", "apply_excludes"])
+def test_lint_tree_rebuild_sees_relinked_plugin_directory(tmp_path, refresh):
     """A fix that replaces an escaping symlink is visible to the next build.
 
     The tree's containment checks resolve through the context memo, so a
@@ -1717,6 +1719,14 @@ def test_lint_tree_rebuild_sees_relinked_plugin_directory(tmp_path):
     (repo / "commands").unlink()
     (repo / "commands").mkdir()
     (repo / "commands" / "hello.md").write_text(command)
-    context.rebuild_lint_tree()
+    getattr(context, refresh)()
 
     assert [block.path.name for block in context.lint_tree.find(CommandBlock)] == ["hello.md"]
+
+    # Replacing an admitted file with an escaping symlink must revoke access.
+    local_command = repo / "commands" / "hello.md"
+    local_command.unlink()
+    local_command.symlink_to(outside / "commands" / "hello.md")
+    getattr(context, refresh)()
+
+    assert context.lint_tree.find(CommandBlock) == []

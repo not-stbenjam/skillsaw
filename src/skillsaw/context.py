@@ -400,6 +400,7 @@ class RepositoryContext(
         after construction must call it again. Filtering only narrows —
         previously excluded paths are not rediscovered.
         """
+        self._resolve_cache.clear()
         # A removed Pi declaration changes a skill's role, not its visibility.
         pi_candidates = set(self._pi_portable_skills)
         self.skills = sorted(set(self.skills) | pi_candidates)
