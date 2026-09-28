@@ -8,6 +8,7 @@ import warnings
 from pathlib import Path
 
 from ..context import RepositoryContext, RepositoryType, merge_plugin_dirs
+from skillsaw.diagnostics import terminal_safe
 from skillsaw.paths import safe_resolve
 
 # ---------------------------------------------------------------------------
@@ -286,7 +287,7 @@ def install_warning_display() -> None:
             c = _ansi_colors(color_enabled(out))
             print(
                 f"{c['yellow']}⚠ Loading custom rule file:{c['reset']} "
-                f"{c['bold']}{message.path}{c['reset']} "
+                f"{c['bold']}{terminal_safe(message.path)}{c['reset']} "
                 f"{c['dim']}(use --no-custom-rules to skip){c['reset']}",
                 file=out,
             )

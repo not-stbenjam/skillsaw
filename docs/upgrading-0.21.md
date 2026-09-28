@@ -64,8 +64,10 @@ review findings before refreshing a baseline. See [repository types](repo-types.
 The `repo_type` field in JSON and SARIF output reports the highest-priority
 detected type, so the new types can replace the value 0.20.0 reported.
 `cursor-marketplace`, `cursor-plugin`, `openclaw-plugin` and `pi-package` rank
-above `agentskills`, and any new type, including `pi`, replaces `unknown`.
-Update CI that matches on `repo_type`, or read the `repo_types` list instead.
+above `agentskills` and the tool-configuration types. `pi` ranks above the
+editor-tool and instruction-file types, so a repository with a `CLAUDE.md` and a
+`.pi/` directory now reports `pi` where 0.20.0 reported `claude-md`. Update CI
+that matches on `repo_type`, or read the `repo_types` list instead.
 
 ## Hook checks
 

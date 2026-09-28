@@ -10,9 +10,11 @@ below is also accepted by `--type`, which replaces packaging-type detection;
 tool types are always detected from the checkout, and plugin-contributed
 types too.
 
-The tool types sort below the packaging types, so the single "primary" type
-in the JSON report's `repo_type` field is unchanged: a marketplace that also
-ships a `.cursor/` is still a `marketplace`.
+The tool types sort below the packaging types in the JSON report's single
+"primary" `repo_type` field: a marketplace that also ships a `.cursor/` is
+still a `marketplace`. See the
+[0.21 upgrade notes](upgrading-0.21.md#reported-repository-type) for the
+primary types that changed in 0.21.
 
 ## agentskills.io Skills
 
