@@ -19,7 +19,13 @@ from skillsaw.paths import (
     safe_exists,
 )
 from skillsaw.utils import read_json, read_text
-from skillsaw.pi_patterns import _globmatch, _ignore_patterns, _ignore_spec, _ignored
+from skillsaw.pi_patterns import (
+    _MAX_TIMEOUTS,
+    _globmatch,
+    _ignore_patterns,
+    _ignore_spec,
+    _ignored,
+)
 
 if TYPE_CHECKING:
     from pathspec import GitIgnoreSpec
@@ -113,7 +119,9 @@ def package_roots(
     return sorted(roots)
 
 
-def _matches(path: Path, pattern: str, base: Path, exact: bool = False) -> bool:
+def _matches(
+    path: Path, pattern: str, base: Path, exact: bool = False, include: bool = False
+) -> bool:
     candidates = [path]
     if path.name == "SKILL.md":
         candidates.append(path.parent)
@@ -121,7 +129,7 @@ def _matches(path: Path, pattern: str, base: Path, exact: bool = False) -> bool:
         target = safe_resolve(base / pattern)
         return target is not None and any(safe_resolve(p) == target for p in candidates)
     return any(
-        _globmatch(value, pattern.removeprefix("./"))
+        _globmatch(value, pattern.removeprefix("./"), fallback=include)
         for p in candidates
         for value in (relative_to_str(p, base) or str(p), p.name, str(p))
     )
@@ -132,7 +140,7 @@ def filter_resources(paths: Iterable[Path], patterns: list[str], base: Path) -> 
     includes = [p for p in patterns if not p.startswith(("!", "+", "-"))]
     result = []
     for path in paths:
-        enabled = not includes or any(_matches(path, p, base) for p in includes)
+        enabled = not includes or any(_matches(path, p, base, include=True) for p in includes)
         if any(_matches(path, p[1:], base) for p in patterns if p.startswith("!")):
             enabled = False
         if any(_matches(path, p[1:], base, True) for p in patterns if p.startswith("+")):
@@ -211,6 +219,7 @@ def collect(
 ) -> list[Path]:
     """Match Pi's resource walk, with cycle and repository-containment guards."""
     visited: set[Path] = set()
+    ignore_timeouts = 0
     suffixes = {
         "skills": (".md",),
         "prompts": (".md",),
@@ -261,8 +270,17 @@ def collect(
         ignore = _ignore_spec(patterns)
 
         def ignored(p: Path) -> bool:
+            nonlocal ignore_timeouts
+            # A timeout is retried, as the budget is wall-clock. Once ignore
+            # rules keep exceeding it, stop matching for this walk and keep
+            # everything: linting more is the safe answer.
             rel = (relative_to_str(p, path) or p.name) + ("/" if safe_is_dir(p) else "")
-            return _ignored(ignore, rel)
+            while ignore_timeouts < _MAX_TIMEOUTS:
+                result = _ignored(ignore, rel)
+                if result is not None:
+                    return result
+                ignore_timeouts += 1
+            return False
 
         entrypoint = current / "SKILL.md"
         if kind == "skills" and safe_is_file(entrypoint) and not ignored(entrypoint):
@@ -321,7 +339,9 @@ def resources(
             roots = [
                 p
                 for p in candidates
-                if _globmatch(relative_to_str(p, base) or p.name, entry.removeprefix("./"))
+                if _globmatch(
+                    relative_to_str(p, base) or p.name, entry.removeprefix("./"), fallback=True
+                )
             ]
         else:
             local = local_path(base, entry, boundary, settings=not manifest)

@@ -1,6 +1,7 @@
 """Pi discovery and CLI regression tests against repository fixtures."""
 
 import os
+import signal
 import json
 import shutil
 from pathlib import Path
@@ -567,7 +568,7 @@ def test_transient_compile_failure_is_not_cached(monkeypatch):
     from skillsaw import pi_patterns
     from skillsaw.timeouts import RegexTimeout
 
-    pi_patterns._compile_glob.cache_clear()
+    pi_patterns.reset_pattern_state()
     original = glob.compile
     calls = 0
 
@@ -579,22 +580,152 @@ def test_transient_compile_failure_is_not_cached(monkeypatch):
         return original(pattern, **kwargs)
 
     monkeypatch.setattr(glob, "compile", compile_once)
-    assert not pi_patterns._globmatch("review.md", "*.md")
+    # The timed-out compile is retried within the call, not cached as failed.
+    assert pi_patterns._globmatch("review.md", "*.md")
     assert pi_patterns._globmatch("review.md", "*.md")
     assert calls == 2
-    pi_patterns._compile_glob.cache_clear()
+    pi_patterns.reset_pattern_state()
 
 
 def test_match_timeout_is_contained(monkeypatch):
     from skillsaw import pi_patterns
     from skillsaw.timeouts import RegexTimeout
 
+    calls = 0
+
     class SlowPattern:
         def match(self, value):
+            nonlocal calls
+            calls += 1
             raise RegexTimeout("slow match")
 
-    monkeypatch.setattr(pi_patterns, "_compile_glob", lambda p: SlowPattern())
-    assert not pi_patterns._globmatch("review.md", "*.md")
+    cached = pi_patterns._Glob("*.md")
+    cached.compiled = SlowPattern()
+    monkeypatch.setattr(pi_patterns, "_compile_glob", lambda p: cached)
+    for _ in range(10):
+        assert not pi_patterns._globmatch("review.md", "*.md")
+    # The pattern is retired after a few timeouts rather than paid per path.
+    assert calls == cached.timeouts == pi_patterns._MAX_TIMEOUTS
+    # A retired inclusion answers "matched", so it cannot hide resources.
+    assert pi_patterns._globmatch("review.md", "*.md", fallback=True)
+    assert calls == pi_patterns._MAX_TIMEOUTS
+
+
+def test_deterministic_compile_failure_is_cached(monkeypatch):
+    from wcmatch import glob
+
+    from skillsaw import pi_patterns
+
+    pi_patterns.reset_pattern_state()
+    calls = 0
+
+    def broken(pattern, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise ValueError("expansion limit")
+
+    monkeypatch.setattr(glob, "compile", broken)
+    for _ in range(5):
+        assert not pi_patterns._globmatch("review.md", "*.md")
+    assert calls == 1
+    # An inclusion that cannot compile still cannot hide what it names.
+    assert pi_patterns._globmatch("review.md", "*.md", fallback=True)
+    assert calls == 1
+    pi_patterns.reset_pattern_state()
+
+
+_CATASTROPHIC = "*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b"
+_FILLER = "a" * 41
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGALRM"), reason="Regex budget requires SIGALRM")
+def test_catastrophic_manifest_glob_stops_after_timeouts(tmp_path, monkeypatch):
+    from wcmatch import glob
+
+    from skillsaw import pi_patterns
+    from skillsaw.timeouts import RegexTimeout
+
+    root = copy_fixture("catastrophic-glob", tmp_path)
+    for i in range(60):
+        (root / f"{_FILLER}{i}.txt").write_text("scratch\n")
+    original = glob.compile
+    matches = timed_out = 0
+
+    class Counting:
+        def __init__(self, compiled):
+            self.compiled = compiled
+
+        def match(self, value):
+            nonlocal matches, timed_out
+            matches += 1
+            try:
+                return self.compiled.match(value)
+            except RegexTimeout:
+                timed_out += 1
+                raise
+
+    def counting_compile(pattern, **kwargs):
+        compiled = original(pattern, **kwargs)
+        return Counting(compiled) if pattern == _CATASTROPHIC else compiled
+
+    monkeypatch.setattr(glob, "compile", counting_compile)
+    pi_patterns.reset_pattern_state()
+    result = run_cli(["lint", str(root), "--no-custom-rules", "--no-plugins"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    # Every long candidate path would otherwise pay a full timeout.
+    assert timed_out == pi_patterns._MAX_TIMEOUTS
+    assert matches < 10
+    pi_patterns.reset_pattern_state()
+    assert paths(RepositoryContext(root), PiSkillBlock) == {"skills/api-review/SKILL.md"}
+    pi_patterns.reset_pattern_state()
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGALRM"), reason="Regex budget requires SIGALRM")
+def test_retired_prompt_glob_cannot_hide_a_matching_prompt(tmp_path):
+    """Slow filler paths must not retire a glob before the prompt it names."""
+    from skillsaw.blocks.pi import PiPromptBlock
+
+    root = copy_fixture("catastrophic-glob", tmp_path)
+    manifest = json.loads((root / "package.json").read_text())
+    manifest["pi"] = {"prompts": [_CATASTROPHIC + "/*.md"]}
+    (root / "package.json").write_text(json.dumps(manifest))
+    for i in range(4):
+        (root / f"{_FILLER}{i}").mkdir()
+        (root / f"{_FILLER}{i}" / "notes.txt").write_text("scratch\n")
+    target = root / f"{_FILLER}zb"
+    target.mkdir()
+    (target / "review.md").write_text("Review the staged diff for regressions.\n")
+
+    ctx = RepositoryContext(root)
+    assert f"{_FILLER}zb/review.md" in paths(ctx, PiPromptBlock)
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGALRM"), reason="Regex budget requires SIGALRM")
+def test_catastrophic_ignore_file_stops_after_timeouts(tmp_path, monkeypatch):
+    from skillsaw import pi_patterns
+    from skillsaw.discovery import pi as pi_discovery
+
+    root = copy_fixture("catastrophic-ignore", tmp_path)
+    for i in range(60):
+        (root / "skills" / f"{_FILLER}{i}").mkdir()
+    original = pi_discovery._ignored
+    timeouts = 0
+
+    def counting_ignored(ignore, value):
+        nonlocal timeouts
+        result = original(ignore, value)
+        timeouts += result is None
+        return result
+
+    monkeypatch.setattr(pi_discovery, "_ignored", counting_ignored)
+    ctx = RepositoryContext(root)
+    assert paths(ctx, PiSkillBlock) == {"skills/api-review/SKILL.md"}
+    walks = timeouts // pi_patterns._MAX_TIMEOUTS
+    # Each walk of skills/ stops matching after a few timeouts, not per child.
+    assert timeouts == walks * pi_patterns._MAX_TIMEOUTS
+    assert 0 < walks < 5
+    result = run_cli(["lint", str(root), "--no-custom-rules", "--no-plugins"])
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_project_theme_autoload_is_shallow(tmp_path):
@@ -704,3 +835,61 @@ def test_cli_selected_skill_directory_reports_references_and_directory_stats(tmp
 
     summary = run_lint(root, "--no-custom-rules", verbose=False)["out"]
     assert summary["stats"]["skills"] == 2
+
+
+def test_pattern_timeouts_reset_per_repository(tmp_path):
+    from skillsaw import pi_patterns
+
+    retired = pi_patterns._compile_glob("*.md")
+    retired.timeouts = pi_patterns._MAX_TIMEOUTS
+    RepositoryContext(copy_fixture("conventional", tmp_path))
+    assert pi_patterns._compile_glob("*.md") is not retired
+    assert pi_patterns._globmatch("review.md", "*.md")
+
+
+def test_unevaluable_patterns_keep_filtered_resources(tmp_path, monkeypatch):
+    """A retired inclusion keeps its paths and a retired exclusion drops none."""
+    from skillsaw import pi_patterns
+    from skillsaw.discovery.pi import filter_resources
+
+    retired = pi_patterns._Glob("prompts/*.md")
+    retired.timeouts = pi_patterns._MAX_TIMEOUTS
+    monkeypatch.setattr(pi_patterns, "_compile_glob", lambda p: retired)
+    review = tmp_path / "prompts/review.md"
+    assert filter_resources([review], ["prompts/*.md"], tmp_path) == [review]
+    assert filter_resources([review], ["!prompts/*.md"], tmp_path) == [review]
+
+
+def test_brace_overflow_prompt_glob_cannot_hide_a_prompt(tmp_path):
+    from skillsaw.blocks.pi import PiPromptBlock
+
+    root = copy_fixture("catastrophic-glob", tmp_path)
+    manifest = json.loads((root / "package.json").read_text())
+    manifest["pi"] = {"prompts": ["{a,x}" * 9 + "/*.md"]}
+    (root / "package.json").write_text(json.dumps(manifest))
+    (root / "aaaaaaaaa").mkdir()
+    (root / "aaaaaaaaa/review.md").write_text("Review the staged diff for regressions.\n")
+
+    assert "aaaaaaaaa/review.md" in paths(RepositoryContext(root), PiPromptBlock)
+
+
+@pytest.mark.parametrize("fallback", [True, False])
+def test_spurious_timeout_does_not_change_a_match(monkeypatch, fallback):
+    """One wall-clock timeout is retried rather than answered with the fallback."""
+    from skillsaw import pi_patterns
+    from skillsaw.timeouts import RegexTimeout
+
+    class SlowOnce:
+        calls = 0
+
+        def match(self, value):
+            SlowOnce.calls += 1
+            if SlowOnce.calls == 1:
+                raise RegexTimeout("descheduled")
+            return value.endswith(".md")
+
+    cached = pi_patterns._Glob("*.md")
+    cached.compiled = SlowOnce()
+    monkeypatch.setattr(pi_patterns, "_compile_glob", lambda p: cached)
+    assert pi_patterns._globmatch("notes.txt", "*.md", fallback=fallback) is False
+    assert pi_patterns._globmatch("review.md", "*.md", fallback=fallback) is True
