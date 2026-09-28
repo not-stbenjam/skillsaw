@@ -168,6 +168,25 @@ def test_null_package_filter_still_warns(tmp_path):
     assert "Pi can fail at startup" in violation["message"]
 
 
+def test_non_boolean_autoload_is_not_a_startup_failure(tmp_path):
+    # package-manager only tests `autoload === false`, so the string "false"
+    # loads the package as enabled; it never crashes Pi at startup.
+    root = copy_fixture("settings-autoload", tmp_path)
+    args = ["lint", str(root), "--rule", "pi-config-valid", "--format", "json"]
+    (violation,) = json.loads(run_cli(args).stdout)["violations"]
+    assert "packages[0].autoload (expected a boolean)" in violation["message"]
+    assert "a non-boolean autoload is treated as enabled" in violation["message"]
+    assert "fail at startup" not in violation["message"]
+
+    # A resource-array defect alongside it keeps the startup consequence.
+    (root / ".pi/settings.json").write_text(
+        '{"skills": "../skills", "packages": [{"source": "../review-kit", "autoload": "false"}]}\n'
+    )
+    (violation,) = json.loads(run_cli(args).stdout)["violations"]
+    assert "Pi can fail at startup" in violation["message"]
+    assert "a non-boolean autoload is treated as enabled" in violation["message"]
+
+
 def test_unrelated_npm_package_is_not_pi(tmp_path):
     (tmp_path / "package.json").write_text('{"name":"ordinary"}')
     ctx = RepositoryContext(tmp_path)

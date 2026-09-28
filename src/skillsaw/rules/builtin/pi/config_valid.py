@@ -54,6 +54,7 @@ class PiConfigValidRule(Rule):
                     )
                     continue
                 bad = []
+                bad_autoload = []
 
                 def lists(mapping, prefix, allow_null):
                     for key in RESOURCE_FIELDS:
@@ -87,18 +88,26 @@ class PiConfigValidRule(Rule):
                                 autoload = entry.get("autoload")
                                 # Pi only tests `autoload === false`.
                                 if autoload is not None and not isinstance(autoload, bool):
-                                    bad.append(f"{prefix}.autoload (expected a boolean)")
+                                    bad_autoload.append(f"{prefix}.autoload (expected a boolean)")
                             else:
                                 bad.append(f"{prefix} (expected a source string or object)")
-                if bad:
-                    detail = "; ".join(bad[:5])
-                    if len(bad) > 5:
-                        detail += f"; and {len(bad) - 5} more"
-                    consequence = (
-                        "project settings are not sanitized, so Pi can fail at startup"
-                        if settings
-                        else "Pi ignores these fields and loads none of their resources"
-                    )
+                if bad or bad_autoload:
+                    found = bad + bad_autoload
+                    detail = "; ".join(found[:5])
+                    if len(found) > 5:
+                        detail += f"; and {len(found) - 5} more"
+                    consequences = []
+                    if bad:
+                        consequences.append(
+                            "project settings are not sanitized, so Pi can fail at startup"
+                            if settings
+                            else "Pi ignores these fields and loads none of their resources"
+                        )
+                    if bad_autoload:
+                        # Pi never crashes on autoload; anything but `false`
+                        # simply loads the package as if autoload were on.
+                        consequences.append("a non-boolean autoload is treated as enabled")
+                    consequence = "; ".join(consequences)
                     violations.append(
                         self.violation(
                             f"Invalid Pi resource declarations: {detail} ({consequence})",
