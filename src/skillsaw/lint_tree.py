@@ -1664,7 +1664,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                         if not is_root_or_ancestor_excluded(
                             path, plugin_path, _is_excluded
                         ) and _inside_plugin(path, resolved_plugin):
-                            state.add_parser_block(config, path, cls, owner=resolved_plugin)
+                            block = state.add_parser_block(config, path, cls, owner=resolved_plugin)
+                            if isinstance(block, CursorPluginHooksBlock):
+                                block.declared_in = config.component_sources.get(field)
                     value = data.get(field)
                     values = (
                         inline_documents(value, field)

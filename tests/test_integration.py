@@ -10234,6 +10234,16 @@ def test_muse_newly_documented_events_have_no_advisories(tmp_path):
     assert violations(result) == []
 
 
+_CLAUDE_HOOKS_PREFIX = (
+    "Hooks use Claude Code's format (matcher groups nesting a 'hooks' array), not Cursor's; "
+)
+_DEFAULT_PATH_REMEDY = (
+    "Cursor also loads hooks/hooks.json by default — declare 'hooks' in the Cursor "
+    "manifest or marketplace entry pointing at a Cursor-format file "
+    "(e.g. hooks/hooks-cursor.json)"
+)
+
+
 @pytest.mark.integration
 class TestCursorNativePlugins:
     def test_clean_plugin_passes(self, tmp_path):
@@ -10258,14 +10268,76 @@ class TestCursorNativePlugins:
         result = run_lint(repo)
         found = by_rule(result)
         assert [(v["severity"], v["message"]) for v in found["cursor-hooks-valid"]] == [
-            (
-                "error",
-                "Hooks use Claude Code's format (matcher groups nesting a 'hooks' "
-                "array), not Cursor's; point .cursor-plugin/plugin.json 'hooks' at "
-                "a Cursor-format hooks file",
-            )
+            ("warning", _CLAUDE_HOOKS_PREFIX + _DEFAULT_PATH_REMEDY)
         ]
         assert "claude-hooks-valid" not in found
+
+    @pytest.mark.parametrize(
+        "declare, config, expected",
+        [
+            (None, None, ("warning", _DEFAULT_PATH_REMEDY)),
+            (
+                "marketplace",
+                None,
+                ("error", "point the marketplace entry's 'hooks' at a Cursor-format hooks file"),
+            ),
+            (
+                "manifest",
+                None,
+                ("error", "point .cursor-plugin/plugin.json 'hooks' at a Cursor-format hooks file"),
+            ),
+            (
+                None,
+                "rules:\n  cursor-hooks-valid:\n    severity: error\n",
+                ("error", _DEFAULT_PATH_REMEDY),
+            ),
+        ],
+        ids=["default-path", "marketplace-declared", "manifest-declared", "configured-error"],
+    )
+    def test_claude_format_hooks_severity_follows_declaration(
+        self, tmp_path, declare, config, expected
+    ):
+        """Only a file Cursor was pointed at keeps ERROR; the default path warns.
+
+        Cursor loads ``hooks/hooks.json`` by default, so a dual plugin's
+        Claude hooks sit there without the author ever naming them for
+        Cursor. An explicit ``hooks`` declaration, or a configured severity,
+        stays strict.
+        """
+        repo = copy_fixture("cursor-plugins/marketplace-claude-hooks", tmp_path)
+        if declare == "marketplace":
+            catalog = repo / ".cursor-plugin/marketplace.json"
+            data = json.loads(catalog.read_text())
+            data["plugins"][0]["hooks"] = "./hooks/hooks.json"
+            catalog.write_text(json.dumps(data, indent=2))
+        elif declare == "manifest":
+            manifest = repo / "plugins/guard/.cursor-plugin/plugin.json"
+            manifest.parent.mkdir()
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "name": "guard",
+                        "description": "Blocks shell commands that read production secrets",
+                        "hooks": "./hooks/hooks.json",
+                    }
+                )
+            )
+        if config:
+            (repo / ".skillsaw.yaml").write_text(config)
+        found = by_rule(run_lint(repo, "--rule", "cursor-hooks-valid"))
+        actual = [(v["severity"], v["message"]) for v in found["cursor-hooks-valid"]]
+        assert actual == [(expected[0], _CLAUDE_HOOKS_PREFIX + expected[1])]
+        if declare != "manifest":
+            assert ".cursor-plugin/plugin.json" not in actual[0][1]
+
+    def test_configured_severity_applies_to_warning_scope_findings(self, tmp_path):
+        """A configured severity reaches the findings that default to WARNING."""
+        repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
+        (repo / "hooks/hooks.json").write_text('{"hooks": {"stop": [], "onSave": []}}')
+        (repo / ".skillsaw.yaml").write_text("rules:\n  cursor-hooks-valid:\n    severity: info\n")
+        found = by_rule(run_lint(repo, "--rule", "cursor-hooks-valid"))
+        assert len(found["cursor-hooks-valid"]) == 3, found
+        assert {v["severity"] for v in found["cursor-hooks-valid"]} == {"info"}
 
     def test_mixed_format_plugin_hooks_keep_entry_checks(self, tmp_path):
         repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
