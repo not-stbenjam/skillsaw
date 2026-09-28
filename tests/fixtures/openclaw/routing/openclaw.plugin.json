@@ -1,0 +1,7 @@
+{
+  "id": "sheets",
+  "name": "Team Sheets",
+  "description": "Smart sheet tools for the team workspace",
+  "configSchema": {},
+  "skills": ["./skills"]
+}
