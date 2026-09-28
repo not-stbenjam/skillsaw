@@ -37,6 +37,11 @@ Deploy with `make deploy-staging`.
 Set the API key via the `API_KEY` environment variable.
 ```
 
+Text that only names a marker is not flagged: a filename (`TODO.md`),
+a list of marker words (`scan for TODO, FIXME`), or a noun after `to`,
+`the`, `a` or `your` (`add a TODO comment`). A marker or list followed
+by `:` or `(` is still flagged (`TODO/FIXME: fill in`).
+
 ## How to fix
 
 Replace each placeholder with the real content it was standing in for.
