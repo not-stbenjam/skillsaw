@@ -10318,6 +10318,64 @@ def test_fix_unknown_rule_advisories_neutralize_terminal_controls(tmp_path, flag
     assert config.read_bytes() == original
 
 
+_CURSOR_RULE_WITH_TAB = (
+    "---\n"
+    "description: Go formatting conventions for the service packages\n"
+    "alwaysApply: 'true'\n"
+    "---\n"
+    "Run gofmt on every change. Indent struct literals with tabs:\n"
+    "\tServer{Addr: addr}\n"
+)
+
+
+@pytest.mark.integration
+def test_fix_dry_run_neutralizes_terminal_controls_and_keeps_tabs(tmp_path):
+    """`fix` output echoes repository paths, descriptions and diff lines.
+
+    A file name carrying ESC/BEL must not drive the terminal, while a tab
+    in a previewed diff line stays a real tab. The fixture is built here
+    because an ESC byte in a committed file name is not portable.
+    """
+    repo = tmp_path / "repo"
+    rules = repo / ".cursor" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "fixme\x1b]0;PWNED\x07\x1b[31m.mdc").write_text(_CURSOR_RULE_WITH_TAB)
+
+    result = run_cli(
+        ["fix", "--dry-run", "--no-color", "--no-custom-rules", "--no-plugins", str(repo)]
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Would fix 1 issue(s):" in result.stdout
+    assert "--- a/.cursor/rules/fixme\ufffd]0;PWNED\ufffd\ufffd[31m.mdc" in result.stdout
+    assert "+alwaysApply: true" in result.stdout
+    assert " \tServer{Addr: addr}" in result.stdout
+    assert not any(control in result.stdout for control in ("\x1b", "\x07"))
+
+
+@pytest.mark.integration
+def test_stale_baseline_verbose_neutralizes_terminal_controls(tmp_path):
+    """Stale baseline entries echo file text verbatim under `lint -v`."""
+    repo = copy_fixture("config/baseline-test", tmp_path)
+    baseline = {
+        "version": "1",
+        "violations": [
+            {
+                "rule_id": "content-weak-language",
+                "file_path": "CLAUDE\x1b]0;PWN\x07.md",
+                "message": "x\x1b[2J\x1b]0;PWNED\x07",
+                "fingerprint": "stale",
+                "line": 1,
+            }
+        ],
+    }
+    (repo / ".skillsaw-baseline.json").write_text(json.dumps(baseline))
+
+    result = run_cli(["lint", "-v", "--no-color", "--no-custom-rules", "--no-plugins", str(repo)])
+    assert "Baseline: 1 stale entry" in result.stdout
+    assert "content-weak-language [CLAUDE\ufffd]0;PWN\ufffd.md]: x\ufffd[2J" in result.stdout
+    assert not any(control in result.stdout for control in ("\x1b", "\x07"))
+
+
 def _pi_routing_findings(root, *options):
     result = run_cli(
         [
