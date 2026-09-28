@@ -98,6 +98,47 @@ def test_prompt_overlap_runs_shared_content_checks_once(tmp_path):
         assert finding["line"] == expected_line
 
 
+@pytest.mark.parametrize("claude", [False, True])
+def test_pi_only_package_prompts_in_commands_stay_pi_prompts(tmp_path, claude):
+    """A Pi-only package's declared ``commands/`` prompts are not Claude commands."""
+    repo = copy_fixture("pi/prompts-in-commands", tmp_path)
+    if claude:
+        marker = repo / ".claude-plugin/plugin.json"
+        marker.parent.mkdir()
+        marker.write_text('{"name":"planning-prompts"}')
+    prompt = repo / "commands/discuss.md"
+    context = RepositoryContext(repo)
+    commands = blocks_at(context, CommandBlock, prompt)
+    prompts = blocks_at(context, PiPromptBlock, prompt)
+    assert (len(commands), len(prompts)) == ((1, 0) if claude else (0, 1))
+    assert len(blocks_at(context, BodyContent, prompt)) == 1
+    assert not context.lint_tree_errors
+
+    result = run_cli(
+        [
+            "lint",
+            repo,
+            "--no-custom-rules",
+            "--no-plugins",
+            "--rule",
+            "content-description-routing",
+            "--format",
+            "json",
+        ]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    findings = json.loads(result.stdout)["violations"]
+    if claude:
+        assert [(v["file_path"], v["message"]) for v in findings] == [
+            (
+                "commands/discuss.md",
+                "Description is missing; add frontmatter describing this command",
+            )
+        ]
+    else:
+        assert findings == []
+
+
 def test_parent_prompt_preserves_configured_cursor_command(tmp_path):
     repo = copy_fixture("pi/prompt-ownership", tmp_path)
     nested = repo / "packages/native"

@@ -1,0 +1,8 @@
+{
+  "name": "planning-prompts",
+  "version": "0.3.0",
+  "keywords": ["pi-package"],
+  "pi": {
+    "prompts": ["./commands"]
+  }
+}

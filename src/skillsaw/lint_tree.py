@@ -101,6 +101,7 @@ from .lint_target import OpenClawPluginNode, OpenClawPluginConfigNode, OpenClawP
 from .blocks.json_config import OpenClawInlineMcpBlock
 from .formats.openclaw import MANIFEST, contained_file, inline_mcp_servers
 from .blocks.pi import PiPackageNode, PiPackageBlock
+from .discovery.pi import package_resources
 from .pi_tree import attach_pi_resources, attach_pi_projects, attach_pi_prompts
 from .formats import antigravity, devin, grok, muse, cursor
 from .blocks.cursor import (
@@ -850,14 +851,20 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 return False
         return False
 
-    def _add_plugin_prose(parent: LintTarget, plugin_dir: Path, owner: Path) -> None:
+    def _add_plugin_prose(
+        parent: LintTarget,
+        plugin_dir: Path,
+        owner: Path,
+        skip: frozenset[Path] = frozenset(),
+    ) -> None:
         """The one prose attach for every plugin container.
 
         ``commands/``, ``agents/``, ``rules/`` and README follow the same
         conventions across plugin ecosystems, so every claimed directory gets
         them here — the content and security rules must read this prose
         whoever owns it. Containment as in ``_add_contained_plugin_block``: a symlink
-        would pull an external file under an in-repo name.
+        would pull an external file under an in-repo name. ``skip`` holds
+        resolved paths another role declared; they attach under that role.
         """
         plugin_resolved = resolve(plugin_dir)
         if plugin_resolved is None:
@@ -879,7 +886,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             except OSError:
                 continue
             for md in files:
-                if _contained(md):
+                if _contained(md) and not (skip and resolve(md) in skip):
                     state.add_block(parent, md, block_cls, owner=owner)
         readme = plugin_dir / "README.md"
         if _contained(readme):
@@ -1607,7 +1614,22 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         # prose here would lint unloaded defaults and assign Claude block types.
         # Mixed packages still retain the other ecosystems' conventional prose.
         if prov.ecosystems - {"cursor"} or not is_cursor:
-            _add_plugin_prose(container, plugin_path, resolved_plugin)
+            # A Pi-only package's declared prompts are Pi prompts, not Claude
+            # commands or agents; ``attach_pi_prompts`` claims them last.
+            pi_prompts: frozenset[Path] = frozenset()
+            if (
+                is_pi
+                and not prov.ecosystems - {"pi"}
+                and not (is_cursor or is_openclaw or is_agent_plugin)
+            ):
+                pi_prompts = frozenset(
+                    resolved
+                    for p in package_resources(
+                        plugin_path, "prompts", context.root_path, context.is_path_excluded
+                    )
+                    if (resolved := resolve(p)) is not None
+                )
+            _add_plugin_prose(container, plugin_path, resolved_plugin, skip=pi_prompts)
         elif _inside_plugin(plugin_path / "README.md", resolved_plugin):
             state.add_block(
                 container, plugin_path / "README.md", ReadmeBlock, owner=resolved_plugin
