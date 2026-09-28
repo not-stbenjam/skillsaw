@@ -308,7 +308,11 @@ def test_mcp_normalization_matches_native_loader_boundary(tmp_path):
         ("[]", "expected an object"),
         ('{"openclaw":42}', "'openclaw' must be an object"),
         ('{"openclaw":{"extensions":[42]}}', "array of non-empty strings"),
-        ('{"openclaw":{"extensions":[]}}', "empty extension list"),
+        # OpenClaw rejects an empty list; it does not fall back to index.*.
+        (
+            '{"openclaw":{"extensions":[]}}',
+            "empty extension list is rejected; OpenClaw neither loads nor installs",
+        ),
         ('{"openclaw":{"extensions":["../outside.js"]}}', "escapes the plugin directory"),
     ],
 )
