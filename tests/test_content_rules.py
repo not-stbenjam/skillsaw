@@ -2688,6 +2688,75 @@ class TestContentPlaceholderTextRule:
         violations = ContentPlaceholderTextRule().check(context)
         assert len(violations) == 0
 
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # cellebrite-labs/ghidra-rpc .pi/prompts/process-feedback.md
+            "   - **Add to TODO** — larger features, uncertain design decisions, "
+            "or items that need human review",
+            "4. **Update TODO.md:**",
+            '   - Add items marked "add to TODO" under `## Open Features` with a date reference',
+            # tmdgusya/roach-pi agents/plan-validator.md, reviewer-risk.md
+            "   - Placeholder code (TODO, FIXME, stubs)",
+            '3. **Placeholder scan** of every field: TBD, TODO, "appropriate", '
+            '"handle edge cases", prose where a decision belongs.',
+            "- **C2:** Is the contract free of placeholder text (TBD / TODO / "
+            '"appropriate" / "handle edge cases" / prose where a decision belongs)?',
+            "Track open work in TODO.txt and FIXME.md.",
+            "Remove the FIXME once the migration lands.",
+            "Check your TODO list before starting.",
+        ],
+    )
+    def test_marker_named_not_left(self, temp_dir, line):
+        """A marker used as a filename, a list of markers, or a noun is not
+        a placeholder left in the text."""
+        (temp_dir / "CLAUDE.md").write_text(f"# Workflow\n\n{line}\n")
+        context = RepositoryContext(temp_dir)
+        assert ContentPlaceholderTextRule().check(context) == []
+
+    @pytest.mark.parametrize(
+        "line, marker",
+        [
+            ("TODO: add example", "TODO"),
+            ("TODO fill in the deploy steps", "TODO"),
+            ("FIXME", "FIXME"),
+            ("XXX", "XXX"),
+            ("See TODO.md. TODO: document the release flow.", "TODO"),
+            ("Markers (TODO, TODO) are banned here.", "TODO"),
+            ("Deploy steps: TODO", "TODO"),
+            ("Go to the ops runbook (TODO)", "TODO"),
+        ],
+    )
+    def test_marker_left_still_flagged(self, temp_dir, line, marker):
+        (temp_dir / "CLAUDE.md").write_text(f"# Workflow\n\n{line}\n")
+        context = RepositoryContext(temp_dir)
+        violations = ContentPlaceholderTextRule().check(context)
+        assert len(violations) == 1
+        assert violations[0].line == 3
+        assert f"'{marker}'" in violations[0].message
+
+    @pytest.mark.parametrize(
+        "line, markers",
+        [
+            ("- TODO/FIXME: fill in the deploy steps.", {"TODO", "FIXME"}),
+            ("- TODO, FIXME: fill in the rollback steps.", {"TODO", "FIXME"}),
+            ("Owner: TBD, TODO: assign an on-call owner.", {"TODO"}),
+            ("- [ ] TODO, HACK: fix auth", {"TODO"}),
+            ("Update the TODO: add real rollback steps here.", {"TODO"}),
+            ("Ask the TODO(alice) owner before merging.", {"TODO"}),
+            ("TODO.Implement retries", {"TODO"}),
+            ("Call XXX.XXX.XXXX for support.", {"XXX"}),
+            ("Enter your XXX API key before deploying.", {"XXX"}),
+        ],
+    )
+    def test_marker_left_behind_a_list_or_determiner(self, temp_dir, line, markers):
+        """A marker, or a list of them, followed by ':' or '(' is left, not named."""
+        (temp_dir / "CLAUDE.md").write_text(f"# Workflow\n\n{line}\n")
+        context = RepositoryContext(temp_dir)
+        violations = ContentPlaceholderTextRule().check(context)
+        assert {v.line for v in violations} == {3}
+        assert {m for m in markers if any(f"'{m}'" in v.message for v in violations)} == markers
+
 
 class TestContentUnlinkedInternalReferenceAutofix:
     def test_autofix_wraps_existing_path(self, temp_dir):

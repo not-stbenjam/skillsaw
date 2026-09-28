@@ -135,6 +135,12 @@ Use claude-3-opus for better code review results.
 <!-- skillsaw-assert content-placeholder-text -->
 TODO: add more configuration examples for the deployment pipeline.
 
+Review feedback before merging:
+- Fix small issues inline; add larger features to TODO for human review.
+- Record deferred work in TODO.md under the open features heading.
+- Reject placeholder code (TODO, FIXME, stubs) in the diff.
+- Flag unresolved contract fields (TBD / TODO) back to the author.
+
 <!-- skillsaw-assert content-broken-internal-reference -->
 See [deployment docs](docs/missing-deployment-guide.md) for more details.
 

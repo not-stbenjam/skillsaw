@@ -6522,6 +6522,17 @@ class TestContentMissingStopCondition:
 
 
 @pytest.mark.integration
+class TestContentPlaceholderText:
+    def test_named_markers_not_reported(self, tmp_path):
+        """Only the left-behind TODO fires; the review list below it names
+        TODO as a filename, a noun, and in marker lists."""
+        repo = copy_fixture("single-plugin/content-violations", tmp_path)
+        r = run_lint(repo)
+        vs = by_rule(r).get("content-placeholder-text", [])
+        assert [(v["file_path"], v["line"]) for v in vs] == [("CLAUDE.md", 136)]
+
+
+@pytest.mark.integration
 class TestContentInlineToolExamples:
     """End-to-end tests for content-inline-tool-examples (opt-in).
 

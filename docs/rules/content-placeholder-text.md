@@ -40,7 +40,8 @@ Set the API key via the `API_KEY` environment variable.
 Text that only names a marker is not flagged: a filename (`TODO.md`),
 a list of marker words (`scan for TODO, FIXME`), or a noun after `to`,
 `the`, `a` or `your` (`add a TODO comment`). A marker or list followed
-by `:` or `(` is still flagged (`TODO/FIXME: fill in`).
+by `:`, or directly by `(`, is still flagged (`TODO/FIXME: fill in`,
+`TODO(alice)`).
 
 ## How to fix
 
