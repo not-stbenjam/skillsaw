@@ -64,9 +64,9 @@ def _reset_process_globals() -> None:
 
     invalidate_read_caches()
 
-    from skillsaw.pi_patterns import _compile_glob
+    from skillsaw.pi_patterns import reset_pattern_state
 
-    _compile_glob.cache_clear()
+    reset_pattern_state()
 
 
 def run_cli(

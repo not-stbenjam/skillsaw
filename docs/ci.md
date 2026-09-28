@@ -125,7 +125,7 @@ as the action. Set `version` to install a specific PyPI release instead:
 
 | Output | Description |
 |--------|-------------|
-| `exit-code` | skillsaw exit code (0=pass, 1=violations at or above the fail-on threshold) |
+| `exit-code` | skillsaw exit code (0=pass, 1=violations at or above the fail-on threshold, 2=usage error) |
 | `errors` | Number of errors found |
 | `warnings` | Number of warnings found |
 | `report-file` | Path to JSON report file |

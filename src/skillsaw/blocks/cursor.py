@@ -48,9 +48,19 @@ class CursorPluginBlock(JsonConfigBlock):
 
 @dataclass(eq=False)
 class CursorPluginHooksBlock(CursorHooksBlock):
-    """Plugin hooks omit the project-only required version field."""
+    """Plugin hooks omit the project-only required version field.
+
+    ``declared_in`` is the manifest or marketplace catalog whose ``hooks``
+    names this file; ``None`` when the file was picked up only at Cursor's
+    default path.
+    """
 
     duplicate_keys_fatal: ClassVar[bool] = False
+    declared_in: Path | None = None
+
+    @property
+    def declared(self) -> bool:
+        return self.declared_in is not None
 
 
 @dataclass(eq=False)

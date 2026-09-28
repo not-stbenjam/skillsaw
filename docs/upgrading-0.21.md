@@ -50,7 +50,32 @@ configuration version to `"0.21.0"` or explicitly enable
 [`pi-skill-valid`](rules/pi-skill-valid.md) to validate those native skills.
 Unselected portable skills keep Agent Skills validation.
 
+`pi-skill-valid` reports at WARNING, where `agentskill-valid` reports at
+ERROR, so metadata defects in Pi-owned skills that failed CI on 0.20.0 may now
+pass. Set `severity: error` on `pi-skill-valid` to keep them blocking.
+
 Pi discovery includes package resources, `.pi/` project resources, flat Markdown
 skills, prompt templates and local package references. Resource selection,
 plugin ownership and compatibility fixes can change the files being checked;
 review findings before refreshing a baseline. See [repository types](repo-types.md).
+
+## Reported repository type
+
+The `repo_type` field in JSON and SARIF output reports the highest-priority
+detected type, so the new types can replace the value 0.20.0 reported.
+`cursor-marketplace`, `cursor-plugin`, `openclaw-plugin` and `pi-package` rank
+above `agentskills` and the tool-configuration types. `pi` ranks above the
+editor-tool and instruction-file types, so a repository with a `CLAUDE.md` and a
+`.pi/` directory now reports `pi` where 0.20.0 reported `claude-md`. Update CI
+that matches on `repo_type`, or read the `repo_types` list instead.
+
+## Hook checks
+
+`hooks-dangerous` no longer flags hooks that run local scripts with Bun, such
+as `bun run scripts/format.ts`. Downloading a script and running it with Bun is
+still flagged.
+
+## New dependencies
+
+skillsaw now requires `wcmatch`, `pathspec` and `json5`. Pip installs them
+automatically; update pinned lockfiles and distribution packages.

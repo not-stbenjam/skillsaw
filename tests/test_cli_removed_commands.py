@@ -41,6 +41,10 @@ def test_docs_command_stays_reserved(tmp_path):
 
     assert result.returncode == 2
     assert "'skillsaw docs' was removed in 0.21.0" in result.stderr
+    # `docs` generated repository documentation, not rule documentation.
+    assert "has no replacement" in result.stderr
+    assert "https://skillsaw.org/upgrading-0.21/" in result.stderr
+    assert "skillsaw.org/rules/" not in result.stderr
     assert "skillsaw lint docs" in result.stderr
     assert result.stdout == ""
     assert site.read_bytes() == published

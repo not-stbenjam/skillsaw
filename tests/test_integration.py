@@ -6522,6 +6522,17 @@ class TestContentMissingStopCondition:
 
 
 @pytest.mark.integration
+class TestContentPlaceholderText:
+    def test_named_markers_not_reported(self, tmp_path):
+        """Only the left-behind TODO fires; the review list below it names
+        TODO as a filename, a noun, and in marker lists."""
+        repo = copy_fixture("single-plugin/content-violations", tmp_path)
+        r = run_lint(repo)
+        vs = by_rule(r).get("content-placeholder-text", [])
+        assert [(v["file_path"], v["line"]) for v in vs] == [("CLAUDE.md", 136)]
+
+
+@pytest.mark.integration
 class TestContentInlineToolExamples:
     """End-to-end tests for content-inline-tool-examples (opt-in).
 
@@ -10234,6 +10245,16 @@ def test_muse_newly_documented_events_have_no_advisories(tmp_path):
     assert violations(result) == []
 
 
+_CLAUDE_HOOKS_PREFIX = (
+    "Hooks use Claude Code's format (matcher groups nesting a 'hooks' array), not Cursor's; "
+)
+_DEFAULT_PATH_REMEDY = (
+    "Cursor also loads hooks/hooks.json by default — declare 'hooks' in the Cursor "
+    "manifest or marketplace entry pointing at a Cursor-format file "
+    "(e.g. hooks/hooks-cursor.json)"
+)
+
+
 @pytest.mark.integration
 class TestCursorNativePlugins:
     def test_clean_plugin_passes(self, tmp_path):
@@ -10258,14 +10279,76 @@ class TestCursorNativePlugins:
         result = run_lint(repo)
         found = by_rule(result)
         assert [(v["severity"], v["message"]) for v in found["cursor-hooks-valid"]] == [
-            (
-                "error",
-                "Hooks use Claude Code's format (matcher groups nesting a 'hooks' "
-                "array), not Cursor's; point .cursor-plugin/plugin.json 'hooks' at "
-                "a Cursor-format hooks file",
-            )
+            ("warning", _CLAUDE_HOOKS_PREFIX + _DEFAULT_PATH_REMEDY)
         ]
         assert "claude-hooks-valid" not in found
+
+    @pytest.mark.parametrize(
+        "declare, config, expected",
+        [
+            (None, None, ("warning", _DEFAULT_PATH_REMEDY)),
+            (
+                "marketplace",
+                None,
+                ("error", "point the marketplace entry's 'hooks' at a Cursor-format hooks file"),
+            ),
+            (
+                "manifest",
+                None,
+                ("error", "point .cursor-plugin/plugin.json 'hooks' at a Cursor-format hooks file"),
+            ),
+            (
+                None,
+                "rules:\n  cursor-hooks-valid:\n    severity: error\n",
+                ("error", _DEFAULT_PATH_REMEDY),
+            ),
+        ],
+        ids=["default-path", "marketplace-declared", "manifest-declared", "configured-error"],
+    )
+    def test_claude_format_hooks_severity_follows_declaration(
+        self, tmp_path, declare, config, expected
+    ):
+        """Only a file Cursor was pointed at keeps ERROR; the default path warns.
+
+        Cursor loads ``hooks/hooks.json`` by default, so a dual plugin's
+        Claude hooks sit there without the author ever naming them for
+        Cursor. An explicit ``hooks`` declaration, or a configured severity,
+        stays strict.
+        """
+        repo = copy_fixture("cursor-plugins/marketplace-claude-hooks", tmp_path)
+        if declare == "marketplace":
+            catalog = repo / ".cursor-plugin/marketplace.json"
+            data = json.loads(catalog.read_text())
+            data["plugins"][0]["hooks"] = "./hooks/hooks.json"
+            catalog.write_text(json.dumps(data, indent=2))
+        elif declare == "manifest":
+            manifest = repo / "plugins/guard/.cursor-plugin/plugin.json"
+            manifest.parent.mkdir()
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "name": "guard",
+                        "description": "Blocks shell commands that read production secrets",
+                        "hooks": "./hooks/hooks.json",
+                    }
+                )
+            )
+        if config:
+            (repo / ".skillsaw.yaml").write_text(config)
+        found = by_rule(run_lint(repo, "--rule", "cursor-hooks-valid"))
+        actual = [(v["severity"], v["message"]) for v in found["cursor-hooks-valid"]]
+        assert actual == [(expected[0], _CLAUDE_HOOKS_PREFIX + expected[1])]
+        if declare != "manifest":
+            assert ".cursor-plugin/plugin.json" not in actual[0][1]
+
+    def test_configured_severity_applies_to_warning_scope_findings(self, tmp_path):
+        """A configured severity reaches the findings that default to WARNING."""
+        repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
+        (repo / "hooks/hooks.json").write_text('{"hooks": {"stop": [], "onSave": []}}')
+        (repo / ".skillsaw.yaml").write_text("rules:\n  cursor-hooks-valid:\n    severity: info\n")
+        found = by_rule(run_lint(repo, "--rule", "cursor-hooks-valid"))
+        assert len(found["cursor-hooks-valid"]) == 3, found
+        assert {v["severity"] for v in found["cursor-hooks-valid"]} == {"info"}
 
     def test_mixed_format_plugin_hooks_keep_entry_checks(self, tmp_path):
         repo = copy_fixture("cursor-plugins/dual-claude-hooks", tmp_path)
@@ -10316,6 +10399,64 @@ def test_fix_unknown_rule_advisories_neutralize_terminal_controls(tmp_path, flag
     assert "No auto-fixable violations found." in result.stdout
     assert not any((control in result.stdout for control in ("\x1b", "\x07", "\u202e")))
     assert config.read_bytes() == original
+
+
+_CURSOR_RULE_WITH_TAB = (
+    "---\n"
+    "description: Go formatting conventions for the service packages\n"
+    "alwaysApply: 'true'\n"
+    "---\n"
+    "Run gofmt on every change. Indent struct literals with tabs:\n"
+    "\tServer{Addr: addr}\n"
+)
+
+
+@pytest.mark.integration
+def test_fix_dry_run_neutralizes_terminal_controls_and_keeps_tabs(tmp_path):
+    """`fix` output echoes repository paths, descriptions and diff lines.
+
+    A file name carrying ESC/BEL must not drive the terminal, while a tab
+    in a previewed diff line stays a real tab. The fixture is built here
+    because an ESC byte in a committed file name is not portable.
+    """
+    repo = tmp_path / "repo"
+    rules = repo / ".cursor" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "fixme\x1b]0;PWNED\x07\x1b[31m.mdc").write_text(_CURSOR_RULE_WITH_TAB)
+
+    result = run_cli(
+        ["fix", "--dry-run", "--no-color", "--no-custom-rules", "--no-plugins", str(repo)]
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Would fix 1 issue(s):" in result.stdout
+    assert "--- a/.cursor/rules/fixme\ufffd]0;PWNED\ufffd\ufffd[31m.mdc" in result.stdout
+    assert "+alwaysApply: true" in result.stdout
+    assert " \tServer{Addr: addr}" in result.stdout
+    assert not any(control in result.stdout for control in ("\x1b", "\x07"))
+
+
+@pytest.mark.integration
+def test_stale_baseline_verbose_neutralizes_terminal_controls(tmp_path):
+    """Stale baseline entries echo file text verbatim under `lint -v`."""
+    repo = copy_fixture("config/baseline-test", tmp_path)
+    baseline = {
+        "version": "1",
+        "violations": [
+            {
+                "rule_id": "content-weak-language",
+                "file_path": "CLAUDE\x1b]0;PWN\x07.md",
+                "message": "x\x1b[2J\x1b]0;PWNED\x07",
+                "fingerprint": "stale",
+                "line": 1,
+            }
+        ],
+    }
+    (repo / ".skillsaw-baseline.json").write_text(json.dumps(baseline))
+
+    result = run_cli(["lint", "-v", "--no-color", "--no-custom-rules", "--no-plugins", str(repo)])
+    assert "Baseline: 1 stale entry" in result.stdout
+    assert "content-weak-language [CLAUDE\ufffd]0;PWN\ufffd.md]: x\ufffd[2J" in result.stdout
+    assert not any(control in result.stdout for control in ("\x1b", "\x07"))
 
 
 def _pi_routing_findings(root, *options):

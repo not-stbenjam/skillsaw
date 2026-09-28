@@ -22,6 +22,8 @@ This rule names the field and the expected type before Pi runs.
 - `null` is accepted where Pi reads it as absent: top-level settings resource
   fields and `packages`, a package entry's `autoload`, and `pi` resource fields.
   A `null` package filter still warns, because Pi drops that package.
+- Pi only tests `autoload === false`, so a non-boolean `autoload` warns: Pi
+  loads that package as if autoload were on.
 
 Unknown npm fields, Pi gallery metadata, and unrelated settings are accepted.
 Empty resource lists are valid. Findings are consolidated by file and default to

@@ -156,6 +156,10 @@ Violations that `skillsaw fix` can resolve automatically are marked with
 |------|---------|
 | `0` | Success (no violations at or above the failure threshold) |
 | `1` | Failure (errors found; warnings in strict mode; any violation with `fail-on: info`) |
+| `2` | Usage error (invalid arguments or a removed command such as `skillsaw docs`) |
+
+Advisory `unknown-rule` notices for unknown or removed rule IDs in
+`.skillsaw.yaml` never fail a run, at any threshold.
 
 ## More Commands
 

@@ -1,0 +1,6 @@
+{
+  "skills": ["../skills"],
+  "packages": [
+    {"source": "../review-kit", "autoload": "false"}
+  ]
+}

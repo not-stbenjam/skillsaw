@@ -4,7 +4,8 @@ OpenClaw loads skill roots explicitly declared in its native manifest; an
 undeclared `skills/` directory does not activate those skills. Ignored values,
 missing directories and paths escaping the plugin prevent resources from loading.
 Undeclared `skills/` directories are not reported.
-An empty extension array suppresses conventional runtime entrypoint discovery.
+An empty extension array is rejected: OpenClaw reports `openclaw.extensions is empty`,
+neither loads nor installs the plugin, and does not fall back to an `index.*` entry.
 
 ## Activation
 

@@ -22,6 +22,7 @@ from .discovery import detect as detect_discovery
 from .discovery.excludes import pattern_variants as _pattern_variants
 from .discovery.excludes import is_root_or_ancestor_excluded, path_matches_patterns
 from .paths import safe_is_dir, safe_resolve
+from .pi_patterns import reset_pattern_state
 from .utils import read_yaml
 from .repository_external_content import RepositoryExternalContentMixin
 from .repository_openclaw import RepositoryOpenClawMixin
@@ -160,6 +161,8 @@ class RepositoryContext(
             lint_external_content: Whether externally sourced nodes should be
                 attached to the lint tree.
         """
+        # Pi pattern timeout history is per repository, not per process.
+        reset_pattern_state()
         self._resolve_cache: Dict[Path, Optional[Path]] = {}
         self.root_path = safe_resolve(root_path) or root_path
         self.content_paths: List[str] = list(content_paths) if content_paths else []

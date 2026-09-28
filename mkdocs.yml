@@ -70,9 +70,9 @@ plugins:
         rules/content/index.md: rules/content-intelligence.md
         rules/content/weak-language.md: rules/content-weak-language.md
         rules/content/tautological.md: rules/content-tautological.md
-        rules/content/critical-position.md: configuration.md
-        rules/content-critical-position.md: configuration.md
-        rules/content-actionability-score.md: configuration.md
+        rules/content/critical-position.md: upgrading-0.21.md
+        rules/content-critical-position.md: upgrading-0.21.md
+        rules/content-actionability-score.md: upgrading-0.21.md
         rules/skill-frontmatter.md: rules/agentskill-valid.md
         rules/deprecated.md: configuration.md
         rules/content/redundant-with-tooling.md: rules/content-redundant-with-tooling.md
@@ -81,7 +81,7 @@ plugins:
         rules/content/section-length.md: rules/content-section-length.md
         rules/content/contradiction.md: rules/content-contradiction.md
         rules/content/hook-candidate.md: rules/content-hook-candidate.md
-        rules/content/actionability-score.md: configuration.md
+        rules/content/actionability-score.md: upgrading-0.21.md
         rules/content/cognitive-chunks.md: rules/content-cognitive-chunks.md
         rules/content/embedded-secrets.md: rules/content-embedded-secrets.md
         rules/content/banned-references.md: rules/content-banned-references.md

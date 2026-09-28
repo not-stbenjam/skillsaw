@@ -136,6 +136,10 @@ class DescriptionRoutingRule(Rule):
         # unmeasured.
         RepositoryType.ANTIGRAVITY,
         RepositoryType.ANTIGRAVITY_PLUGIN,
+        # OpenClaw plugins carry skills (it is in ``SKILL_REPO_TYPES``), so
+        # ``--type openclaw-plugin`` must not silence the checks that auto
+        # detection runs on those skills.
+        RepositoryType.OPENCLAW_PLUGIN,
     }
 
     config_schema = {

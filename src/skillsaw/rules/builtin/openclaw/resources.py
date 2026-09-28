@@ -98,7 +98,12 @@ class OpenClawResourcesRule(Rule):
                             f"{safe_display(raw)!r} is not an existing runtime file; build the package first"
                         )
                 if field == "openclaw.extensions" and values == []:
-                    problems.append("empty extension list disables entrypoint discovery")
+                    # discovery.ts and install-shared.ts both reject an empty
+                    # list outright; neither falls back to an index.* entry.
+                    problems.append(
+                        "empty extension list is rejected; OpenClaw neither loads nor"
+                        " installs the plugin and does not fall back to an index.* entry"
+                    )
                 if problems:
                     violations.append(
                         self.violation(

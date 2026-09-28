@@ -39,6 +39,23 @@ def lint(repo, *args):
     return result.returncode, json.loads(result.stdout)["violations"]
 
 
+def test_forced_type_keeps_description_routing(tmp_path):
+    # OPENCLAW_PLUGIN is a skill repo type, so forcing it must not silence
+    # the routing check auto detection runs on the plugin's skills. No
+    # --rule here: that force-enables the rule and bypasses repo_types.
+    repo = copy_fixture("routing", tmp_path)
+    found = {}
+    for args in ([], ["--type", "openclaw-plugin"]):
+        result = run_cli(["lint", str(repo), "--format", "json"] + args)
+        found[tuple(args)] = sorted(
+            (Path(v["file_path"]).as_posix(), v["line"])
+            for v in json.loads(result.stdout)["violations"]
+            if v["rule_id"] == "content-description-routing"
+        )
+    assert found[()] == [("skills/sheet-schema/SKILL.md", 3)]
+    assert found[("--type", "openclaw-plugin")] == found[()]
+
+
 def test_native_json5_and_declared_skills(tmp_path):
     repo = copy_fixture("valid", tmp_path)
     context = RepositoryContext(repo)
@@ -308,7 +325,11 @@ def test_mcp_normalization_matches_native_loader_boundary(tmp_path):
         ("[]", "expected an object"),
         ('{"openclaw":42}', "'openclaw' must be an object"),
         ('{"openclaw":{"extensions":[42]}}', "array of non-empty strings"),
-        ('{"openclaw":{"extensions":[]}}', "empty extension list"),
+        # OpenClaw rejects an empty list; it does not fall back to index.*.
+        (
+            '{"openclaw":{"extensions":[]}}',
+            "empty extension list is rejected; OpenClaw neither loads nor installs",
+        ),
         ('{"openclaw":{"extensions":["../outside.js"]}}', "escapes the plugin directory"),
     ],
 )

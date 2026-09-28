@@ -55,7 +55,8 @@ tell you.
 
 Three checks are warnings, because the file still loads and the rest of it
 still runs: an unrecognised event name, an empty `hooks` object, and an
-event whose array is empty and so configures nothing.
+event whose array is empty and so configures nothing. A severity configured
+for the rule applies to these as well.
 
 ## Examples
 
@@ -115,8 +116,15 @@ plugin hooks may omit `version`; an explicit version is still validated.
 A plugin that also ships a Claude Code manifest often keeps Claude's
 `hooks/hooks.json` at that default path, with matcher groups that nest a
 `hooks` array under PascalCase events. When every entry has that shape, the
-rule reports one finding for the file instead of checking each entry. Point
-`hooks` in `.cursor-plugin/plugin.json` at a separate Cursor-format file.
+rule reports one finding for the file instead of checking each entry. Declare
+`hooks` in the Cursor manifest or marketplace entry, pointing at a separate
+Cursor-format file such as `hooks/hooks-cursor.json`.
+
+That finding is a warning when no manifest or marketplace entry declares
+`hooks` and Cursor only picks the file up at its default path. When the
+author pointed Cursor at the Claude-format file, or wrote Claude-format hooks
+inline, it keeps the rule's error severity. A severity set in `.skillsaw.yaml`
+overrides both.
 
 ## Configuration
 

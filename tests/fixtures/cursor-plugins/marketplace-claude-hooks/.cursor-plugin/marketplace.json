@@ -1,0 +1,17 @@
+{
+  "name": "platform-guards",
+  "owner": {
+    "name": "Platform Security",
+    "email": "platform-security@example.com"
+  },
+  "metadata": {
+    "description": "Guard hooks that keep agents away from production credentials"
+  },
+  "plugins": [
+    {
+      "name": "guard",
+      "source": "./plugins/guard",
+      "description": "Blocks shell commands that read production secrets"
+    }
+  ]
+}

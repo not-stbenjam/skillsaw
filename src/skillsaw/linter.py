@@ -205,8 +205,14 @@ class CustomRuleWarning(UserWarning):
     """
 
     def __init__(self, path: Path):
+        # ``args`` holds only the path, as a string: pickling and pytest-xdist
+        # rebuild a warning as ``cls(*args)`` (xdist only when ``args``
+        # serializes), so a formatted message there would be formatted again.
         self.path = path
-        super().__init__(f"Loading custom rule file: {path} — use --no-custom-rules to skip")
+        super().__init__(str(path))
+
+    def __str__(self) -> str:
+        return f"Loading custom rule file: {self.path} — use --no-custom-rules to skip"
 
 
 class Linter:
