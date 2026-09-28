@@ -20,7 +20,7 @@ A linter for the files that steer AI coding agents.
 
 Agent instructions behave like code, but most teams still review them like
 prose. skillsaw gives them a linter. It validates structure across every major
-AI coding ecosytem, guards against many supply-chain attacks, and applies content
+AI coding ecosystem, guards against many supply-chain attacks, and applies content
 and context rules backed by research and frontier lab guidance.
 
 It understands Agent Skills,
@@ -79,7 +79,7 @@ INFO findings too. A configured `fail-on: info` includes them automatically.
 
 ## What it catches
 
-- **Multi-ecosystem structure & compatibility:** schema, frontmatter, and manifest validation for Agent Skills (`SKILL.md`), Claude Code, OpenAI Codex (project config, plugins & marketplaces), Grok Build (project config, plugins & marketplaces), Google Antigravity (configuration in any customization root — `.agents/`, `.agent/`, `_agents/`, `_agent/` — its `rules/` and `agents/` prose, plugins, hooks, MCP servers and registries), Agent Plugins v1 (`plugin.json`, `mcp.json`), GitHub Copilot & VS Code custom agents (`.github/agents/`), OpenCode configuration, Pi packages and project resources, APM packages, MCP server maps, and MCP Registry metadata.
+- **Multi-ecosystem structure & compatibility:** schema, frontmatter, and manifest validation for Agent Skills (`SKILL.md`), Claude Code, OpenAI Codex (project config, plugins & marketplaces), Cursor plugins & marketplaces, Grok Build (project config, plugins & marketplaces), Google Antigravity (configuration in any customization root — `.agents/`, `.agent/`, `_agents/`, `_agent/` — its `rules/` and `agents/` prose, plugins, hooks, MCP servers and registries), Agent Plugins v1 (`plugin.json`, `mcp.json`), GitHub Copilot & VS Code custom agents (`.github/agents/`), OpenCode configuration, Pi packages and project resources, native OpenClaw plugins, APM packages, MCP server maps, and MCP Registry metadata.
 - **Content quality & token economy:** research-backed rules detecting instruction drift across duplicate files, excessive instruction budgets, cognitive overload, section length violations, weak language, contradictions, and repetitive inline tool-call examples.
 - **Discovery & repository integrity:** unreferenced bundled files, broken internal file references, inconsistent terminology, missing stop conditions, and stale baselines.
 - **Security & supply chain:**
@@ -87,7 +87,8 @@ INFO findings too. A configured `fail-on: info` includes them automatically.
   - **Prohibited & unvetted MCP servers:** enforces strict MCP allowlists across root, plugin, and custom agent configurations.
   - **Prompt injection & stealth payloads:** detects invisible Unicode (ASCII smuggling, zero-width tags, bidi overrides), high-entropy encoded payloads (base64/hex), and hidden instructions in comments and code fences.
   - **Environment & context security:** flags dangerous environment overrides (`LD_PRELOAD`, `NODE_OPTIONS`, `PYTHONPATH`), unallowlisted dynamic context injection, and embedded credentials.
- **Deterministic autofixes:** safe, instant automated fixes for invalid frontmatter, broken headings, missing manifests, unclosed code fences, and schema keys via `skillsaw fix`.
+- **Deterministic autofixes:** safe, instant automated fixes for invalid frontmatter, broken headings, missing manifests, unclosed code fences, and schema keys via `skillsaw fix`.
+
 skillsaw detects repository types automatically and lints multiple formats in the same project. See [supported repository types](https://skillsaw.org/repo-types/) and the [complete rule reference](https://skillsaw.org/rules/) for details.
 
 

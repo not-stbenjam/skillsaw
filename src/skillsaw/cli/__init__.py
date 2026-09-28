@@ -41,8 +41,8 @@ def _warn_deprecated_command(command: str) -> None:
 def _exit_removed_command(command: str) -> None:
     print(
         f"Error: 'skillsaw {command}' was removed in {_REMOVED_COMMANDS[command]}. "
-        "Rule documentation is at https://skillsaw.org/rules/ and in "
-        "'skillsaw explain <rule>'. To lint a directory named "
+        "It generated repository documentation and has no replacement; see "
+        "https://skillsaw.org/upgrading-0.21/. To lint a directory named "
         f"'{command}', run 'skillsaw lint {command}'.",
         file=sys.stderr,
     )
