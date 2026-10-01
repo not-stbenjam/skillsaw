@@ -184,13 +184,12 @@ def test_missing_description(plugin_with_missing_description):
     assert "description" in violations[0].message.lower()
 
 
-def test_missing_name(plugin_with_missing_name):
-    """Test that missing name is detected"""
+def test_plugin_missing_name_uses_filename(plugin_with_missing_name):
+    """Plugin agents derive a missing name from the filename."""
     context = RepositoryContext(plugin_with_missing_name)
     rule = AgentFrontmatterRule()
     violations = rule.check(context)
-    assert len(violations) == 1
-    assert "name" in violations[0].message.lower()
+    assert violations == []
 
 
 def test_no_agents_directory(plugin_without_agents):
@@ -225,16 +224,15 @@ some-other-field: value
     return plugin_dir
 
 
-def test_fix_both_name_and_description_missing(plugin_with_missing_both_fields):
-    """Test that fixing both missing name and description produces a single
-    AutofixResult that contains both fields, not two conflicting results."""
+def test_plugin_fix_preserves_filename_name(plugin_with_missing_both_fields):
+    """A plugin agent fix adds description without overriding its filename name."""
     context = RepositoryContext(plugin_with_missing_both_fields)
     rule = AgentFrontmatterRule()
 
     violations = rule.check(context)
-    assert len(violations) == 2
+    assert len(violations) == 1
     messages = {v.message for v in violations}
-    assert "Missing 'name' in frontmatter" in messages
+    assert "Missing 'name' in frontmatter" not in messages
     assert "Missing 'description' in frontmatter" in messages
 
     fixes = rule.fix(context, violations)
@@ -242,7 +240,6 @@ def test_fix_both_name_and_description_missing(plugin_with_missing_both_fields):
     assert len(fixes) == 1
 
     fix = fixes[0]
-    assert "name: both-missing" in fix.fixed_content
+    assert "name:" not in fix.fixed_content
     assert "description: " in fix.fixed_content
-    # Both violations should be covered by the single fix
-    assert len(fix.violations_fixed) == 2
+    assert len(fix.violations_fixed) == 1

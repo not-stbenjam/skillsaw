@@ -2,7 +2,6 @@
 Rule: plugin-json-valid
 """
 
-import re
 from typing import List
 
 from skillsaw.rule import Rule, RuleViolation, Severity
@@ -84,18 +83,15 @@ class PluginJsonValidRule(Rule):
                         )
                     )
 
-            # Validate version format (semver)
-            if "version" in data:
-                version = data["version"]
-                if not re.match(
-                    r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$", str(version)
-                ):
-                    violations.append(
-                        self.violation(
-                            f"Version '{version}' should follow semver (X.Y.Z)",
-                            file_path=plugin_json,
-                        )
+            # Claude's manifest reference allows arbitrary version strings;
+            # the released validator checks only their type.
+            if "version" in data and not isinstance(data["version"], str):
+                violations.append(
+                    self.violation(
+                        "'version' must be a string",
+                        file_path=plugin_json,
                     )
+                )
 
             # Validate author structure
             if "author" in data:

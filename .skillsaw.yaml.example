@@ -105,7 +105,7 @@ rules:
     enabled: auto
     severity: error
 
-  # Agent files must have valid frontmatter with name and description
+  # Agent files need valid frontmatter and description; project agents also need name
   claude-agent-frontmatter:
     enabled: true
     severity: error
@@ -222,6 +222,11 @@ rules:
   codex-marketplace-registration:
     enabled: auto
     severity: error
+
+  # Codex HTTP MCP servers must use http_headers instead of ignored headers
+  codex-mcp-headers:
+    enabled: auto
+    severity: warning
 
   # Validate skill openai.yaml and catalog-compatible plugin metadata
   codex-openai-metadata:
@@ -585,7 +590,7 @@ rules:
     # extra-handler-fields: []
     # extra-group-keys: []
 
-  # Native OpenClaw manifests must declare an id and object configSchema
+  # Native OpenClaw manifests must declare valid identity, configSchema, and themes
   openclaw-manifest-valid:
     enabled: false
     severity: error
@@ -616,6 +621,11 @@ rules:
   # Pi package and project resource declarations must have valid types
   pi-config-valid:
     enabled: auto
+    severity: warning
+
+  # Pi MCP servers must use supported field types and transports
+  pi-mcp-valid:
+    enabled: false
     severity: warning
 
   # Literal Pi resource paths should exist in the assembled checkout

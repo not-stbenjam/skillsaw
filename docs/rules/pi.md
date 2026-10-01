@@ -10,4 +10,5 @@ Discovers Pi packages and `.pi/` project resources, validates resource arrays an
 | [`pi-config-valid`](pi-config-valid.md) | Pi package and project resource declarations must have valid types | warning (auto) | - |
 | [`pi-skill-valid`](pi-skill-valid.md) | Pi skills need parseable frontmatter and a nonempty description | warning (auto) | - |
 | [`pi-resource-paths`](pi-resource-paths.md) | Literal Pi resource paths should exist in the assembled checkout | warning (disabled) | - |
+| [`pi-mcp-valid`](pi-mcp-valid.md) | Pi MCP servers must use supported field types and transports | warning (disabled) | - |
 

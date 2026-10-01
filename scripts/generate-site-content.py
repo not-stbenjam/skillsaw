@@ -332,6 +332,7 @@ RULE_GROUPS = [
         "codex",
         [
             "codex-hooks-valid",
+            "codex-mcp-headers",
             "codex-openai-metadata",
             "codex-plugin-json-valid",
             "codex-plugin-structure",
@@ -344,7 +345,9 @@ RULE_GROUPS = [
         "the [Codex plugin specification]"
         "(https://developers.openai.com/plugins/build/plugins). The metadata "
         "rule auto-enables for Agent Skills; the plugin and marketplace rules "
-        "auto-enable only when their Codex manifests are present.",
+        "auto-enable only when their Codex manifests are present. Project "
+        "`.codex/config.toml` files also get a warning when an HTTP MCP server "
+        "uses the ignored `headers` field instead of Codex's `http_headers`.",
     ),
     (
         "OpenClaw",
@@ -377,7 +380,7 @@ RULE_GROUPS = [
     (
         "Pi",
         "pi",
-        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths"],
+        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths", "pi-mcp-valid"],
         "Discovers Pi packages and `.pi/` project resources, validates resource "
         "arrays and native skill metadata, and exposes prompts and flat skills "
         "to content checks. Literal resource-path checks are opt-in. "

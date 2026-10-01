@@ -160,13 +160,24 @@ hedge (see Sync notes).
     loads as stdio, `url = ""` as streamable HTTP, and `command = ["npx"]` refuses
     the whole file (`invalid type: sequence, expected a string`) rather than
     reading the table some other way.
-  - **No server field vocabulary is kept**, deliberately. An unknown server key
+  - **No general server field vocabulary is kept**, deliberately. An unknown server key
     loads silently, so watching a table load proves nothing about whether its
     keys are real; only `--strict-config` names one (`unknown configuration field
     \`mcp_servers.<name>.enviroment\``), and it does so for every malformed
     server table, which is why skillsaw adds no shape rule here. The tables reach
     `mcp-prohibited` and `mcp-valid-json`'s dialect-neutral checks through the MCP
     role on `CodexConfigBlock`, and nothing restates the refusals.
+    One targeted exception, added for the ignored-field report in issue #632:
+    `codex-mcp-headers` warns on `headers` in a server table with a string `url`
+    and no `command`. Codex CLI 0.159.3's offline `mcp get --json` drops that
+    field and retains the canonical `http_headers` map. Its
+    [released parser](https://github.com/openai/codex/blob/rust-v0.159.3/codex-rs/config/src/mcp_types.rs)
+    has no `headers` alias, and its
+    [unknown-field regression](https://github.com/openai/codex/blob/rust-v0.159.3/codex-rs/config/src/mcp_types_tests.rs#L620)
+    pins silent acceptance. The warning suggests `http_headers` for literal
+    values or `env_http_headers` for environment-variable names, without an
+    autofix that would activate the ignored headers. This exception does not
+    add a field allowlist, transport validation, or a general shape rule.
   - `env` is the one server field that holds literal values, so it is the one in
     `credential_maps` beside `http_headers`. `env_vars` is a *sequence* under
     `--strict-config` (`invalid type: map, expected a sequence`) whose entries
@@ -215,6 +226,8 @@ hedge (see Sync notes).
   deferral is unconditional, so the JSON shape walk stands down and
   `codex-hooks-valid` owns the one parse-error finding for the file. No Codex MCP
   shape rule exists by design — see the measured note above.
+  The narrow ignored-field warning lives in `codex/mcp_headers.py` and reads
+  `CodexConfigBlock`; JSON plugin MCP declarations keep their existing dialects.
 
 ## Sync notes
 Hand-copied value sets that drift — re-check each against upstream:

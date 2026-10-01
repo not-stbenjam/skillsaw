@@ -232,16 +232,17 @@ def test_plugin_json_missing_name_is_error(temp_dir):
     assert len(warnings) == 2
 
 
-def test_plugin_json_valid_version_rejects_trailing_garbage(temp_dir):
-    """Test that version strings with trailing garbage are rejected"""
+def test_plugin_json_valid_version_rejects_non_strings(temp_dir):
+    """Claude refuses non-string version values, including explicit null."""
     import json
 
     invalid_versions = [
-        "1.0.0garbage",
-        "1.0.0.0.0",
-        "1.0.0; rm -rf /",
-        "1.0.0 ",
-        "1.0.0!",
+        None,
+        True,
+        1,
+        1.5,
+        [],
+        {"version": "1.0.0"},
     ]
 
     for i, bad_version in enumerate(invalid_versions):
@@ -268,14 +269,13 @@ def test_plugin_json_valid_version_rejects_trailing_garbage(temp_dir):
         rule = PluginJsonValidRule()
         violations = rule.check(context)
 
-        version_violations = [
-            v for v in violations if "semver" in v.message.lower() or "Version" in v.message
-        ]
-        assert len(version_violations) == 1, f"Expected version '{bad_version}' to be rejected"
+        assert len(violations) == 1, f"Expected version {bad_version!r} to be rejected"
+        assert violations[0].message == "'version' must be a string"
+        assert violations[0].severity == Severity.ERROR
 
 
-def test_plugin_json_valid_version_accepts_semver_prerelease(temp_dir):
-    """Test that valid semver versions with prerelease/build metadata are accepted"""
+def test_plugin_json_valid_version_accepts_arbitrary_strings(temp_dir):
+    """Version strings may use semver, release labels, or another scheme."""
     import json
 
     valid_versions = [
@@ -289,6 +289,15 @@ def test_plugin_json_valid_version_accepts_semver_prerelease(temp_dir):
         "1.0.0+build.123",
         "1.0.0+build-meta.123",
         "1.0.0-beta+build.456",
+        "v1",
+        "2026.10",
+        "release-candidate",
+        "1.0.0garbage",
+        "1.0.0.0.0",
+        "1.0.0; rm -rf /",
+        "1.0.0 ",
+        "1.0.0!",
+        "",
     ]
 
     for i, good_version in enumerate(valid_versions):
@@ -315,10 +324,7 @@ def test_plugin_json_valid_version_accepts_semver_prerelease(temp_dir):
         rule = PluginJsonValidRule()
         violations = rule.check(context)
 
-        version_violations = [
-            v for v in violations if "semver" in v.message.lower() or "Version" in v.message
-        ]
-        assert len(version_violations) == 0, f"Expected version '{good_version}' to be accepted"
+        assert violations == [], f"Expected version {good_version!r} to be accepted"
 
 
 def test_command_name_format_reports_line_number(temp_dir):

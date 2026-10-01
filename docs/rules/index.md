@@ -3,7 +3,7 @@
 
 # Rules Reference
 
-skillsaw includes **106** built-in rules organized into the following categories:
+skillsaw includes **108** built-in rules organized into the following categories:
 
 - [Agent Plugins](agent-plugins.md) (3 rules)
 - [agentskills.io](agentskills.md) (8 rules)
@@ -21,10 +21,10 @@ skillsaw includes **106** built-in rules organized into the following categories
 - [Instruction Files](instruction-files.md) (3 rules)
 - [MCP (Model Context Protocol)](mcp.md) (5 rules)
 - [Muse Code](muse.md) (1 rule)
-- [OpenAI Codex](codex.md) (6 rules)
+- [OpenAI Codex](codex.md) (7 rules)
 - [OpenClaw](openclaw.md) (4 rules)
 - [OpenCode](opencode.md) (1 rule)
-- [Pi](pi.md) (3 rules)
+- [Pi](pi.md) (4 rules)
 - [Promptfoo Evals](promptfoo.md) (3 rules)
 - [Security](security.md) (4 rules)
 - [Vercel](vercel.md) (1 rule)
@@ -54,7 +54,7 @@ skillsaw includes **106** built-in rules organized into the following categories
 | [`claude-command-frontmatter`](claude-command-frontmatter.md) | Command files must have valid frontmatter with description | error | auto | Claude Code |
 | [`claude-command-sections`](claude-command-sections.md) | Command files should have Name, Synopsis, Description, and Implementation sections | warning (disabled) | - | Claude Code |
 | [`claude-command-name-format`](claude-command-name-format.md) | Command Name section should be 'plugin-name:command-name' | warning (disabled) | - | Claude Code |
-| [`claude-agent-frontmatter`](claude-agent-frontmatter.md) | Agent files must have valid frontmatter with name and description | error | auto | Claude Code |
+| [`claude-agent-frontmatter`](claude-agent-frontmatter.md) | Agent files need valid frontmatter and description; project agents also need name | error | auto | Claude Code |
 | [`claude-marketplace-json-valid`](claude-marketplace-json-valid.md) | Marketplace.json must be valid JSON with required fields | error (auto) | - | Claude Code |
 | [`claude-marketplace-registration`](claude-marketplace-registration.md) | Plugins must be registered in marketplace.json | error (auto) | auto | Claude Code |
 | [`claude-settings-dangerous`](claude-settings-dangerous.md) | Flags settings keys that execute arbitrary commands (apiKeyHelper, awsAuthRefresh, awsCredentialExport, gcpAuthRefresh, otelHeadersHelper) and dangerous env vars (LD_PRELOAD, NODE_OPTIONS, proxy settings, GIT_SSH_COMMAND, etc.) | error (auto) | - | Claude Code |
@@ -118,19 +118,21 @@ skillsaw includes **106** built-in rules organized into the following categories
 | [`mcp-registry-npm-name-match`](mcp-registry-npm-name-match.md) | Local npm package.json mcpName must match MCP Registry server.json name | error (auto) | - | MCP (Model Context Protocol) |
 | [`muse-hooks-valid`](muse-hooks-valid.md) | .muse/hooks.json must use Muse's events, matcher groups and handler fields | error (disabled) | - | Muse Code |
 | [`codex-hooks-valid`](codex-hooks-valid.md) | Codex hooks files must use Codex's hook events, handler types, and fields | error (auto) | - | OpenAI Codex |
+| [`codex-mcp-headers`](codex-mcp-headers.md) | Codex HTTP MCP servers must use http_headers instead of ignored headers | warning (auto) | - | OpenAI Codex |
 | [`codex-openai-metadata`](codex-openai-metadata.md) | Validate skill openai.yaml and catalog-compatible plugin metadata | error (auto) | - | OpenAI Codex |
 | [`codex-plugin-json-valid`](codex-plugin-json-valid.md) | The selected Codex manifest or portable OpenAI overlay must be valid | error (auto) | - | OpenAI Codex |
 | [`codex-plugin-structure`](codex-plugin-structure.md) | Only plugin.json belongs in .codex-plugin/ | warning (auto) | - | OpenAI Codex |
 | [`codex-marketplace-json-valid`](codex-marketplace-json-valid.md) | .agents/plugins/marketplace.json must be valid JSON with required fields | error (auto) | - | OpenAI Codex |
 | [`codex-marketplace-registration`](codex-marketplace-registration.md) | Codex plugins must be registered in .agents/plugins/marketplace.json | error (auto) | auto | OpenAI Codex |
 | [`openclaw-metadata`](openclaw-metadata.md) | Validate metadata.openclaw fields against the OpenClaw spec | warning (auto) | - | OpenClaw |
-| [`openclaw-manifest-valid`](openclaw-manifest-valid.md) | Native OpenClaw manifests must declare an id and object configSchema | error (disabled) | - | OpenClaw |
+| [`openclaw-manifest-valid`](openclaw-manifest-valid.md) | Native OpenClaw manifests must declare valid identity, configSchema, and themes | error (disabled) | - | OpenClaw |
 | [`openclaw-package-valid`](openclaw-package-valid.md) | OpenClaw package metadata must declare valid extension entries | error (disabled) | - | OpenClaw |
 | [`openclaw-resources`](openclaw-resources.md) | OpenClaw resources should resolve inside their package and exist when loaded | warning (disabled) | - | OpenClaw |
 | [`opencode-config-valid`](opencode-config-valid.md) | opencode.json and opencode.jsonc must parse and use keys and MCP server shapes OpenCode reads | error (auto) | - | OpenCode |
 | [`pi-config-valid`](pi-config-valid.md) | Pi package and project resource declarations must have valid types | warning (auto) | - | Pi |
 | [`pi-skill-valid`](pi-skill-valid.md) | Pi skills need parseable frontmatter and a nonempty description | warning (auto) | - | Pi |
 | [`pi-resource-paths`](pi-resource-paths.md) | Literal Pi resource paths should exist in the assembled checkout | warning (disabled) | - | Pi |
+| [`pi-mcp-valid`](pi-mcp-valid.md) | Pi MCP servers must use supported field types and transports | warning (disabled) | - | Pi |
 | [`promptfoo-valid`](promptfoo-valid.md) | Validate promptfoo eval YAML config structure and file references | error (auto) | - | Promptfoo Evals |
 | [`promptfoo-assertions`](promptfoo-assertions.md) | Require specific assertion types in all promptfoo eval tests | warning (disabled) | - | Promptfoo Evals |
 | [`promptfoo-metadata`](promptfoo-metadata.md) | Require specific metadata keys on all promptfoo eval tests | warning (disabled) | - | Promptfoo Evals |

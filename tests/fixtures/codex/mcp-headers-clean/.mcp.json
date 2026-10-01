@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "catalog": {
+      "type": "http",
+      "url": "https://catalog.example.test/mcp",
+      "headers": { "X-Client": "release-review" }
+    }
+  }
+}

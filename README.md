@@ -79,7 +79,7 @@ INFO findings too. A configured `fail-on: info` includes them automatically.
 
 ## What it catches
 
-- **Multi-ecosystem structure & compatibility:** schema, frontmatter, and manifest validation for Agent Skills (`SKILL.md`), Claude Code, OpenAI Codex (project config, plugins & marketplaces), Cursor plugins & marketplaces, Grok Build (project config, plugins & marketplaces), Google Antigravity (configuration in any customization root — `.agents/`, `.agent/`, `_agents/`, `_agent/` — its `rules/` and `agents/` prose, plugins, hooks, MCP servers and registries), Agent Plugins v1 (`plugin.json`, `mcp.json`), GitHub Copilot & VS Code custom agents (`.github/agents/`), OpenCode configuration, Pi packages and project resources, native OpenClaw plugins, APM packages, MCP server maps, and MCP Registry metadata.
+- **Multi-ecosystem structure & compatibility:** schema, frontmatter, and manifest validation for Agent Skills (`SKILL.md`), Claude Code, OpenAI Codex (project config, plugins & marketplaces), Cursor plugins & marketplaces, Grok Build (project config, plugins & marketplaces), Google Antigravity (configuration in any customization root — `.agents/`, `.agent/`, `_agents/`, `_agent/` — its `rules/` and `agents/` prose, plugins, hooks, MCP servers and registries), Agent Plugins v1 (`plugin.json`, `mcp.json`), GitHub Copilot & VS Code custom agents (`.github/agents/`), OpenCode configuration, Pi packages and project resources, native OpenClaw plugins (including optional theme and artwork declarations), APM packages, MCP server maps, and MCP Registry metadata.
 - **Content quality & token economy:** research-backed rules detecting instruction drift across duplicate files, excessive instruction budgets, cognitive overload, section length violations, weak language, contradictions, and repetitive inline tool-call examples.
 - **Discovery & repository integrity:** unreferenced bundled files, broken internal file references, inconsistent terminology, missing stop conditions, and stale baselines.
 - **Security & supply chain:**
@@ -93,8 +93,11 @@ skillsaw detects repository types automatically and lints multiple formats in th
 
 
 Pi packages and `.pi/` project resources are supported, including native skills,
-prompt templates, manifest globs and local package references. See
-[Pi configuration checks](https://skillsaw.org/rules/pi-config-valid/).
+prompt templates, manifest globs, local package references, and first-party
+`.pi/mcp.json` servers. Shared MCP credential and policy checks cover these
+servers; enable `pi-mcp-valid` for Pi-specific field validation. See
+[Pi configuration checks](https://skillsaw.org/rules/pi-config-valid/) and
+[Pi MCP checks](https://skillsaw.org/rules/pi-mcp-valid/).
 
 ## Built for real workflows
 
@@ -129,6 +132,9 @@ Codex portable plugins can place OpenAI metadata and hooks in
 `plugin.json` under `extensions.com.openai`. Skillsaw follows that overlay's
 precedence over `.codex-plugin/plugin.json`, validates its declared resources,
 and checks portable `skills/` and `mcp.json` through the Agent Plugins rules.
+Project `.codex/config.toml` files also get a [targeted warning](https://skillsaw.org/rules/codex-mcp-headers/)
+when an HTTP MCP server uses the ignored `headers` field instead of
+`http_headers` or `env_http_headers`.
 
 ## Measure the result
 

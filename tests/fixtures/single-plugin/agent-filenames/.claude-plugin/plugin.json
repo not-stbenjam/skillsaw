@@ -1,0 +1,6 @@
+{
+  "name": "deployment-review",
+  "description": "Review deployment changes and report concrete configuration defects",
+  "version": "1.0.0",
+  "author": {"name": "Release Engineering"}
+}

@@ -14,7 +14,7 @@ from skillsaw.rules.builtin.utils import insert_frontmatter_fields, read_text
 
 
 class AgentFrontmatterRule(Rule):
-    """Check that agent .md files have valid frontmatter"""
+    """Validate agent frontmatter with plugin filename fallback."""
 
     default_enabled = True
 
@@ -30,13 +30,19 @@ class AgentFrontmatterRule(Rule):
 
     @property
     def description(self) -> str:
-        return "Agent files must have valid frontmatter with name and description"
+        return "Agent files need valid frontmatter and description; project agents also need name"
 
     def default_severity(self) -> Severity:
         return Severity.ERROR
 
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
+        project_dir = (
+            context.root_path
+            if context.root_path.name == ".claude"
+            else context.root_path / ".claude"
+        )
+        project_owner = context.resolve_path(project_dir)
 
         for block in self.scoped_find(context, AgentBlock):
             if block.frontmatter_error:
@@ -59,7 +65,13 @@ class AgentFrontmatterRule(Rule):
                 )
                 continue
 
-            if not block.field("name"):
+            # The project .claude directory also has a plugin owner. An
+            # explicit plugin declaration permits fallback even at that path.
+            owner = block.plugin_owner
+            plugin_agent = owner is not None and (
+                owner != project_owner or context.provenance(owner).claude_plugin_declared
+            )
+            if not plugin_agent and not block.field("name"):
                 violations.append(
                     self.violation(
                         "Missing 'name' in frontmatter", file_path=block.path, block=block

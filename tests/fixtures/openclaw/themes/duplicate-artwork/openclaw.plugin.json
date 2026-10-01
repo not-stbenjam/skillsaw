@@ -1,0 +1,12 @@
+{
+  // JSON5 must retain duplicate artwork IDs for this host check.
+  id: 'theme-pack',
+  configSchema: {},
+  themes: [{
+    id: 'night',
+    name: 'Night',
+    description: 'A dark palette with custom artwork.',
+    source: 'themes/night.json',
+    hats: {beret: 'first.svg', 'b\u0065ret': 'second.svg'},
+  }],
+}

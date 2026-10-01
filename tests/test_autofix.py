@@ -572,15 +572,9 @@ class TestAgentFixBothFieldsMissing:
     fields, not two conflicting results that overwrite each other."""
 
     def test_agent_fix_adds_both_fields_at_once(self, temp_dir):
-        plugin_dir = temp_dir / "test-plugin"
-        plugin_dir.mkdir()
-
-        claude_dir = plugin_dir / ".claude-plugin"
-        claude_dir.mkdir()
-        (claude_dir / "plugin.json").write_text(json.dumps({"name": "test-plugin"}))
-
-        agents_dir = plugin_dir / "agents"
-        agents_dir.mkdir()
+        plugin_dir = temp_dir / "project"
+        agents_dir = plugin_dir / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
 
         agent_md = agents_dir / "my-agent.md"
         agent_md.write_text("---\nsome-field: value\n---\n\n# My Agent\n")

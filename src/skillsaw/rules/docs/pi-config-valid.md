@@ -86,7 +86,8 @@ only when the directory also declares Claude ownership.
 
 Extensions are represented as entrypoint nodes. Themes
 are configuration nodes, not prose; theme colors and runtime extension behavior
-are outside this rule. No core Pi MCP schema is assumed.
+are outside this rule. First-party `.pi/mcp.json` servers receive shared
+MCP security checks and the opt-in [pi-mcp-valid](pi-mcp-valid.md) rule.
 
 ## Upstream reference
 
