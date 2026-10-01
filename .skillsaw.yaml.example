@@ -105,7 +105,7 @@ rules:
     enabled: auto
     severity: error
 
-  # Agent files must have valid frontmatter with name and description
+  # Agent files need valid frontmatter and description; project agents also need name
   claude-agent-frontmatter:
     enabled: true
     severity: error

@@ -326,7 +326,7 @@ class TestSinglePlugin:
         assert any("Missing frontmatter" in v["message"] for v in frontmatter)
 
         agent = grouped["claude-agent-frontmatter"]
-        assert any("name" in v["message"].lower() for v in agent)
+        assert all("Missing 'name'" not in v["message"] for v in agent)
         assert any("description" in v["message"].lower() for v in agent)
 
     def test_embedded_secrets_detected(self, tmp_path):
@@ -343,6 +343,58 @@ class TestSinglePlugin:
         # vars, hunter2placeholder, <paste-…>) must not fire — only the
         # real structured token line is a violation (issue #322).
         assert len(secrets) == 1
+
+    @pytest.mark.parametrize("dual_manifest", [False, True])
+    def test_plugin_agent_filename_fallback_keeps_project_requirements(
+        self, tmp_path, dual_manifest
+    ):
+        repo = copy_fixture("single-plugin/agent-filenames", tmp_path)
+        if dual_manifest:
+            marker = repo / ".codex-plugin"
+            marker.mkdir()
+            (marker / "plugin.json").write_text('{"name":"deployment-review"}')
+        result = run_lint(repo, "--rule", "claude-agent-frontmatter")
+
+        assert result["rc"] == 1
+        found = violations(result)
+        assert len(found) == 2
+        assert {(v["file_path"], v["message"]) for v in found} == {
+            (
+                ".claude/agents/project-reviewer.md",
+                "Missing 'name' in frontmatter",
+            ),
+            (
+                "agents/missing-description.md",
+                "Missing 'description' in frontmatter",
+            ),
+        }
+
+    @pytest.mark.parametrize("checkout_name", ["review-tools", ".claude"])
+    def test_plugin_agents_need_no_name_fix(self, tmp_path, checkout_name):
+        repo = copy_fixture("single-plugin/agent-filenames", tmp_path)
+        repo = repo.rename(tmp_path / checkout_name)
+        for path in (
+            repo / ".claude/agents/project-reviewer.md",
+            repo / "agents/missing-description.md",
+        ):
+            path.unlink()
+        before = {path: path.read_bytes() for path in (repo / "agents").glob("*.md")}
+
+        result = run_lint(repo, "--rule", "claude-agent-frontmatter")
+        assert result["rc"] == 0
+        assert violations(result) == []
+        fixed = run_cli(["fix", str(repo), "--rule", "claude-agent-frontmatter"])
+        assert fixed.returncode == 0
+        assert {path: path.read_bytes() for path in before} == before
+
+    def test_direct_project_agents_still_require_names(self, tmp_path):
+        repo = copy_fixture("single-plugin/agent-filenames", tmp_path)
+        result = run_lint(repo / ".claude", "--rule", "claude-agent-frontmatter")
+
+        assert result["rc"] == 1
+        assert [(v["file_path"], v["message"]) for v in violations(result)] == [
+            ("agents/project-reviewer.md", "Missing 'name' in frontmatter"),
+        ]
 
 
 # ── Hooks JSON ──────────────────────────────────────────────────
@@ -8331,7 +8383,7 @@ class TestLintFixLoop:
         m = re.search(r"\[\*\] (\d+) violation\(s\) fixable with `skillsaw fix`", r["stdout"])
         assert m, f"missing fixable summary line in:\n{r['stdout']}"
         # The count matches the [*]-marked violation lines above it.
-        assert int(m.group(1)) == r["stdout"].count("[*]") - 1
+        assert int(m.group(1)) == r["stdout"][: m.start()].count("[*]")
 
     def test_json_lint_reports_fixable_per_violation(self, tmp_path):
         repo = copy_fixture(self.FIXTURE, tmp_path)
