@@ -1,0 +1,22 @@
+{
+  "id": "@scope/Theme.Pack",
+  "configSchema": {},
+  "themes": [
+    {
+      "id": "night",
+      "name": "Night",
+      "description": "A dark palette with custom artwork.",
+      "source": "./themes/night.JSON",
+      "hats": {
+        "fedora": "assets/hat.svg"
+      },
+      "critters": {
+        "ferris": {
+          "source": "assets/ferris.svg",
+          "title": "A crab",
+          "crossMs": 12000
+        }
+      }
+    }
+  ]
+}

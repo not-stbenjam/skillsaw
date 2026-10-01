@@ -2,6 +2,7 @@
 
 from skillsaw.context import RepositoryContext
 from skillsaw.formats.openclaw import read_manifest
+from skillsaw.formats.openclaw_themes import theme_manifest_error
 from skillsaw.lint_target import OpenClawPluginConfigNode
 from skillsaw.paths import contained_resolve, safe_resolve
 from skillsaw.repository_types import RepositoryType
@@ -22,7 +23,7 @@ class OpenClawManifestValidRule(Rule):
 
     @property
     def description(self) -> str:
-        return "Native OpenClaw manifests must declare an id and object configSchema"
+        return "Native OpenClaw manifests must declare valid identity, configSchema, and themes"
 
     def default_severity(self) -> Severity:
         return Severity.ERROR
@@ -62,4 +63,7 @@ class OpenClawManifestValidRule(Rule):
                         "Declare an object 'configSchema' ({} is valid)", file_path=node.path
                     )
                 )
+            theme_error = theme_manifest_error(data, node.path)
+            if theme_error:
+                violations.append(self.violation(theme_error, file_path=node.path))
         return violations

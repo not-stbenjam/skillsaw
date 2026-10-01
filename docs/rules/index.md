@@ -124,7 +124,7 @@ skillsaw includes **106** built-in rules organized into the following categories
 | [`codex-marketplace-json-valid`](codex-marketplace-json-valid.md) | .agents/plugins/marketplace.json must be valid JSON with required fields | error (auto) | - | OpenAI Codex |
 | [`codex-marketplace-registration`](codex-marketplace-registration.md) | Codex plugins must be registered in .agents/plugins/marketplace.json | error (auto) | auto | OpenAI Codex |
 | [`openclaw-metadata`](openclaw-metadata.md) | Validate metadata.openclaw fields against the OpenClaw spec | warning (auto) | - | OpenClaw |
-| [`openclaw-manifest-valid`](openclaw-manifest-valid.md) | Native OpenClaw manifests must declare an id and object configSchema | error (disabled) | - | OpenClaw |
+| [`openclaw-manifest-valid`](openclaw-manifest-valid.md) | Native OpenClaw manifests must declare valid identity, configSchema, and themes | error (disabled) | - | OpenClaw |
 | [`openclaw-package-valid`](openclaw-package-valid.md) | OpenClaw package metadata must declare valid extension entries | error (disabled) | - | OpenClaw |
 | [`openclaw-resources`](openclaw-resources.md) | OpenClaw resources should resolve inside their package and exist when loaded | warning (disabled) | - | OpenClaw |
 | [`opencode-config-valid`](opencode-config-valid.md) | opencode.json and opencode.jsonc must parse and use keys and MCP server shapes OpenCode reads | error (auto) | - | OpenCode |
