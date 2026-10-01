@@ -15,7 +15,7 @@ Validates the Claude Code formats: plugin manifests (`.claude-plugin/plugin.json
 | [`claude-command-frontmatter`](claude-command-frontmatter.md) | Command files must have valid frontmatter with description | error | auto |
 | [`claude-command-sections`](claude-command-sections.md) | Command files should have Name, Synopsis, Description, and Implementation sections | warning (disabled) | - |
 | [`claude-command-name-format`](claude-command-name-format.md) | Command Name section should be 'plugin-name:command-name' | warning (disabled) | - |
-| [`claude-agent-frontmatter`](claude-agent-frontmatter.md) | Agent files must have valid frontmatter with name and description | error | auto |
+| [`claude-agent-frontmatter`](claude-agent-frontmatter.md) | Agent files need valid frontmatter and description; project agents also need name | error | auto |
 | [`claude-marketplace-json-valid`](claude-marketplace-json-valid.md) | Marketplace.json must be valid JSON with required fields | error (auto) | - |
 | [`claude-marketplace-registration`](claude-marketplace-registration.md) | Plugins must be registered in marketplace.json | error (auto) | auto |
 | [`claude-settings-dangerous`](claude-settings-dangerous.md) | Flags settings keys that execute arbitrary commands (apiKeyHelper, awsAuthRefresh, awsCredentialExport, gcpAuthRefresh, otelHeadersHelper) and dangerous env vars (LD_PRELOAD, NODE_OPTIONS, proxy settings, GIT_SSH_COMMAND, etc.) | error (auto) | - |

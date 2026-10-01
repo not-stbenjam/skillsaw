@@ -29,6 +29,22 @@ from ._helpers import (
 )
 
 
+class TestClaudePluginDeclaration:
+    @pytest.mark.parametrize("checkout_name", ["review-tools", ".claude"])
+    @pytest.mark.parametrize("repo_type", [None, RepositoryType.CODEX_PLUGIN])
+    def test_declaration_is_distinct_from_project_ownership(
+        self, tmp_path, checkout_name, repo_type
+    ):
+        repo = copy_fixture("single-plugin/agent-filenames", tmp_path)
+        repo = repo.rename(tmp_path / checkout_name)
+        context = RepositoryContext(repo, repo_types={repo_type} if repo_type else None)
+
+        assert context.provenance(repo).claude_plugin_declared is True
+        project = context.provenance(repo / ".claude")
+        assert project.claude is True
+        assert project.claude_plugin_declared is False
+
+
 class TestClaudeRulesStandDown:
     """A Codex repository is not a half-broken Claude repository.
 
@@ -450,7 +466,10 @@ class TestClaudeRulesStandDown:
             },
         )
 
-        violations = PluginJsonRequiredRule({}).check(RepositoryContext(tmp_path))
+        context = RepositoryContext(tmp_path)
+        assert context.provenance(tmp_path / "plugins" / "dual").claude_plugin_declared is True
+        assert context.provenance(tmp_path).claude_plugin_declared is False
+        violations = PluginJsonRequiredRule({}).check(context)
         assert messages(violations) == ["Missing plugin.json"]
 
 
@@ -968,6 +987,7 @@ class TestPluginProvenanceCodexOnlyTruthTable:
     def test_codex_only_matches_its_definition(self, ecosystems, expected):
         """The membership views and the predicate cannot drift apart."""
         record = PluginProvenance(ecosystems=ecosystems)
+        assert record.claude_plugin_declared is False
         assert record.claude is ("claude" in ecosystems)
         assert record.codex is ("codex" in ecosystems)
         assert record.agent_plugin is ("agent-plugin" in ecosystems)

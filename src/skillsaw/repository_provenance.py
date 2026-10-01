@@ -45,6 +45,8 @@ class PluginProvenance:
 
     ecosystems: FrozenSet[str]
     installed: bool = False
+    # Explicit packaging evidence, distinct from implicit project .claude ownership.
+    claude_plugin_declared: bool = False
 
     @property
     def codex_only(self) -> bool:
@@ -346,9 +348,10 @@ class RepositoryProvenanceMixin:
             or safe_is_symlink(claude_manifest)
             or not safe_is_file(claude_marker / "marketplace.json")
         )
-        if claude_plugin_marker or (
+        claude_plugin_declared = claude_plugin_marker or (
             resolved is not None and resolved in getattr(self, "marketplace_entries", {})
-        ):
+        )
+        if claude_plugin_declared:
             ecosystems.add("claude")
         elif resolved is not None and resolved == resolve(self.root_path / ".claude"):
             # The .claude/ directory is Claude by definition — a Codex
@@ -409,6 +412,7 @@ class RepositoryProvenanceMixin:
         record = PluginProvenance(
             ecosystems=frozenset(ecosystems),
             installed=self.is_codex_installed_plugin(plugin_dir),
+            claude_plugin_declared=claude_plugin_declared,
         )
         self._provenance_cache[key] = record
         self._provenance_cache[plugin_dir] = record

@@ -1,9 +1,14 @@
 ## Why
 
-Agent `.md` files need YAML frontmatter with `name` and `description`
-so that the host application can discover and register them. Without
-frontmatter, the agent file is invisible to the runtime — its
-instructions will never be loaded.
+Project agent `.md` files need YAML frontmatter with `name` and
+`description` so Claude Code can discover and register them. Plugin agents
+can omit `name`: Claude Code uses the filename stem under the plugin's
+namespace. The same fallback applies to empty or null names.
+
+This rule still checks plugin agents for valid YAML frontmatter and a
+description so their instructions and routing metadata can be reviewed.
+See [Claude's agent loading rules](https://code.claude.com/docs/en/sub-agents#subagent-files-claude-code-skips)
+for the distinction between project and plugin agents.
 
 ## Examples
 
@@ -31,7 +36,8 @@ Review pull requests for correctness and style...
 
 ## How to fix
 
-Add a YAML frontmatter block with `name` (matching the filename stem)
-and `description` (imperative, stating what the agent does and when to
-invoke it). `skillsaw fix` can add missing frontmatter fields
-automatically.
+Add a YAML frontmatter block with `description`, stating what the agent
+does and when to invoke it. Project and APM agent files also require
+`name`; plugin agents may use the filename instead. `skillsaw fix` can
+add missing fields. When frontmatter already exists, the fix preserves
+a plugin agent's filename fallback.
