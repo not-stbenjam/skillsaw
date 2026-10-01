@@ -2,10 +2,11 @@
 
 from dataclasses import dataclass, field
 from typing import ClassVar
+from types import MappingProxyType
 
 from .frontmatter import FrontmatteredBlock
 from .pi_frontmatter import parse_pi_frontmatter
-from .json_config import JsonConfigBlock
+from .json_config import JsonConfigBlock, McpBlock, McpShapeDeferral
 from ..lint_target import LintTarget
 
 
@@ -28,6 +29,27 @@ class PiSettingsBlock(JsonConfigBlock):
 
     strict_json: ClassVar[bool] = True
     duplicate_keys_fatal: ClassVar[bool] = False
+
+
+@dataclass(eq=False)
+class PiMcpBlock(McpBlock):
+    """Pi's project MCP servers, introduced in Pi 0.99.0.
+
+    Shape checks are opt-in; shared credential and server policy rules
+    continue to run, including under an unrelated forced repository type.
+    """
+
+    strict_json: ClassVar[bool] = True
+    duplicate_keys_fatal: ClassVar[bool] = False
+    allow_bare_server_map: ClassVar[bool] = False
+    claude_builtins_reserved: ClassVar[bool] = False
+    shape_deferral: ClassVar[McpShapeDeferral] = McpShapeDeferral()
+    credential_maps: ClassVar[tuple] = (("env", False), ("headers", True), ("oauth", False))
+    credential_key_aliases: ClassVar = MappingProxyType({"clientSecret": "client_secret"})
+    credential_command_prefixes: ClassVar[tuple] = ("!",)
+
+    def tree_label(self) -> str:
+        return "mcp.json (Pi MCP)"
 
 
 @dataclass(eq=False)

@@ -623,6 +623,11 @@ rules:
     enabled: auto
     severity: warning
 
+  # Pi MCP servers must use supported field types and transports
+  pi-mcp-valid:
+    enabled: false
+    severity: warning
+
   # Literal Pi resource paths should exist in the assembled checkout
   pi-resource-paths:
     enabled: false

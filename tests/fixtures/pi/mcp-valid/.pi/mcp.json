@@ -1,0 +1,23 @@
+{
+  "autoEnableCodemode": false,
+  "mcpServers": {
+    "workspace": {
+      "command": "uvx",
+      "args": ["workspace-mcp", "--read-only"],
+      "env": {"WORKSPACE_TOKEN": "!credential-tool read workspace"},
+      "timeout": 0.5,
+      "enabled": false,
+      "description": "Read workspace files and search project symbols.",
+      "exposure": "codemode-deferred",
+      "toolExposure": {"write_*": "hidden", "search": "direct"}
+    },
+    "docs": {
+      "type": "streamable-http",
+      "url": "https://docs.example.com/mcp",
+      "headers": {"Authorization": "!credential-tool read docs"},
+      "oauth": {"clientSecret": "${DOCS_SECRET}", "callbackPort": 8765.0},
+      "command": 42,
+      "args": null
+    }
+  }
+}

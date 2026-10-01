@@ -6090,6 +6090,9 @@ class TestRuleCoverage:
         )
         fired |= rule_ids(r)
 
+        repo = copy_fixture("pi/mcp-invalid", tmp_path / "pi_mcp_invalid")
+        fired |= rule_ids(run_lint(repo, "--rule", "pi-mcp-valid"))
+
         missing = all_rule_ids - fired
         assert not missing, (
             f"Rules without test coverage ({len(missing)}): {sorted(missing)}\n"

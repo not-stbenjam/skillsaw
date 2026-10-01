@@ -8,6 +8,16 @@ RESOURCE_FIELDS = ("extensions", "skills", "prompts", "themes")
 TOOL_DIR_NAME = ".pi"
 REMOTE_PREFIXES = ("npm:", "git:", "https://", "http://", "ssh://", "git://")
 
+# Pi 0.99.2, packages/coding-agent/src/core/mcp-servers.ts.
+MCP_EXPOSURES = frozenset({"codemode", "deferred", "direct", "hidden", "codemode-deferred"})
+MCP_HTTP_TYPES = frozenset({"http", "streamable-http"})
+MCP_OAUTH_STRING_FIELDS = ("clientId", "clientSecret", "scope", "callbackUrl", "clientName")
+# ECMAScript String.trim removes BOM but not NEL or ASCII file separators.
+JS_TRIM_CHARS = (
+    "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+    "\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
 
 def string_list(value: object) -> bool:
     """Pi accepts an entire resource field only when every item is a string."""

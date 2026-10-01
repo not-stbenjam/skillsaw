@@ -218,6 +218,7 @@ _TOOL_EVIDENCE = {
         ".pi",
         (
             ("settings.json", False),
+            ("mcp.json", False),
             ("skills", True),
             ("prompts", True),
             ("extensions", True),

@@ -1,0 +1,12 @@
+{
+  "autoEnableCodemode": "false",
+  "mcpServers": {
+    "legacy": {"type": "sse", "url": "https://docs.example.com/sse"},
+    "bad-args": {"command": "uvx", "args": "workspace-mcp"},
+    "provider-auth": {"url": "https://docs.example.com/mcp", "auth": {"provider": "openai"}},
+    "dev-tools": {"command": "uvx", "args": ["dev-mcp"]},
+    "dev_tools": {"command": "uvx", "args": ["other-mcp"]},
+    "bad-exposure": {"command": "uvx", "toolExposure": {"write": "public"}},
+    "bad-oauth": {"url": "https://docs.example.com/mcp", "oauth": {"callbackPort": true}}
+  }
+}

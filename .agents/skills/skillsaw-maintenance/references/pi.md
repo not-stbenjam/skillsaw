@@ -4,6 +4,8 @@
 
 - [Package documentation](https://pi.dev/docs/latest/packages)
 - [Pinned loader source](https://github.com/earendil-works/pi/tree/36b60d2e8985899743c4cf5bd5f8929832a3f05d/packages/coding-agent/src/core)
+- [MCP configuration loader, v0.99.2](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/extensions/mcp/config.ts)
+- [MCP field validator, v0.99.2](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/core/mcp-servers.ts)
 
 Compare `pi-manifest.ts`, `package-manager.ts`, and `skills.ts` against the
 pinned commit when updating support.
@@ -13,6 +15,28 @@ pinned commit when updating support.
 The `pi-config-valid` rule checks resource arrays and local package selectors.
 The `pi-skill-valid` rule validates native skill frontmatter and descriptions.
 The opt-in `pi-resource-paths` rule checks assembled local paths.
+
+Pi 0.99.0 introduced project `.pi/mcp.json`. It attaches as `PiMcpBlock`,
+including nested projects, so shared credential and server policy checks run.
+The opt-in `pi-mcp-valid` rule follows v0.99.2 field types and transport selection.
+It remains opt-in pending the ten-repository accuracy survey.
+
+MCP sync points: exposure names and the `codemode-deferred` alias; HTTP-first
+selection when both command and URL are present; the unsupported SSE transport;
+server namespace collisions after replacing hyphens with underscores; project
+HTTP provider `auth` refusal; and OAuth field types and callback-port bounds.
+The project `auth` guard also applies to stdio entries retaining any `url`
+property and a JavaScript-truthy `auth` value.
+The wrapper may be omitted, unknown fields are ignored, duplicate keys use the
+last value, and empty commands pass field validation. Shared credentials include
+`oauth.clientSecret`. Whole-value `!command` references are never executed and
+still receive structured-token detection.
+
+URI validation and OAuth callback URI semantics are deliberately deferred to
+Pi's WHATWG parser. User configuration, MCP connections, and extension code
+remain outside static discovery.
+Namespace checks admit stdio and ordinary ASCII DNS HTTP URLs without callback
+URIs; uncertain HTTP entries cannot reserve names and create false conflicts.
 
 ## Sync notes
 
