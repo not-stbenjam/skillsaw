@@ -1,0 +1,3 @@
+[mcp_servers.catalog]
+url = "https://catalog.example.test/mcp"
+headers = { "X-Client" = "release-review" }

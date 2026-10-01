@@ -3,7 +3,7 @@
 
 # Rules Reference
 
-skillsaw includes **106** built-in rules organized into the following categories:
+skillsaw includes **107** built-in rules organized into the following categories:
 
 - [Agent Plugins](agent-plugins.md) (3 rules)
 - [agentskills.io](agentskills.md) (8 rules)
@@ -21,7 +21,7 @@ skillsaw includes **106** built-in rules organized into the following categories
 - [Instruction Files](instruction-files.md) (3 rules)
 - [MCP (Model Context Protocol)](mcp.md) (5 rules)
 - [Muse Code](muse.md) (1 rule)
-- [OpenAI Codex](codex.md) (6 rules)
+- [OpenAI Codex](codex.md) (7 rules)
 - [OpenClaw](openclaw.md) (4 rules)
 - [OpenCode](opencode.md) (1 rule)
 - [Pi](pi.md) (3 rules)
@@ -118,6 +118,7 @@ skillsaw includes **106** built-in rules organized into the following categories
 | [`mcp-registry-npm-name-match`](mcp-registry-npm-name-match.md) | Local npm package.json mcpName must match MCP Registry server.json name | error (auto) | - | MCP (Model Context Protocol) |
 | [`muse-hooks-valid`](muse-hooks-valid.md) | .muse/hooks.json must use Muse's events, matcher groups and handler fields | error (disabled) | - | Muse Code |
 | [`codex-hooks-valid`](codex-hooks-valid.md) | Codex hooks files must use Codex's hook events, handler types, and fields | error (auto) | - | OpenAI Codex |
+| [`codex-mcp-headers`](codex-mcp-headers.md) | Codex HTTP MCP servers must use http_headers instead of ignored headers | warning (auto) | - | OpenAI Codex |
 | [`codex-openai-metadata`](codex-openai-metadata.md) | Validate skill openai.yaml and catalog-compatible plugin metadata | error (auto) | - | OpenAI Codex |
 | [`codex-plugin-json-valid`](codex-plugin-json-valid.md) | The selected Codex manifest or portable OpenAI overlay must be valid | error (auto) | - | OpenAI Codex |
 | [`codex-plugin-structure`](codex-plugin-structure.md) | Only plugin.json belongs in .codex-plugin/ | warning (auto) | - | OpenAI Codex |

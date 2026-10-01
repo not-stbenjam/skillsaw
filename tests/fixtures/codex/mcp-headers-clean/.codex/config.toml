@@ -1,0 +1,8 @@
+[mcp_servers.catalog]
+url = "https://catalog.example.test/mcp"
+http_headers = { "X-Client" = "release-review" }
+env_http_headers = { Authorization = "CATALOG_AUTHORIZATION" }
+
+[mcp_servers.local]
+command = "catalog-mcp"
+args = ["--local"]

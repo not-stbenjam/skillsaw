@@ -3,11 +3,12 @@
 
 # OpenAI Codex
 
-Validates OpenAI's optional [skill metadata](https://learn.chatgpt.com/docs/build-skills#optional-metadata) in `agents/openai.yaml`, plus Codex plugins and marketplaces against the [Codex plugin specification](https://developers.openai.com/plugins/build/plugins). The metadata rule auto-enables for Agent Skills; the plugin and marketplace rules auto-enable only when their Codex manifests are present.
+Validates OpenAI's optional [skill metadata](https://learn.chatgpt.com/docs/build-skills#optional-metadata) in `agents/openai.yaml`, plus Codex plugins and marketplaces against the [Codex plugin specification](https://developers.openai.com/plugins/build/plugins). The metadata rule auto-enables for Agent Skills; the plugin and marketplace rules auto-enable only when their Codex manifests are present. Project `.codex/config.toml` files also get a warning when an HTTP MCP server uses the ignored `headers` field instead of Codex's `http_headers`.
 
 | Rule ID | Description | Default Severity | Autofix |
 |---------|-------------|------------------|---------|
 | [`codex-hooks-valid`](codex-hooks-valid.md) | Codex hooks files must use Codex's hook events, handler types, and fields | error (auto) | - |
+| [`codex-mcp-headers`](codex-mcp-headers.md) | Codex HTTP MCP servers must use http_headers instead of ignored headers | warning (auto) | - |
 | [`codex-openai-metadata`](codex-openai-metadata.md) | Validate skill openai.yaml and catalog-compatible plugin metadata | error (auto) | - |
 | [`codex-plugin-json-valid`](codex-plugin-json-valid.md) | The selected Codex manifest or portable OpenAI overlay must be valid | error (auto) | - |
 | [`codex-plugin-structure`](codex-plugin-structure.md) | Only plugin.json belongs in .codex-plugin/ | warning (auto) | - |
