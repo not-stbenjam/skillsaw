@@ -32,13 +32,24 @@ jobs:
             --user-agent 'Mozilla/5.0 (compatible; skillsaw-link-check/1.0; +https://github.com/stbenjam/skillsaw)'
             --exclude-path '(^|/)tests/fixtures/'
             --exclude-path '(^|/)src/skillsaw/marketplace/templates/'
+            --exclude '(?i)^file://.*(?:\{\{.*\}\}|%7b%7b.*%7d%7d)'
             './**/*.md'
             './**/*.html'
             './**/*.rst'
           fail: false
 
+      - name: Validate link-check result
+        env:
+          LYCHEE_EXIT_CODE: ${{ steps.lychee.outputs.exit_code }}
+        run: |
+          # Lychee returns 2 for failed links; other failures are tooling errors.
+          case "$LYCHEE_EXIT_CODE" in
+            0|2) ;;
+            *) echo "::error::Lychee did not complete successfully (exit code: $LYCHEE_EXIT_CODE)"; exit 1 ;;
+          esac
+
       - name: Open broken-link issue
-        if: steps.lychee.outputs.exit_code != '0'
+        if: steps.lychee.outputs.exit_code == '2'
         uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6.0.0
         with:
           title: Weekly broken-link report
