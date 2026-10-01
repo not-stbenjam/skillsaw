@@ -1,0 +1,6 @@
+{
+  "name": "deploy-tools",
+  "description": "Deployment checks and release reporting for service maintainers",
+  "version": "release-candidate",
+  "author": {"name": "Release Engineering"}
+}

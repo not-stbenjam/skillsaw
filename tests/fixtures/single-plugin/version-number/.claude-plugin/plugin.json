@@ -1,0 +1,6 @@
+{
+  "name": "deploy-tools",
+  "description": "Deployment checks and release reporting for service maintainers",
+  "version": 2026,
+  "author": {"name": "Release Engineering"}
+}
