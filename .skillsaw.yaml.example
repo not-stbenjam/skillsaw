@@ -223,6 +223,11 @@ rules:
     enabled: auto
     severity: error
 
+  # Codex HTTP MCP servers must use http_headers instead of ignored headers
+  codex-mcp-headers:
+    enabled: auto
+    severity: warning
+
   # Validate skill openai.yaml and catalog-compatible plugin metadata
   codex-openai-metadata:
     enabled: auto
