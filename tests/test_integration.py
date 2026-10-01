@@ -251,6 +251,23 @@ def _deduplicated_fixture_dirs():
 @pytest.mark.integration
 class TestSinglePlugin:
 
+    @pytest.mark.parametrize(
+        ("fixture", "expected_errors"),
+        [("version-string", 0), ("version-number", 1)],
+    )
+    def test_plugin_version_type(self, tmp_path, fixture, expected_errors):
+        repo = copy_fixture(f"single-plugin/{fixture}", tmp_path)
+        result = run_lint(repo, "--rule", "claude-plugin-json-valid")
+
+        assert result["rc"] == expected_errors
+        assert summary(result)["errors"] == expected_errors
+        assert summary(result)["warnings"] == 0
+        if expected_errors:
+            assert len(violations(result)) == 1
+            assert violations(result)[0]["message"] == "'version' must be a string"
+        else:
+            assert violations(result) == []
+
     def test_clean_plugin_passes(self, tmp_path):
         repo = copy_fixture("single-plugin/clean", tmp_path)
         r = run_lint(repo)

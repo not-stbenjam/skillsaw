@@ -44,6 +44,13 @@ layout. Each format below maps to its own skillsaw rules.
 - Agents — `src/skillsaw/rules/builtin/agents/frontmatter.py`: `claude-agent-frontmatter`.
 
 ## Sync notes
+- **Plugin versions are strings, not semver.** The current
+  [manifest version reference](https://code.claude.com/docs/en/plugins-reference#version)
+  explicitly permits version strings without a semantic-version constraint.
+  Verified on 2026-10-01 with released Claude Code 2.1.286:
+  `claude plugin validate` accepts `v1`, `release-candidate`, `2026.10`, and
+  `1.0.0garbage`, while numeric and null values fail. Keep the string type
+  check in `claude-plugin-json-valid`; do not restore the former semver regex.
 - `plugin_structure.py` and `command_format.py` are backward-compat import shims — the
   real rules live in the `plugins/` and `commands/` packages. Do not re-add rules to the
   shims.
