@@ -97,3 +97,29 @@ root was absent before dependency installation. External plugin code was not run
 Native package metadata uses the host’s 16 MiB read limit from
 `src/plugins/plugin-cache-files.ts`. Recheck it alongside the manifest’s
 256 KiB limit when updating the pinned loader contract.
+
+### Theme declarations
+
+Added September 19–21, 2026 and verified against released
+[`v2026.9.7`](https://github.com/openclaw/openclaw/releases/tag/v2026.9.7).
+The existing opt-in `openclaw-manifest-valid` rule validates declarations in
+`src/skillsaw/formats/openclaw_themes.py`; regression coverage lives in
+`tests/test_openclaw_themes.py` and `tests/fixtures/openclaw/themes/`.
+
+- [`manifest-themes.ts`](https://github.com/openclaw/openclaw/blob/v2026.9.7/src/plugins/manifest-themes.ts)
+  rejects malformed theme arrays and artwork declarations before plugin loading.
+  Check the 32-theme limit, theme field allowlist, duplicate IDs, relative JSON/SVG
+  paths, and the eight-entry artwork limits. Duplicate artwork object keys are
+  rejected from the original JSON5 source, even if normal parsing overwrites them.
+- [`theme.ts`](https://github.com/openclaw/openclaw/blob/v2026.9.7/packages/gateway-protocol/src/theme.ts)
+  owns the name/description limits (80/320 UTF-16 units), artwork ID pattern,
+  built-in hats (`fedora`, `crown`, `santa`, `party`, `pumpkin`), and built-in
+  critters (`penguin`, `fedora`). Recheck these copied sets each pass.
+- [`theme-ids.ts`](https://github.com/openclaw/openclaw/blob/v2026.9.7/packages/gateway-protocol/src/theme-ids.ts)
+  defines portable plugin ownership, the reserved personal-theme namespace, and
+  the 64-character lowercase local ID pattern. Preserve scoped and multi-entry
+  plugin IDs.
+- Deliberately omitted: theme JSON content, SVG content, and asset existence.
+  Invalid assets omit a theme with a warning rather than rejecting the plugin;
+  they do not belong to this ERROR-level manifest check. See the
+  [theme packaging reference](https://github.com/openclaw/openclaw/blob/v2026.9.7/docs/plugins/manifest/surfaces.md#themes).

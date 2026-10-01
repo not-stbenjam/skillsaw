@@ -590,7 +590,7 @@ rules:
     # extra-handler-fields: []
     # extra-group-keys: []
 
-  # Native OpenClaw manifests must declare an id and object configSchema
+  # Native OpenClaw manifests must declare valid identity, configSchema, and themes
   openclaw-manifest-valid:
     enabled: false
     severity: error

@@ -6,6 +6,10 @@ a manifest exceeding 262,144 bytes,
 or a missing/non-object `configSchema` prevents the native manifest from loading.
 An empty schema object is valid. Optional unknown fields remain forward compatible.
 
+OpenClaw v2026.9.7 also rejects the whole plugin when its optional `themes`
+declaration is invalid. This rule checks theme and artwork declarations against
+that released manifest contract.
+
 ## Activation
 
 Opt-in: enable `openclaw-manifest-valid` in configuration or with `--rule`.
@@ -18,6 +22,29 @@ Ship a native manifest in the package root, with a non-empty string `id` and
 an object `configSchema`. Keep the file inside the package; escaping symlinks
 are reported without reading their target. This rule makes no autofixes.
 
+When declaring themes:
+
+- Use an array of at most 32 objects. Each theme needs a unique lowercase `id`
+  (1–64 letters, digits, underscores, or hyphens, starting with a letter or digit),
+  a non-empty `name` of at most 80 characters, a non-empty `description` of at
+  most 320 characters, and a relative `.json` `source`. Names and descriptions
+  cannot contain control characters. OpenClaw measures text limits in UTF-16
+  code units; most emoji use two units.
+- Use a portable plugin ID outside the reserved `user` namespace. Scoped IDs
+  such as `@scope/theme-pack` and multi-entry IDs such as `pack/one` are valid.
+- Optional `hats` and `critters` maps each allow at most eight unique lowercase
+  artwork IDs of 1–32 characters. Avoid IDs from the corresponding built-in
+  catalog. Hats map to relative `.svg` paths; critters map to objects with a
+  `.svg` `source`, optional printable `title` of at most 60 characters, and
+  optional integer `crossMs` from 5000 through 90000.
+- Keep source paths inside the plugin: absolute paths, traversal, backslashes,
+  URLs, and empty path segments are invalid. A leading `./` is accepted.
+  Duplicate artwork keys are errors even in JSON5 or when a key uses escapes.
+
+Theme JSON contents and SVG files are outside this manifest check. Missing or
+invalid asset files cause OpenClaw to omit the theme with a warning; other plugin
+capabilities remain available. This rule does not require those files to exist.
+
 ## Upstream source
 
 Pinned to OpenClaw revision
@@ -29,7 +56,15 @@ for the native loader contract:
 - [`plugin-skills.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/skills/loading/plugin-skills.ts): explicit skill roots and containment.
 - [`manifest-capability-normalizers.ts`](https://github.com/openclaw/openclaw/blob/912b21b98581c0be3baad87fe3686b64d69fffeb/src/plugins/manifest-capability-normalizers.ts): static MCP normalization.
 
-The rule validates the stable native loading core. Optional runtime capability
+Theme declarations follow the released
+[`v2026.9.7` loader](https://github.com/openclaw/openclaw/blob/v2026.9.7/src/plugins/manifest-themes.ts),
+with limits and catalog IDs from
+[`theme.ts`](https://github.com/openclaw/openclaw/blob/v2026.9.7/packages/gateway-protocol/src/theme.ts)
+and [`theme-ids.ts`](https://github.com/openclaw/openclaw/blob/v2026.9.7/packages/gateway-protocol/src/theme-ids.ts).
+The [upstream manifest reference](https://github.com/openclaw/openclaw/blob/v2026.9.7/docs/plugins/manifest/surfaces.md#themes)
+describes theme packaging and the separate asset warning behavior.
+
+The rule validates the stable native loading core and theme declarations. Other runtime capability
 metadata, schema compilation, export/manifest identity agreement, gateway
 settings, install-time dependency resolution, ClawHub and marketplace feeds are
 outside its scope. Compatible portable bundles use their existing validators.

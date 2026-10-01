@@ -1,0 +1,21 @@
+{
+  "id": "@scope/Theme.Pack",
+  "configSchema": {},
+  "themes": [
+    {
+      "id": "night",
+      "name": "Night",
+      "description": "A dark palette with custom artwork.",
+      "source": "./themes/night.JSON",
+      "hats": {
+        "beret": "./assets/beret.SVG"
+      },
+      "critters": {
+        "ferris": {
+          "source": "ferris.svg",
+          "crossMs": true
+        }
+      }
+    }
+  ]
+}
