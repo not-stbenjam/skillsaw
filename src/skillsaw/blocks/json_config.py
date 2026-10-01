@@ -1191,6 +1191,9 @@ class McpConfigRole:
     #: 1.x ``clientSecret`` against its 2.0 ``client_secret``). Findings
     #: always name the key as the author wrote it.
     credential_key_aliases: ClassVar[Mapping[str, str]] = MappingProxyType({})
+    #: Hosts may resolve an entire credential value through a command.
+    #: Keep structured-token scans even when that syntax is a reference.
+    credential_command_prefixes: ClassVar[Tuple[str, ...]] = ()
     #: Host-specific transport spellings normalized before the shared shape
     #: validator chooses the required connection field. GitHub Copilot calls
     #: a process-backed server ``local``; the portable MCP spelling is

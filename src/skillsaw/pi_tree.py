@@ -11,6 +11,7 @@ from .blocks import ContextFileBlock
 if TYPE_CHECKING:
     from .lint_tree import _TreeBuildState
 from .blocks.pi import (
+    PiMcpBlock,
     PiSettingsBlock,
     PiSkillBlock,
     PiSkillNode,
@@ -105,6 +106,7 @@ def attach_pi_resources(state: _TreeBuildState, parent: LintTarget, package: Pat
 def attach_pi_projects(state: _TreeBuildState, root: LintTarget) -> None:
     context = state.context
     for directory in context.agent_tool_dirs(".pi"):
+        state.add_parser_block(root, directory / "mcp.json", PiMcpBlock)
         block = state.add_parser_block(root, directory / "settings.json", PiSettingsBlock)
         data = block.raw_data if block is not None else None
         for name in ("SYSTEM.md", "APPEND_SYSTEM.md"):

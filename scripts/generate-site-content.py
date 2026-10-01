@@ -377,7 +377,7 @@ RULE_GROUPS = [
     (
         "Pi",
         "pi",
-        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths"],
+        ["pi-config-valid", "pi-skill-valid", "pi-resource-paths", "pi-mcp-valid"],
         "Discovers Pi packages and `.pi/` project resources, validates resource "
         "arrays and native skill metadata, and exposes prompts and flat skills "
         "to content checks. Literal resource-path checks are opt-in. "

@@ -279,6 +279,7 @@ def mapped_secret_description(
     header: bool,
     markers: Sequence[str] = DEFAULT_PLACEHOLDER_MARKERS,
     kind: Optional[str] = None,
+    reference: bool = False,
 ) -> Optional[str]:
     """Describe a secret embedded in a named MCP configuration value.
 
@@ -293,11 +294,13 @@ def mapped_secret_description(
     *kind* names what carried the value for a caller that is not scanning a
     map — a server-level scalar has no environment variable or header to
     name, and saying it does sends the author looking for one.
+    *reference* marks a host-specific command expression, which avoids a
+    generic credential finding but still receives the structured-token scan.
     """
     structured = structured_secret_description(value)
     if structured is not None:
         return structured
-    if is_secret_placeholder(value, markers):
+    if reference or is_secret_placeholder(value, markers):
         return None
     if _credential_name(name, header=header):
         if kind is not None:
