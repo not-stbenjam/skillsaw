@@ -2,7 +2,7 @@
 
 Pi 0.99.0 introduced first-party MCP servers in project `.pi/mcp.json`.
 Invalid entries are reported and skipped while valid sibling servers remain
-available. This opt-in rule checks the field contract in Pi 0.99.2.
+available. This opt-in rule checks the field contract in Pi 1.0.0.
 
 ## Checks
 
@@ -15,6 +15,9 @@ available. This opt-in rule checks the field contract in Pi 0.99.2.
   Legacy `sse` is rejected.
 - Arguments, environment values, headers, OAuth field types, callback ports,
   exposure values, timeout, description, and enabled flags match the host.
+- `oauth.authServerMetadataUrl` is a string. Pi requires HTTPS, with HTTP
+  allowed on `localhost`, `127.0.0.1`, and `[::1]`; URI semantics remain
+  delegated to its WHATWG parser.
 - Provider `auth` is unavailable in project HTTP definitions. Pi also rejects
   a truthy `auth` on stdio entries retaining a `url` property.
 - A UTF-8 BOM prevents Pi from reading the file.
@@ -24,8 +27,9 @@ An empty command, an omitted server map, and duplicate keys with the last value
 winning match Pi's parser behavior. URI parsing and OAuth callback URI semantics
 remain with Pi's WHATWG URL parser.
 Namespace collision checks therefore use stdio servers and ordinary ASCII DNS
-HTTP URLs without callback URIs. Other HTTP entries do not reserve a namespace
-because Pi may reject an unchecked URI before it reserves the name.
+HTTP URLs without callback or authorization metadata URIs. Other HTTP entries
+do not reserve a namespace because Pi may reject an unchecked URI before it
+reserves the name.
 
 ## How to fix
 
@@ -67,6 +71,6 @@ servers are not loaded.
 
 ## Upstream reference
 
-The release-tagged [configuration loader](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/extensions/mcp/config.ts)
-and [field validator](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/core/mcp-servers.ts)
+The release-tagged [configuration loader](https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/src/extensions/mcp/config.ts)
+and [field validator](https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/src/core/mcp-servers.ts)
 define the checked contract. See the [Pi MCP documentation](https://pi.dev/docs/latest/mcp).

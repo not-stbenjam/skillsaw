@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "https": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": "https://auth.example.com/.well-known/openid-configuration"}
+    },
+    "localhost": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": "http://localhost:8765/metadata"}
+    },
+    "ipv4": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": "http://127.0.0.1:8765/metadata"}
+    },
+    "ipv6": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": "http://[::1]:8765/metadata"}
+    },
+    "null": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": null}
+    },
+    "number": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": 42}
+    },
+    "object": {
+      "url": "https://docs.example.com/mcp",
+      "oauth": {"authServerMetadataUrl": {"url": "https://auth.example.com/metadata"}}
+    },
+    "stdio": {
+      "command": "node",
+      "oauth": {"authServerMetadataUrl": 42}
+    }
+  }
+}
