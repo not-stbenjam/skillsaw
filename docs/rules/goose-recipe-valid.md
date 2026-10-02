@@ -47,6 +47,7 @@ outside this static contract, configure per-rule exclusions or disable the rule.
 
 Automatic discovery reads `.goose/recipes/` in each workspace. `--type goose`
 also selects top-level `.yaml`, `.yml` and `.json` files in the lint directory.
+Known project configuration filenames are skipped in this explicit mode.
 Local subrecipe paths inside the lint root are followed. See
 [repository types](../repo-types.md#goose-recipes).
 

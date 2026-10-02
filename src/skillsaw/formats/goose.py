@@ -8,6 +8,20 @@ from typing import Optional
 
 TOOL_DIR_NAME = ".goose"
 RECIPE_SUFFIXES = frozenset({".yaml", ".yml", ".json"})
+PROJECT_CONFIG_FILES = frozenset(
+    {
+        ".skillsaw.yaml",
+        ".skillsaw.yml",
+        ".claudelint.yaml",
+        ".claudelint.yml",
+        ".pre-commit-config.yaml",
+        "mkdocs.yaml",
+        "mkdocs.yml",
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+    }
+)
 INPUT_TYPES = frozenset({"string", "number", "boolean", "date", "file", "select"})
 REQUIREMENTS = frozenset({"required", "optional", "user_prompt"})
 EXTENSION_TYPES = frozenset({"stdio", "builtin", "platform", "streamable_http"})

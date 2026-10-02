@@ -11051,6 +11051,29 @@ class TestGoose:
         )
         assert {v["severity"] for v in by_rule(run_lint(repo))["goose-recipe-valid"]} == {"warning"}
 
+    def test_forced_discovery_skips_project_config_files(self, tmp_path):
+        from skillsaw.blocks.goose import GooseRecipeBlock
+        from skillsaw.context import RepositoryContext, RepositoryType
+
+        repo = copy_fixture("goose/explicit-configs", tmp_path)
+        result = run_lint(repo, "--type", "goose")
+        assert result["rc"] == 1
+        found = violations(result)
+        assert len(found) == 1
+        assert found[0]["rule_id"] == "goose-recipe-valid"
+        assert found[0]["file_path"] == "broken.yaml"
+        recipes = RepositoryContext(repo, repo_types={RepositoryType.GOOSE}).lint_tree.find(
+            GooseRecipeBlock
+        )
+        assert {block.path.name for block in recipes} == {"review.yaml", "broken.yaml"}
+        recipe_dir = repo / ".goose/recipes"
+        recipe_dir.mkdir(parents=True)
+        (repo / "package.json").rename(recipe_dir / "package.json")
+        automatic = RepositoryContext(repo).lint_tree.find(GooseRecipeBlock)
+        assert {block.path.relative_to(repo).as_posix() for block in automatic} == {
+            ".goose/recipes/package.json"
+        }
+
     def test_exclusions_and_cycles(self, tmp_path):
         from skillsaw.blocks.goose import GooseRecipeBlock
         from skillsaw.context import RepositoryContext

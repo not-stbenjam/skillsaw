@@ -105,7 +105,10 @@ skillsaw lint my-recipes --type goose --rule goose-recipe-valid --rule goose-sub
 ```
 
 The explicit type selects top-level YAML/JSON files in that directory as
-recipes. Automatic discovery selects top-level files in `.goose/recipes/`.
+recipes, skipping skillsaw configuration, pre-commit and MkDocs configuration,
+Node package manifests and npm/pnpm lockfiles. Other unrelated files can be
+excluded through configuration. Automatic discovery selects top-level files
+in `.goose/recipes/`.
 Both follow contained local subrecipe references and respect exclusions.
 Other repository YAML/JSON files are untouched.
 

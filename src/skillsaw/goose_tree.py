@@ -2,13 +2,18 @@
 
 from skillsaw.blocks.goose import GooseRecipeBlock
 from skillsaw.discovery.goose import existing_subrecipe, local_subrecipe, recipe_files
+from skillsaw.formats.goose import PROJECT_CONFIG_FILES
 
 
 def attach_goose_recipes(state, root) -> None:
     context = state.context
     pending = []
     if context.goose_recipes_forced:
-        pending.extend((path, context.root_path) for path in recipe_files(context.root_path))
+        pending.extend(
+            (path, context.root_path)
+            for path in recipe_files(context.root_path)
+            if path.name not in PROJECT_CONFIG_FILES
+        )
     for directory in context.agent_tool_dirs(".goose"):
         pending.extend((path, directory.parent) for path in recipe_files(directory / "recipes"))
     while pending:
