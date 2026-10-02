@@ -1,4 +1,4 @@
-"""Pi 0.99.2 MCP configuration types and transport selection."""
+"""Pi 1.0.0 MCP configuration types and transport selection."""
 
 import re
 from urllib.parse import urlsplit
@@ -25,7 +25,8 @@ def _namespace_certain(server):
 
     An invalid predecessor is skipped by Pi and cannot conflict with a later
     server. Restrict HTTP admission to an ordinary ASCII DNS URL with no
-    callback URI; all other WHATWG cases remain with the native validator.
+    callback or authorization metadata URI; all other WHATWG cases remain
+    with the native validator.
     """
     if not isinstance(server.get("url"), str) or server.get("type") == "stdio":
         return True
@@ -33,7 +34,9 @@ def _namespace_certain(server):
     if (
         not url.isascii()
         or any(ord(char) <= 32 or ord(char) == 127 or char == "\\" for char in url)
-        or "callbackUrl" in server.get("oauth", {})
+        or any(
+            field in server.get("oauth", {}) for field in ("callbackUrl", "authServerMetadataUrl")
+        )
     ):
         return False
     try:

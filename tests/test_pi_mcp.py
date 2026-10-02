@@ -1,4 +1,4 @@
-"""Pi MCP discovery and CLI regressions from the released 0.99.2 contract."""
+"""Pi MCP discovery and CLI regressions from the released 1.0.0 contract."""
 
 import json
 
@@ -149,6 +149,10 @@ def test_transport_precedence_and_tolerated_values(config):
         {"url": "not a URL"},
         {
             "url": "https://docs.example.com/mcp",
+            "oauth": {"authServerMetadataUrl": "http://auth.example.com/metadata"},
+        },
+        {
+            "url": "https://docs.example.com/mcp",
             "oauth": {"callbackUrl": "https://evil.example/callback"},
         },
         {"url": "http://256.0.0.1/mcp"},
@@ -221,3 +225,25 @@ def test_pi_mcp_containment_and_exclusion(tmp_path):
     path.symlink_to(outside)
     invalidate_read_caches()
     assert RepositoryContext(root).lint_tree.find(PiMcpBlock) == []
+
+
+def test_pi_1_0_oauth_metadata_url_cli(tmp_path):
+    root = copy_fixture("mcp-oauth-metadata", tmp_path)
+    result, findings = lint(root, "--rule", "pi-mcp-valid", "--rule", "mcp-valid-json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(findings) == 3
+    assert {finding["rule_id"] for finding in findings} == {"pi-mcp-valid"}
+    assert all("oauth.authServerMetadataUrl must be a string" in f["message"] for f in findings)
+    for name in ("null", "number", "object"):
+        assert any(f"'{name}'" in f["message"] for f in findings)
+
+
+@pytest.mark.parametrize("value", [None, False, 42, {}, []])
+def test_oauth_metadata_url_requires_a_string(value):
+    assert "oauth.authServerMetadataUrl must be a string" in _problem(
+        {"url": "https://docs.example.com/mcp", "oauth": {"authServerMetadataUrl": value}}
+    )
+
+
+def test_stdio_ignores_oauth_metadata_url():
+    assert _problem({"command": "node", "oauth": {"authServerMetadataUrl": 42}}) is None
