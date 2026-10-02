@@ -1,4 +1,4 @@
-"""Pi's authored resource contract (upstream 36b60d2, 2026-09-18).
+"""Pi's authored resource contract (upstream v1.0.0, 2026-10-01).
 
 See https://pi.dev/docs/latest/packages and packages/coding-agent/src/core/{pi-manifest,
 package-manager,skills}.ts in https://github.com/earendil-works/pi.
@@ -8,10 +8,17 @@ RESOURCE_FIELDS = ("extensions", "skills", "prompts", "themes")
 TOOL_DIR_NAME = ".pi"
 REMOTE_PREFIXES = ("npm:", "git:", "https://", "http://", "ssh://", "git://")
 
-# Pi 0.99.2, packages/coding-agent/src/core/mcp-servers.ts.
+# Pi 1.0.0, packages/coding-agent/src/core/mcp-servers.ts.
 MCP_EXPOSURES = frozenset({"codemode", "deferred", "direct", "hidden", "codemode-deferred"})
 MCP_HTTP_TYPES = frozenset({"http", "streamable-http"})
-MCP_OAUTH_STRING_FIELDS = ("clientId", "clientSecret", "scope", "callbackUrl", "clientName")
+MCP_OAUTH_STRING_FIELDS = (
+    "clientId",
+    "clientSecret",
+    "scope",
+    "callbackUrl",
+    "clientName",
+    "authServerMetadataUrl",
+)
 # ECMAScript String.trim removes BOM but not NEL or ASCII file separators.
 JS_TRIM_CHARS = (
     "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"

@@ -2,13 +2,13 @@
 
 ## Upstream sources
 
-- [Package documentation](https://pi.dev/docs/latest/packages)
-- [Pinned loader source](https://github.com/earendil-works/pi/tree/36b60d2e8985899743c4cf5bd5f8929832a3f05d/packages/coding-agent/src/core)
-- [MCP configuration loader, v0.99.2](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/extensions/mcp/config.ts)
-- [MCP field validator, v0.99.2](https://github.com/earendil-works/pi/blob/v0.99.2/packages/coding-agent/src/core/mcp-servers.ts)
+- [Package documentation, v1.0.0](https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/docs/packages.md)
+- [Pinned loader source](https://github.com/earendil-works/pi/tree/v1.0.0/packages/coding-agent/src/core)
+- [MCP configuration loader, v1.0.0](https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/src/extensions/mcp/config.ts)
+- [MCP field validator, v1.0.0](https://github.com/earendil-works/pi/blob/v1.0.0/packages/coding-agent/src/core/mcp-servers.ts)
 
 Compare `pi-manifest.ts`, `package-manager.ts`, and `skills.ts` against the
-pinned commit when updating support.
+release tag when updating support.
 
 ## Rules and discovery
 
@@ -18,13 +18,15 @@ The opt-in `pi-resource-paths` rule checks assembled local paths.
 
 Pi 0.99.0 introduced project `.pi/mcp.json`. It attaches as `PiMcpBlock`,
 including nested projects, so shared credential and server policy checks run.
-The opt-in `pi-mcp-valid` rule follows v0.99.2 field types and transport selection.
+The opt-in `pi-mcp-valid` rule follows v1.0.0 field types and transport selection.
 It remains opt-in pending the ten-repository accuracy survey.
 
 MCP sync points: exposure names and the `codemode-deferred` alias; HTTP-first
 selection when both command and URL are present; the unsupported SSE transport;
 server namespace collisions after replacing hyphens with underscores; project
 HTTP provider `auth` refusal; and OAuth field types and callback-port bounds.
+Pi 1.0 adds `oauth.authServerMetadataUrl`: a string naming an HTTPS metadata
+document, with HTTP permitted on `localhost`, `127.0.0.1`, and `[::1]`.
 The project `auth` guard also applies to stdio entries retaining any `url`
 property and a JavaScript-truthy `auth` value.
 The wrapper may be omitted, unknown fields are ignored, duplicate keys use the
@@ -32,11 +34,12 @@ last value, and empty commands pass field validation. Shared credentials include
 `oauth.clientSecret`. Whole-value `!command` references are never executed and
 still receive structured-token detection.
 
-URI validation and OAuth callback URI semantics are deliberately deferred to
-Pi's WHATWG parser. User configuration, MCP connections, and extension code
-remain outside static discovery.
+URI validation, including authorization metadata and OAuth callback URI
+semantics, is deliberately deferred to Pi's WHATWG parser. User configuration,
+MCP connections, and extension code remain outside static discovery.
 Namespace checks admit stdio and ordinary ASCII DNS HTTP URLs without callback
-URIs; uncertain HTTP entries cannot reserve names and create false conflicts.
+or authorization metadata URIs; uncertain HTTP entries cannot reserve names
+and create false conflicts.
 
 ## Sync notes
 
@@ -67,3 +70,19 @@ authoring rules off Pi's dialect. Report formatters use `skill_paths` and
 `skill_count` so flat native skills are included in single- and multi-path
 reports. Add `.pi/skills` through Pi's resource selection, not through the
 unfiltered conventional skill directory lists.
+
+## Pi 1.0.0 audit (2026-10-01)
+
+Compared the tagged release to the pinned resource loader and v0.99.2 MCP
+contract. `pi-manifest.ts`, `skills.ts`, `utils/frontmatter.ts`, and the MCP
+configuration loader are unchanged. Resource selection, legacy skills migration,
+and project autoload retain their checked contracts. The MCP field validator
+adds only `oauth.authServerMetadataUrl`; its type is checked, while URI
+semantics stay delegated as above.
+
+The package manager adds built-in extension overrides such as `-builtin:mcp`,
+already accepted as override patterns. Built-in extension execution, package
+installation and dependency resolution remain outside static discovery.
+Settings changes for fullscreen, quiet startup, default tools and codemode
+are outside the resource-only `pi-config-valid` contract. OAuth credential
+storage, issuer checks and incremental scope handling are runtime behavior.
