@@ -37,6 +37,12 @@ Nested `recipe:` documents, numeric/boolean YAML string scalars, optional nulls,
 unknown fields and extension descriptions omitted by the author are accepted.
 Findings are consolidated per recipe and respect configured severity.
 
+## How to fix
+
+Correct the fields named in the finding, then run `goose recipe validate` to
+check template and runtime constraints. For generated recipes or conventions
+outside this static contract, configure per-rule exclusions or disable the rule.
+
 ## Discovery and limits
 
 Automatic discovery reads `.goose/recipes/` in each workspace. `--type goose`
