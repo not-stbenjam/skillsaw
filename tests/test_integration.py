@@ -5963,6 +5963,7 @@ class TestAssertDirectives:
 
 
 BROKEN_FIXTURES = [
+    "codex-instructions",
     "pi/invalid",
     "pi/invalid-skill",
     "cursor-plugins/broken",
@@ -11153,3 +11154,57 @@ class TestGoose:
         ]
         assert len(set(blocks)) == 2
         assert len({b.fingerprint_identity(1) for b in blocks}) == 2
+
+
+@pytest.mark.integration
+class TestCodexInstructionSelection:
+    def test_combined_budget_and_inspection(self, tmp_path):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 1
+        findings = violations(result)
+        assert len(findings) == 1
+        assert "36,864 file bytes" in findings[0]["message"]
+        assert "32,768" in findings[0]["message"]
+        assert "service/AGENTS.md" in findings[0]["message"]
+        generic = run_lint(repo, "--rule", "context-budget")
+        assert violations(generic) == []  # Both files are individually below the generic cap.
+        inspection = run_cli(["tree", str(repo), "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 0, inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert [e["path"] for e in report["selected"]] == ["AGENTS.md", "service/AGENTS.md"]
+        assert [e["charged_bytes"] for e in report["selected"]] == [18432, 14336]
+        assert report["rendered_project_bytes"] == 32770
+        assert report["affected_paths"] == ["service/AGENTS.md"]
+        assert report["assumptions"]
+
+    def test_raised_project_limit_and_cli_cwd(self, tmp_path):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        (repo / ".codex").mkdir()
+        (repo / ".codex/config.toml").write_text("project_doc_max_bytes = 65536\n")
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 0
+        assert violations(result) == []
+        inspection = run_cli(
+            ["tree", str(repo), "--codex-instructions", "--cwd", ".", "--format", "json"]
+        )
+        report = json.loads(inspection.stdout)
+        assert [e["path"] for e in report["selected"]] == ["AGENTS.md"]
+        assert report["project_doc_max_bytes"] == 65536
+
+    def test_multibyte_override_and_fallback_content_checks(self, tmp_path):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        (repo / "AGENTS.override.md").write_text("é" * 10000)
+        (repo / "service/AGENTS.md").unlink()
+        (repo / "service/TEAM.md").write_text("界" * 6000)
+        (repo / ".codex").mkdir()
+        (repo / ".codex/config.toml").write_text('project_doc_fallback_filenames = ["TEAM.md"]\n')
+        inspection = run_cli(["tree", str(repo), "--codex-instructions", "--format", "json"])
+        report = json.loads(inspection.stdout)
+        assert [e["path"] for e in report["selected"]] == ["AGENTS.override.md", "service/TEAM.md"]
+        assert [e["file_bytes"] for e in report["selected"]] == [20000, 18000]
+        assert [e["charged_bytes"] for e in report["selected"]] == [20000, 12768]
+        # A novel fallback is part of the content tree before content rules run.
+        (repo / "service/TEAM.md").write_text("# Service guide\n\n" + "Use scoped tests.\n" * 3500)
+        generic = run_lint(repo, "--rule", "context-budget")
+        assert any("TEAM.md" in v["file_path"] for v in violations(generic))

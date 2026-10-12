@@ -170,6 +170,8 @@ def scan_repository(root: Path, root_names: Iterable[str]) -> RepositoryScan:
                     promptfoo_evals.setdefault(evals_dir, []).append(path)
         found.update(here / name for name in filenames if name.endswith(".instructions.md"))
         if not vendored:
+            if "AGENTS.override.md" in filenames:
+                found.add(here / "AGENTS.override.md")
             found.update(here / name for name in filenames if devin.is_instruction_filename(name))
             if "server.json" in filenames:
                 mcp_registry_files.append(here / "server.json")
@@ -502,7 +504,11 @@ def tool_types(
         # carry their own types, so ``.grok/`` itself is the only marker
         # that is Grok Build's alone.
         ("grok-project", tool_marker("grok-project")),
-        ("codex-project", tool_marker("codex-project")),
+        (
+            "codex-project",
+            tool_marker("codex-project")
+            or any(path.name == "AGENTS.override.md" and not is_excluded(path) for path in files),
+        ),
         ("antigravity", antigravity_marker()),
         ("gemini", marker("GEMINI.md")),
         ("qwen", marker("QWEN.md")),

@@ -267,6 +267,19 @@ class Linter:
             self.context.rebuild_lint_tree()
         self.rules: List[Rule] = []
         self._load_rules()
+        # Selection inputs are shared by the diagnostic and tree inspection.
+        # Prepare the tree before *any* content rule runs, so configured
+        # fallback instructions receive the same checks as AGENTS.md.
+        from .formats.codex_instructions import CodexInstructionOptions
+
+        codex_options = self.config.codex_instructions
+        if codex_options is None and any(
+            rule.rule_id == "codex-project-instructions" for rule in self.rules
+        ):
+            codex_options = CodexInstructionOptions()
+        if self.context.codex_instructions != codex_options:
+            self.context.codex_instructions = codex_options
+            self.context.rebuild_lint_tree()
         enabled_surfaces = self._enabled_builtin_surfaces()
         for rule in self.rules:
             rule._enabled_surface_rule_ids = enabled_surfaces

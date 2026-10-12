@@ -629,7 +629,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
     def _instruction_block_type(path: Path) -> type:
         """Return the semantic block for one discovered instruction file."""
-        if path.name.lower() == "agents.md":
+        if path.name.lower() == "agents.md" or path.name == "AGENTS.override.md":
             return AgentsMdBlock
         return _INSTRUCTION_FILE_BLOCK_TYPES.get(path.name, InstructionBlock)
 
@@ -2150,6 +2150,11 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # original semantic owner wins when a path is also a skill, command,
     # agent, editor rule, README, or plugin-contributed content block.
     _add_opencode_instructions()
+
+    if context.codex_instructions is not None:
+        from .codex_instructions_tree import attach_codex_instructions
+
+        attach_codex_instructions(state)
 
     external_roots = context.externally_sourced_roots()
 
