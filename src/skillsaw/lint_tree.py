@@ -2138,8 +2138,13 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
     # Generator parser views must not replace native consumers, whose
     # relative references and decoded content can differ from the source.
-    from .lint_tree_generators import attach_generator_configs, attach_generator_sources
+    from .lint_tree_generators import (
+        attach_generator_configs,
+        attach_generator_sources,
+        attach_rulesync_claude_rules,
+    )
 
+    attach_rulesync_claude_rules(state, _readable_matches)
     attach_generator_sources(state)
     attach_generator_configs(state)
 

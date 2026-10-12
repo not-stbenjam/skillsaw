@@ -11159,6 +11159,66 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize("owned", [True, False])
+    def test_nested_rulesync_claude_outputs_keep_consumer_checks(self, owned, tmp_path):
+        repo = tmp_path / "monorepo"
+        project = copy_fixture("generators/rulesync", repo / "packages")
+        (repo / ".skillsaw.yaml").write_text(f"rulesync-generated: {str(owned).lower()}\n")
+        source = project / ".rulesync/rules/backend/api.md"
+        output = project / ".claude/rules/backend/api.md"
+        for path in (source, output, project / ".cursor/rules/backend/api.mdc"):
+            path.write_text(path.read_text().replace("reservation logic", "reservation\u200blogic"))
+        manual = project / ".claude/rules/manual.md"
+        manual.write_text("# Deployment checks\n\nConsider adding a release acceptance test.\n")
+        security = run_lint(repo, "--rule", "security-invisible-unicode")
+        emitted = [
+            v for v in violations(security) if v["file_path"] == str(output.relative_to(repo))
+        ]
+        assert len(emitted) == 1
+        if owned:
+            assert emitted[0]["generator"] == "rulesync"
+            assert emitted[0]["generated_from"] == [str(source.relative_to(repo))]
+        else:
+            assert "generator" not in emitted[0]
+        editorial = run_lint(repo, "--rule", "content-weak-language")
+        paths = {v["file_path"] for v in violations(editorial)}
+        assert str(manual.relative_to(repo)) in paths
+        assert (str(output.relative_to(repo)) in paths) is not owned
+
+    def test_nested_rulesync_claude_copies_are_protected_during_fix(self, tmp_path):
+        repo = tmp_path / "monorepo"
+        project = copy_fixture("generators/rulesync", repo / "packages")
+        source = project / ".rulesync/rules/backend/api.md"
+        outputs = [
+            project / ".claude/rules/backend/api.md",
+            project / ".cursor/rules/backend/api.mdc",
+        ]
+        (repo / ".skillsaw.yaml").write_text(
+            'rulesync-generated: true\nrules:\n  content-unlinked-internal-reference:\n    patterns: ["**/*.txt"]\n'
+        )
+        for path in (source, *outputs):
+            path.write_text(
+                path.read_text().replace(
+                    "# HTTP API\n", "# HTTP API\n\nRead references/checklist.txt.\n"
+                )
+            )
+            (path.parent / "references").mkdir()
+            (path.parent / "references/checklist.txt").write_text(
+                "Verify the reservation release.\n"
+            )
+        result = run_lint(repo, "--rule", "content-unlinked-internal-reference")
+        emitted = [
+            v
+            for v in violations(result)
+            if v["file_path"] in {str(p.relative_to(repo)) for p in outputs}
+        ]
+        assert len(emitted) == 2
+        assert all(v["generator"] == "rulesync" and not v["fixable"] for v in emitted)
+        before = {path: path.read_bytes() for path in outputs}
+        _run_fix(repo, "--suggest", "--rule", "content-unlinked-internal-reference")
+        assert "[references/checklist.txt](references/checklist.txt)" in source.read_text()
+        assert all(path.read_bytes() == before[path] for path in outputs)
+
     @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
     @pytest.mark.parametrize("fmt", ["json", "sarif"])
     @pytest.mark.parametrize(

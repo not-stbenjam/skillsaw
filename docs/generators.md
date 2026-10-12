@@ -66,9 +66,17 @@ configuration, other frontmatter extensions, and full compiler validation.
 These checks are opt-in because their scope and release pins are narrower than
 the generators' evolving interfaces.
 
+Rulesync 32.0.0 parses source frontmatter through gray-matter's js-yaml 3 engine.
+Its integer syntax includes legacy octal (`010`) and sexagesimal (`1:20`);
+`0o10` is a string. This differs from the newer YAML engine used by some output
+serializers. The source check preserves those released parser semantics.
+
 ## Copy recognition and attribution
 
-Existing consumer discovery still owns generated output files. A recognized
+Consumer files keep their native lint-tree roles. Conventional `.claude/rules/`
+files beside a discovered Rulesync project are also checked in nested packages,
+including hand-managed rules and outputs whose sources are absent or excluded.
+This discovery does not require the generated-ownership opt-in. A recognized
 copy keeps its typed consumer node and structural, security, policy, reference,
 and size checks. Only a fixed set of editorial checks, such as weak language
 and repeated directives, is suppressed on verified copies. Source findings
@@ -92,7 +100,9 @@ With that assertion, skillsaw recognizes non-root, non-local rule copies under
 `.claude/rules/**/*.md` and `.cursor/rules/**/*.mdc`. It verifies the conventional
 relative filename, configured target and `rules` feature, source targeting,
 copied body, and emitted frontmatter. The body comparison allows the generator's
-outer-whitespace normalization. The default is `false`: a matching filename or
+outer-whitespace normalization. Cursor copies use the common `description`;
+Rulesync 32.0.0 does not emit the nested `cursor.description` field.
+The default is `false`: a matching filename or
 matching prose alone never makes an unstamped, user-managed file generated.
 Files outside those destinations remain fully checked. Edited or stale copies
 that fail verification receive all checks too. Symlinked outputs are never
@@ -185,6 +195,7 @@ This increment was verified against the released npm CLIs, using Node 22.23.1:
   commit `01118a908541f1f65fbbedcf7864f4c1173d8994`:
   [file formats](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/docs/reference/file-formats.md),
   [rule schema](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/src/features/rules/rulesync-rule.ts),
+  [source frontmatter parser](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/src/utils/frontmatter.ts),
   [configuration schema](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/src/config/config.ts),
   [Claude output](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/src/features/rules/claudecode-rule.ts),
   [Cursor output](https://github.com/dyoshikawa/rulesync/blob/01118a908541f1f65fbbedcf7864f4c1173d8994/src/features/rules/cursor-rule.ts).
