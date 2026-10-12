@@ -916,22 +916,22 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         if _contained(readme):
             state.add_block(parent, readme, ReadmeBlock, owner=owner)
 
-    # --- Root-level instruction files (skip .apm/ — handled in APM section) ---
+    # --- Instruction files; defer semantic owners to their attachment passes ---
     # Only Devin Desktop reads ``agents.md`` case-insensitively, so that
     # spelling is an instruction file only where the repository carries other
     # Devin evidence; elsewhere ``docs/agents.md`` is a documentation page.
     devin_desktop = RepositoryType.DEVIN in context.repo_types
     codex_overrides: list[Path] = []
     for f in context.instruction_files:
-        if _is_in_apm_source(f) or _claimed_by_an_editor_dir(f):
-            continue
-        if not devin_desktop and devin.is_desktop_agents_spelling(f.name):
-            continue
         if f.name == "AGENTS.override.md":
             candidate = probe_file(f, context.root_path, resolve=resolve, is_excluded=_is_excluded)
             if candidate is None or candidate.issue:
                 continue
             codex_overrides.append(f)
+            continue
+        if _is_in_apm_source(f) or _claimed_by_an_editor_dir(f):
+            continue
+        if not devin_desktop and devin.is_desktop_agents_spelling(f.name):
             continue
         # APM writes .apm/instructions/ out to .github/instructions/. The
         # authored source attaches below; the copy attaches content-suppressed

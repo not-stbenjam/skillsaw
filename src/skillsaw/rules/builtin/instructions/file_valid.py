@@ -4,8 +4,8 @@ Rule: instruction-file-valid
 
 from typing import List
 
-from skillsaw.blocks import CodexInstructionBlock, ContentBlock, FrontmatteredBlock
-from skillsaw.codex_instructions import CodexInstructionsNode
+from skillsaw.blocks import CodexInstructionBlock
+from skillsaw.codex_instructions import CodexInstructionFileNode
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext, INSTRUCTION_REPO_TYPES
 from skillsaw.repository_types import RepositoryType
@@ -37,25 +37,15 @@ class InstructionFileValidRule(Rule):
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
         violations = []
         tree = context.lint_tree
-        selected = {
-            source.resolved_path
-            for node in tree.find(CodexInstructionsNode)
-            for source in node.sources
-            if source.issue is None and source.resolved_path is not None
-        }
-        blocks = tree.find(InstructionBlock)
-        if selected:
-            # A selected command or skill keeps its parser role. Empty and
-            # unreadable frontmattered files have no BodyContent child.
-            for block_type in (ContentBlock, FrontmatteredBlock):
-                blocks.extend(b for b in tree.find(block_type) if b.resolved_path in selected)
+        blocks = [*tree.find(InstructionBlock), *tree.find(CodexInstructionFileNode)]
         seen = set()
         for block in blocks:
-            recognized = isinstance(block, InstructionBlock) and (
-                isinstance(block, (CodexInstructionBlock, DevinGlobalRuleBlock))
+            if not (
+                isinstance(
+                    block, (CodexInstructionBlock, CodexInstructionFileNode, DevinGlobalRuleBlock)
+                )
                 or is_instruction_filename(block.path.name)
-            )
-            if not recognized and block.resolved_path not in selected:
+            ):
                 continue
             if block.resolved_path in seen:
                 continue

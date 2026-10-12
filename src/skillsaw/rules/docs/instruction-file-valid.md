@@ -3,11 +3,12 @@
 Empty instruction files provide no guidance, and invalid UTF-8 prevents
 skillsaw's content checks from reading them. This rule reports empty files
 and read failures in `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `QWEN.md`, and
-the other recognized instruction formats. It also checks Codex overrides
-and custom fallback prose selected by `codex-instructions` analysis.
-Selected prose is checked even when it is also a command, agent, or skill;
-its existing role and format checks remain intact. Excluded and external
-content removed from the lint tree is not checked.
+the other recognized instruction formats. It also checks discovered Codex
+overrides, including those in APM source directories, and custom fallback
+prose selected by `codex-instructions` analysis. Overrides need no analysis
+configuration. These files are checked even when they also serve as a
+command, agent, or skill; their existing roles and format checks remain
+intact. Excluded and external content removed from the lint tree is not checked.
 
 Codex itself accepts empty files and decodes invalid UTF-8 with replacement
 characters. This warning identifies missing guidance or text that skillsaw

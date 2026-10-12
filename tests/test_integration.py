@@ -11161,11 +11161,14 @@ class TestCodexInstructionSelection:
     @pytest.mark.parametrize(
         "source", ["commands/status.md", "agents/reviewer.md", "skills/release-notes/SKILL.md"]
     )
-    @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
+    @pytest.mark.parametrize(
+        "filename,projected",
+        [("AGENTS.override.md", False), ("AGENTS.override.md", True), ("TEAM.md", True)],
+    )
     @pytest.mark.parametrize("invalid_utf8", [False, True])
     @pytest.mark.parametrize("force_rule", [False, True])
     def test_selected_semantic_prose_receives_file_validation(
-        self, tmp_path, source, filename, invalid_utf8, force_rule
+        self, tmp_path, source, filename, projected, invalid_utf8, force_rule
     ):
         repo = copy_fixture("single-plugin/clean", tmp_path)
         original = repo / source
@@ -11176,11 +11179,13 @@ class TestCodexInstructionSelection:
         data = original.read_bytes() + b"\xff\n" if invalid_utf8 else b""
         original.write_bytes(data)
         cwd = path.parent.relative_to(repo).as_posix()
-        (repo / ".skillsaw.yaml").write_text(
-            'version: "99.0.0"\nplugins: false\n'
-            f"codex-instructions:\n  cwd: {cwd}\n"
-            f"  project_doc_fallback_filenames: [{filename}]\n"
-        )
+        settings = 'version: "99.0.0"\nplugins: false\n'
+        if projected:
+            settings += (
+                f"codex-instructions:\n  cwd: {cwd}\n"
+                f"  project_doc_fallback_filenames: [{filename}]\n"
+            )
+        (repo / ".skillsaw.yaml").write_text(settings)
         flags = ["--rule", "instruction-file-valid"] if force_rule else []
         result = run_lint(repo, "--strict", *flags)
         assert result["rc"] == 1, result["stdout"] + result["stderr"]
@@ -11189,11 +11194,46 @@ class TestCodexInstructionSelection:
         assert (repo / found[0]["file_path"]).resolve() == original
         assert found[0]["severity"] == "warning"
         assert ("Failed to read" if invalid_utf8 else "is empty") in found[0]["message"]
-        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        inspection = run_cli(
+            ["tree", repo, "--codex-instructions", "--cwd", cwd, "--format", "json"]
+        )
         assert inspection.returncode == 0, inspection.stderr
         report = json.loads(inspection.stdout)
         assert report["complete"]
         assert report["charged_bytes"] == len(data)
+
+    @pytest.mark.parametrize(
+        "directory", [".apm", ".apm/instructions", ".apm/prompts", ".apm/skills/deploy"]
+    )
+    @pytest.mark.parametrize("excluded", [False, True])
+    @pytest.mark.parametrize("invalid_utf8", [False, True])
+    def test_apm_source_overrides_receive_default_checks(
+        self, tmp_path, directory, excluded, invalid_utf8
+    ):
+        repo = copy_fixture("apm/clean", tmp_path)
+        path = repo / directory / "AGENTS.override.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        text = (repo / ".apm/instructions/CLAUDE.md").read_text()
+        path.write_bytes(
+            text.encode("utf-8") + b"\xff\n"
+            if invalid_utf8
+            else (text + "\nReview deployment\u200b before promotion.\n").encode("utf-8")
+        )
+        settings = 'version: "99.0.0"\nplugins: false\n'
+        if excluded:
+            settings += f"exclude: [{path.relative_to(repo).as_posix()}]\n"
+        (repo / ".skillsaw.yaml").write_text(settings)
+        result = run_lint(repo, "--strict")
+        rule = "instruction-file-valid" if invalid_utf8 else "security-invisible-unicode"
+        found = [
+            v
+            for v in violations(result)
+            if v["rule_id"] == rule and v["file_path"] == path.relative_to(repo).as_posix()
+        ]
+        assert len(found) == int(not excluded), result["stdout"] + result["stderr"]
+        assert ("codex-project" in result["out"]["stats"]["repo_types"]) == (not excluded)
+        if not excluded:
+            assert result["rc"] == 1
 
     @pytest.mark.parametrize("force_rule", [False, True])
     @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])

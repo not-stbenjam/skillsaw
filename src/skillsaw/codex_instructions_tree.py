@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
 from .blocks.codex import CodexConfigBlock
+from .blocks.base import ContentBlock
 from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ExtraBlock, ReadmeBlock
-from .codex_instructions import CodexInstructionsNode
+from .blocks.frontmatter import FrontmatteredBlock
+from .codex_instructions import CodexInstructionFileNode, CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
 from .discovery.excludes import is_root_or_ancestor_excluded
 from .formats.codex import CODEX_HOOKS_FILENAME
@@ -119,7 +121,7 @@ def attach_instruction_content(
     if not paths:
         return
     resolve = state.context.resolve_path
-    claimed = set()
+    claimed = {}
     readmes = {}
     extras = {}
     for parent in state.root.walk():
@@ -130,10 +132,19 @@ def attach_instruction_content(
             elif type(block) is ExtraBlock:
                 extras[resolved] = (parent, block)
             else:
-                claimed.add(resolved)
+                claimed.setdefault(resolved, block)
     for path in paths:
         resolved = resolve(path)
-        if resolved is None or resolved in claimed:
+        if resolved is None:
+            continue
+        if resolved in claimed:
+            owner = claimed[resolved]
+            if isinstance(owner, (ContentBlock, FrontmatteredBlock)):
+                # Record file validation separately from the existing prose
+                # parser, including empty frontmattered files without a body.
+                state.add_parser_block(
+                    owner, owner.path, CodexInstructionFileNode, owner=owner.plugin_owner
+                )
             continue
         # Keep existing skill/command/config roles. Generic extra prose yields
         # to the instruction role; a README retains its separate display role.
@@ -156,5 +167,5 @@ def attach_instruction_content(
                     state.seen_roles.discard((resolved, ExtraBlock))
         else:
             state.add_block(state.root, path, block_type, content_suppressed=path in suppressed)
-        claimed.add(resolved)
+        claimed[resolved] = None
     state.root.invalidate_find_cache()

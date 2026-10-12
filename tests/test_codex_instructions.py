@@ -18,7 +18,7 @@ from skillsaw.blocks import (
     PluginRuleBlock,
     ReadmeBlock,
 )
-from skillsaw.codex_instructions import CodexInstructionsNode
+from skillsaw.codex_instructions import CodexInstructionFileNode, CodexInstructionsNode
 from skillsaw.config import LinterConfig
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.discovery.codex_instructions import select_instructions
@@ -174,7 +174,13 @@ def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
     assert block.plugin_owner == root
     assert block.content_suppressed
     assert block.externally_sourced
-    assert block.children == [child]
+    assert child in block.children
+    validation = block.find(CodexInstructionFileNode)
+    assert len(validation) == int(custom_role)
+    if validation:
+        assert validation[0].parent is block
+        assert validation[0].in_suppressed_content
+        assert validation[0].in_external_source
     assert child.parent is block
     assert child.in_external_source
 
@@ -182,12 +188,13 @@ def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
 @pytest.mark.parametrize("structured", [False, True])
 @pytest.mark.parametrize("lint_external", [False, True])
 @pytest.mark.parametrize("excluded", [False, True])
+@pytest.mark.parametrize("filename", ["TEAM.md", "AGENTS.override.md"])
 def test_selected_file_validation_respects_prose_roles_and_pruning(
-    tmp_path, structured, lint_external, excluded
+    tmp_path, structured, lint_external, excluded, filename
 ):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
-    path = root / "TEAM.md"
+    path = root / filename
     (root / "AGENTS.override.md").rename(path)
     path.write_bytes(b"\xff")
 
@@ -198,7 +205,11 @@ def test_selected_file_validation_respects_prose_roles_and_pruning(
     original = block_type(path=path, plugin_owner=root, externally_sourced=True)
     context = RepositoryContext(
         root,
-        codex_instructions=CodexInstructionOptions(project_doc_fallback_filenames=(path.name,)),
+        codex_instructions=(
+            CodexInstructionOptions(project_doc_fallback_filenames=(path.name,))
+            if filename == "TEAM.md"
+            else None
+        ),
         lint_external_content=lint_external,
         exclude_patterns=[path.name] if excluded else [],
     )
@@ -207,36 +218,59 @@ def test_selected_file_validation_respects_prose_roles_and_pruning(
     assert len(found) == int(not structured and lint_external and not excluded)
     if found:
         assert found[0].file_path == path
-        assert "Failed to read TEAM.md" in found[0].message
+        assert f"Failed to read {filename}" in found[0].message
     assert not context.lint_tree_errors
     assert not context.plugin_extension_errors
 
 
 @pytest.mark.parametrize("selected", [False, True])
-def test_selected_semantic_source_aliases_are_validated_once(tmp_path, selected):
+@pytest.mark.parametrize("filename", ["TEAM.md", "AGENTS.override.md"])
+@pytest.mark.parametrize("excluded", [False, True])
+def test_selected_semantic_source_aliases_are_validated_once(
+    tmp_path, selected, filename, excluded
+):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
     path = root / "commands/status.md"
     path.write_text("")
     (root / "child").mkdir()
-    (root / "TEAM.md").symlink_to("commands/status.md")
-    (root / "child/TEAM.md").symlink_to("../commands/status.md")
+    (root / filename).symlink_to("commands/status.md")
+    (root / "child" / filename).symlink_to("../commands/status.md")
     context = RepositoryContext(
         root,
         codex_instructions=(
-            CodexInstructionOptions(cwd="child", project_doc_fallback_filenames=("TEAM.md",))
+            CodexInstructionOptions(cwd="child", project_doc_fallback_filenames=(filename,))
             if selected
             else None
         ),
+        exclude_patterns=["commands/status.md"] if excluded else [],
     )
     found = InstructionFileValidRule().check(context)
-    assert len(found) == int(selected)
-    if selected:
+    expected = (selected or filename == "AGENTS.override.md") and not excluded
+    assert len(found) == int(expected)
+    if expected:
         assert found[0].file_path == path
         assert found[0].message == "status.md is empty"
     commands = [b for b in context.lint_tree.find(CommandBlock) if b.path == path]
-    assert len(commands) == 1
-    assert commands[0].plugin_owner == root
+    assert len(commands) == int(not excluded)
+    if commands:
+        assert commands[0].plugin_owner == root
+    assert len(context.lint_tree.find(CodexInstructionFileNode)) == int(expected)
+
+
+def test_semantic_override_validation_survives_frontmatter_rebuild(tmp_path):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    path = root / "commands/status.md"
+    (root / "AGENTS.override.md").symlink_to("commands/status.md")
+    context = RepositoryContext(root)
+    tree = context.lint_tree
+    command = next(block for block in tree.find(CommandBlock) if block.path == path)
+    assert len(tree.find(CodexInstructionFileNode)) == 1
+    command.write_frontmatter_text("name: status\ndescription: Show repository status.\n")
+    assert len(tree.find(CodexInstructionFileNode)) == 1
+    assert tree.find(CodexInstructionFileNode)[0].parent is command
+    assert InstructionFileValidRule().check(context) == []
 
 
 @pytest.mark.parametrize("inspect", [False, True])

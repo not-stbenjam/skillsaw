@@ -14,6 +14,18 @@ from .paths import relative_to_str
 
 
 @dataclass(eq=False)
+class CodexInstructionFileNode(LintTarget):
+    """File validation for Codex prose retaining another semantic owner.
+
+    Attached beneath that owner so external-content and suppression policy
+    follow the original role. This node carries no second copy of the prose.
+    """
+
+    def tree_label(self) -> str:
+        return "Codex instruction file validation"
+
+
+@dataclass(eq=False)
 class CodexInstructionsNode(LintTarget):
     """A selection view referencing retained tree nodes without copying their content."""
 
