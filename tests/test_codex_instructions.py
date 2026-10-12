@@ -7,11 +7,14 @@ from pathlib import Path
 import pytest
 
 from skillsaw.blocks import (
+    AgentBlock,
     AgentsMdBlock,
     CodexConfigBlock,
     CodexHooksBlock,
     CodexInstructionBlock,
+    CommandBlock,
     ContentBlock,
+    PluginRuleBlock,
     ReadmeBlock,
 )
 from skillsaw.codex_instructions import CodexInstructionsNode
@@ -94,6 +97,80 @@ def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp
     assert report["complete"]
     assert [entry["path"] for entry in report["selected"]] == ["README.md", "child/README.md"]
     assert report["charged_bytes"] == 2 * (root / "README.md").stat().st_size
+
+
+@pytest.mark.parametrize("inspect", [False, True])
+@pytest.mark.parametrize(
+    "directory,block_type,plugin_location,ecosystem",
+    [
+        ("agents", AgentBlock, ".", "claude"),
+        ("commands", CommandBlock, ".", "claude"),
+        ("rules/nested", PluginRuleBlock, ".", "claude"),
+        ("agents", AgentBlock, "plugins/tools", "dual"),
+        ("commands", CommandBlock, "plugins/tools", "claude"),
+        ("rules/nested", PluginRuleBlock, "plugins/tools", "codex"),
+    ],
+)
+def test_override_keeps_plugin_prose_role(
+    tmp_path, inspect, directory, block_type, plugin_location, ecosystem
+):
+    root = tmp_path / "repo"
+    plugin = root / plugin_location
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", plugin)
+    if ecosystem in {"codex", "dual"}:
+        (plugin / ".codex-plugin").mkdir()
+        (plugin / ".codex-plugin/plugin.json").write_text('{"name": "deployment-tools"}')
+    if ecosystem == "codex":
+        shutil.rmtree(plugin / ".claude-plugin")
+    path = plugin / directory / "AGENTS.override.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(plugin / "agents/reviewer.md", path)
+    options = CodexInstructionOptions(cwd=str(path.parent.relative_to(root))) if inspect else None
+    context = RepositoryContext(root, codex_instructions=options)
+    tree = context.lint_tree
+    blocks = [b for b in tree.find(block_type) if b.path == path]
+    assert len(blocks) == 1
+    assert blocks[0].plugin_owner == plugin.resolve()
+    assert len([b for b in tree.find(ContentBlock) if b.path == path]) == 1
+    assert not tree.find(CodexInstructionBlock)
+    assert not context.lint_tree_errors
+    if inspect:
+        report = tree.find(CodexInstructionsNode)[0].report(tree)
+        assert report["complete"]
+        assert [entry["path"] for entry in report["selected"]] == [str(path.relative_to(root))]
+        assert report["charged_bytes"] == path.stat().st_size
+
+
+@pytest.mark.parametrize(
+    "directory,block_type", [("agents", AgentBlock), ("commands", CommandBlock)]
+)
+def test_override_alias_keeps_canonical_plugin_role(tmp_path, directory, block_type):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    target = root / directory / ("reviewer.md" if directory == "agents" else "status.md")
+    (root / "AGENTS.override.md").symlink_to(target.relative_to(root))
+    context = RepositoryContext(root, codex_instructions=CodexInstructionOptions())
+    tree = context.lint_tree
+    assert any(b.path == target and b.plugin_owner == root for b in tree.find(block_type))
+    assert len([b for b in tree.find(ContentBlock) if b.path.resolve() == target]) == 1
+    assert not tree.find(CodexInstructionBlock)
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"]
+    assert [entry["path"] for entry in report["selected"]] == ["AGENTS.override.md"]
+    assert report["charged_bytes"] == target.stat().st_size
+
+
+def test_override_outside_plugin_glob_stays_instruction(tmp_path):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    path = root / "commands/nested/AGENTS.override.md"
+    path.parent.mkdir()
+    shutil.copyfile(root / "agents/reviewer.md", path)
+    context = RepositoryContext(root)
+    instructions = context.lint_tree.find(CodexInstructionBlock)
+    assert [b.path for b in instructions] == [path]
+    assert instructions[0].plugin_owner is None
+    assert not context.lint_tree_errors
 
 
 def test_selected_configuration_fallback_does_not_gain_a_prose_role(tmp_path):

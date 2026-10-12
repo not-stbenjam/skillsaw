@@ -645,7 +645,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
     _INSTRUCTION_FILE_BLOCK_TYPES = {
         "AGENTS.md": AgentsMdBlock,
-        "AGENTS.override.md": CodexInstructionBlock,
         "CLAUDE.md": ClaudeMdBlock,
         "GEMINI.md": GeminiMdBlock,
         "QWEN.md": QwenMdBlock,
@@ -923,6 +922,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # spelling is an instruction file only where the repository carries other
     # Devin evidence; elsewhere ``docs/agents.md`` is a documentation page.
     devin_desktop = RepositoryType.DEVIN in context.repo_types
+    codex_overrides: list[Path] = []
     for f in context.instruction_files:
         if _is_in_apm_source(f) or _claimed_by_an_editor_dir(f):
             continue
@@ -932,6 +932,8 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             candidate = probe_file(f, context.root_path, resolve=resolve, is_excluded=_is_excluded)
             if candidate is None or candidate.issue:
                 continue
+            codex_overrides.append(f)
+            continue
         # APM writes .apm/instructions/ out to .github/instructions/. The
         # authored source attaches below; the copy attaches content-suppressed
         # so its content findings don't double the source's, while the
@@ -2146,6 +2148,17 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # Pi prompts can select another host's configured command or skill.
     # Those semantic owners keep the single body and its parser role.
     attach_pi_prompts(state)
+
+    # An override can also be a plugin agent, command, rule, or skill reference.
+    # Let those existing roles attach first; path deduplication then retains
+    # their parser and ownership without repeating their discovery here.
+    for path in codex_overrides:
+        state.add_block(
+            root,
+            path,
+            CodexInstructionBlock,
+            content_suppressed=_is_apm_compiled_github(path.parent),
+        )
 
     # --- Extra content paths from config ---
     # User-configured content paths plus globs contributed by detected

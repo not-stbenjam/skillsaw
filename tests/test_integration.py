@@ -11158,6 +11158,41 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("inspect", [False, True])
+    @pytest.mark.parametrize("kind", ["agent", "command"])
+    def test_plugin_override_keeps_frontmatter_validation(self, tmp_path, inspect, kind):
+        from skillsaw.blocks import AgentBlock, CommandBlock
+
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        source = repo / ("agents/reviewer.md" if kind == "agent" else "commands/status.md")
+        block_type = AgentBlock if kind == "agent" else CommandBlock
+        body = block_type(path=source).body_text
+        path = source.with_name("AGENTS.override.md")
+        source.rename(path)
+        path.write_text(f"---\nname: reviewer\n---\n{body}")
+        if inspect:
+            (repo / ".skillsaw.yaml").write_text(
+                f"plugins: false\ncodex-instructions:\n  cwd: {path.parent.name}\n"
+            )
+        rule_id = f"claude-{kind}-frontmatter"
+        result = run_lint(repo, "--rule", rule_id)
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = violations(result)
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == rule_id
+        assert findings[0]["message"] == "Missing 'description' in frontmatter"
+        assert findings[0]["file_path"].endswith(f"{path.parent.name}/AGENTS.override.md")
+        inspection = run_cli(
+            ["tree", repo, "--codex-instructions", "--cwd", path.parent.name, "--format", "json"]
+        )
+        assert inspection.returncode == 0, inspection.stdout + inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert report["complete"]
+        assert [entry["path"] for entry in report["selected"]] == [
+            f"{path.parent.name}/AGENTS.override.md"
+        ]
+        assert report["charged_bytes"] == path.stat().st_size
+
     @pytest.mark.parametrize("non_file", [False, True])
     @pytest.mark.parametrize(
         "excluded,selected",
