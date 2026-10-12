@@ -10140,6 +10140,33 @@ class TestCodexRootWithClaudeMarketplace:
 
 @pytest.mark.integration
 class TestCodexOnboarding:
+    def test_legacy_nested_directory_alias_and_file_symlink_membership(self, tmp_path):
+        repo = copy_fixture("codex/onboarding", tmp_path)
+        (repo / "plugin.json").unlink()
+        manifest = repo / ".codex-plugin/plugin.json"
+        original = repo / "skills/get-started"
+        destination = repo / "resources/get-started"
+        destination.parent.mkdir()
+        original.rename(destination)
+        original.symlink_to("../resources/get-started", target_is_directory=True)
+        shutil.copytree(repo / "skills/connect-account", destination / "connect-account")
+        data = json.loads(manifest.read_text())
+        data["extensions"]["com.openai"][
+            "onboardingSkill"
+        ] = "./resources/get-started/connect-account/SKILL.md"
+        manifest.write_text(json.dumps(data))
+        result = run_lint(repo, "--rule", "codex-plugin-json-valid")
+        assert result["rc"] == 0 and result["out"]["violations"] == []
+
+        entrypoint = destination / "connect-account/SKILL.md"
+        entrypoint.rename(repo / "welcome.md")
+        entrypoint.symlink_to("../../../welcome.md")
+        result = run_lint(repo, "--rule", "codex-plugin-json-valid")
+        assert result["rc"] == 1
+        findings = result["out"]["violations"]
+        assert len(findings) == 1
+        assert "not a bundled skill" in findings[0]["message"]
+
     def test_skill_content_is_validated_by_existing_skill_rule(self, tmp_path):
         repo = copy_fixture("codex/onboarding", tmp_path)
         skill = repo / "skills/get-started/SKILL.md"
@@ -10213,6 +10240,7 @@ class TestCodexOnboarding:
         } == before
 
 
+@pytest.mark.integration
 class TestCodexPortableOverlay:
     @pytest.mark.parametrize("host_type", ["codex-plugin", "codex-marketplace"])
     @pytest.mark.parametrize("component", ["plugin.json", "mcp.json"])

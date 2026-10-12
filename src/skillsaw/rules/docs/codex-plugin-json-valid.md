@@ -101,12 +101,18 @@ it must be a non-empty string resolving from the plugin root to a bundled
 skill file. The skill can have any name; a directory path does not select
 its `SKILL.md` automatically. The `./` prefix is optional for this field.
 Absolute paths, parent traversal, and symlinks escaping the plugin are
-reported. Contained aliases to a bundled skill file are accepted.
+reported. `.//skills/...` is also invalid: the host removes one `./` prefix
+before checking for an absolute path. Contained aliases to a bundled skill
+file are accepted, including directory aliases across components. A symlink
+named `SKILL.md` does not itself establish membership; Codex skips file
+symlinks during skill discovery.
 
 Portable packages supply immediate, non-hidden `skills/*/SKILL.md` entries.
 Legacy packages use their declared skill roots, or the conventional `skills/`
-root when no valid path strings are declared. A missing declared directory
-does not restore the default root. An unrelated Markdown file or a
+root when no valid path strings are declared. Their recursive scan skips
+hidden directories and continues below existing skills, up to six directory
+levels beneath each root. A missing declared directory does not restore the
+default root. An unrelated Markdown file or a
 skill outside those components cannot serve as onboarding. Set
 `check-paths-exist: false` to skip target existence and membership checks
 for files generated during packaging; type and containment checks remain.
@@ -117,5 +123,7 @@ and the released [Codex 0.162.1 manifest resolver](https://github.com/openai/cod
 and [skill matching](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core-plugins/src/manager.rs).
 Skill content remains covered by the Agent Skills rules. Runtime plugin/skill
 enablement, remote catalog names, and generated command migrations are outside
-this authored-reference check. Installed `.codex/plugins/` manifests retain
+this authored-reference check. An incomplete legacy scan (I/O errors or the
+host's traversal limits) cannot prove absence and produces no membership
+finding. Installed `.codex/plugins/` manifests retain
 the existing stand-down; installed content is never autofixed.

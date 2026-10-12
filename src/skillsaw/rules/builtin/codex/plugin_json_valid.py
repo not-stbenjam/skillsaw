@@ -8,15 +8,14 @@ from urllib.parse import urlparse
 
 from skillsaw.formats.codex_manifest import (
     OPENAI_OVERLAY_FIELDS,
-    codex_skill_component_roots,
     openai_extension,
 )
-from skillsaw.discovery.agent_plugins import discover_agent_plugin_skills
+from skillsaw.discovery.codex import codex_bundles_skill
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext
 from skillsaw.diagnostics import safe_display
-from skillsaw.lint_target import CodexPluginConfigNode, SkillNode
+from skillsaw.lint_target import CodexPluginConfigNode
 from skillsaw.paths import contained_resolve, safe_exists, safe_is_dir, safe_is_file
 from skillsaw.rules.builtin.utils import read_json
 
@@ -194,9 +193,11 @@ class CodexPluginJsonValidRule(Rule):
         def problem(message: str) -> List[RuleViolation]:
             return [self.violation(f"'{field}': {message}", file_path=node.path)]
 
-        if not isinstance(value, str) or not value:
+        if not isinstance(value, str) or not value.removeprefix("./"):
             return problem("must be a non-empty path string to a bundled skill's SKILL.md")
-        path_error = path_problem(value, "plugin root", node.plugin_dir)
+        # Remove exactly one optional prefix before validating. Pathlib
+        # would normalize './/skills/...' even though Codex rejects it.
+        path_error = path_problem(value.removeprefix("./"), "plugin root", node.plugin_dir)
         if path_error:
             return problem(path_error)
         # Unlike legacy component paths, the released onboarding resolver
@@ -216,23 +217,10 @@ class CodexPluginJsonValidRule(Rule):
         if is_root_or_ancestor_excluded(target, root, context.is_path_excluded):
             return []
 
-        if node.portable_overlay:
-            # Shared manifests can also expose recursive skills to other
-            # hosts. Portable Codex membership is the existing fixed scan.
-            skills = [
-                skill
-                for skill in discover_agent_plugin_skills(node.plugin_dir)
-                if not skill.name.startswith(".")
-            ]
-        else:
-            roots = codex_skill_component_roots(node.plugin_dir, resolve=context.resolve_path)
-            skills = [
-                skill.path
-                for skill in context.lint_tree.find(SkillNode)
-                if skill.plugin_owner == root
-                and any(skill.resolved_path.is_relative_to(component) for component in roots)
-            ]
-        if any(context.resolve_path(skill / "SKILL.md") == target for skill in skills):
+        membership = codex_bundles_skill(
+            node.plugin_dir, target, portable=node.portable_overlay, resolve=context.resolve_path
+        )
+        if membership is not False:
             return []
         return problem(
             f"'{safe_display(value)}' is not a bundled skill's SKILL.md; "

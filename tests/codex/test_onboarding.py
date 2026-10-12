@@ -135,6 +135,18 @@ def test_legacy_declared_roots_replace_conventional_root(tmp_path, declared):
     assert len(findings) == 1 and "not a bundled skill" in findings[0].message
 
 
+@pytest.mark.parametrize("absent", [True, False])
+def test_legacy_without_declared_paths_uses_conventional_root(tmp_path, absent):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    data = json.loads(manifest.read_text())
+    if absent:
+        data.pop("skills")
+    else:
+        data["skills"] = []
+    manifest.write_text(json.dumps(data))
+    assert _check(repo) == []
+
+
 @pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
 def test_shared_claude_manifest_does_not_change_codex_membership(tmp_path, layout):
     repo, manifest = _plugin(tmp_path, layout)
@@ -162,6 +174,15 @@ def test_unsafe_paths(tmp_path, value):
     repo, manifest = _plugin(tmp_path)
     _set_reference(manifest, value)
     findings = _check(repo)
+    assert len(findings) == 1 and findings[0].file_path == manifest
+
+
+@pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
+@pytest.mark.parametrize("value", [".//skills/get-started/SKILL.md", "./"])
+def test_prefix_is_validated_before_normalization(tmp_path, layout, value):
+    repo, manifest = _plugin(tmp_path, layout)
+    _set_reference(manifest, value)
+    findings = _check(repo, {"check-paths-exist": False})
     assert len(findings) == 1 and findings[0].file_path == manifest
 
 
@@ -205,6 +226,69 @@ def test_contained_directory_alias_is_a_bundled_skill(tmp_path, layout):
     (repo / "skills/welcome").symlink_to(repo / "skills/get-started", target_is_directory=True)
     _set_reference(manifest, "./skills/welcome/SKILL.md")
     assert _check(repo) == []
+
+
+@pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
+@pytest.mark.parametrize("reference_alias", [True, False])
+def test_directory_alias_outside_component_still_bundles_skill(tmp_path, layout, reference_alias):
+    repo, manifest = _plugin(tmp_path, layout)
+    original = repo / "skills/get-started"
+    destination = repo / "resources/get-started"
+    destination.parent.mkdir()
+    original.rename(destination)
+    original.symlink_to("../resources/get-started", target_is_directory=True)
+    target = "skills/get-started" if reference_alias else "resources/get-started"
+    _set_reference(manifest, f"./{target}/SKILL.md")
+    assert _check(repo) == []
+
+
+@pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
+def test_file_symlink_does_not_establish_skill_membership(tmp_path, layout):
+    repo, manifest = _plugin(tmp_path, layout)
+    entrypoint = repo / "skills/get-started/SKILL.md"
+    entrypoint.rename(repo / "welcome.md")
+    entrypoint.symlink_to("../../welcome.md")
+    _set_reference(manifest, "./skills/get-started/SKILL.md")
+    findings = _check(repo)
+    assert len(findings) == 1 and "not a bundled skill" in findings[0].message
+
+
+@pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
+def test_nested_skill_beneath_a_skill_is_legacy_only(tmp_path, layout):
+    repo, manifest = _plugin(tmp_path, layout)
+    shutil.copytree(repo / "skills/connect-account", repo / "skills/get-started/connect-account")
+    _set_reference(manifest, "./skills/get-started/connect-account/SKILL.md")
+    assert len(_check(repo)) == (0 if layout == "legacy" else 1)
+
+
+def test_hidden_editor_skill_does_not_establish_codex_membership(tmp_path):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    target = "skills/group/.agents/skills/get-started"
+    shutil.copytree(repo / "skills/get-started", repo / target)
+    _set_reference(manifest, f"./{target}/SKILL.md")
+    findings = _check(repo)
+    assert len(findings) == 1 and "not a bundled skill" in findings[0].message
+
+
+@pytest.mark.parametrize("depth", [0, 6, 7])
+def test_legacy_recursive_skill_depth_limit(tmp_path, depth):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    target = repo / "skills"
+    for _ in range(depth):
+        target = target / "nested"
+    target.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(repo / "skills/get-started/SKILL.md", target / "SKILL.md")
+    _set_reference(manifest, f"./{target.relative_to(repo)}/SKILL.md")
+    assert len(_check(repo)) == (1 if depth == 7 else 0)
+
+
+def test_legacy_directory_cycle_does_not_establish_membership(tmp_path):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    (repo / "skills/cycle").symlink_to(".", target_is_directory=True)
+    shutil.copytree(repo / "skills/get-started", repo / "private/get-started")
+    _set_reference(manifest, "./private/get-started/SKILL.md")
+    findings = _check(repo)
+    assert len(findings) == 1 and "not a bundled skill" in findings[0].message
 
 
 @pytest.mark.parametrize("layout", ["portable", "legacy"])
