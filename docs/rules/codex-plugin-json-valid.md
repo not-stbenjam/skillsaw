@@ -138,10 +138,10 @@ and the released [Codex 0.162.1 manifest resolver](https://github.com/openai/cod
 and [skill matching](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core-plugins/src/manager.rs).
 Skill content remains covered by the Agent Skills rules. Runtime plugin/skill
 enablement, remote catalog names, and generated command migrations are outside
-this authored-reference check. An incomplete legacy scan (I/O errors or the
-host's traversal limits) cannot prove absence and produces no membership
-finding. Installed `.codex/plugins/` manifests retain
-the existing stand-down; installed content is never autofixed.
+this authored-reference check. A legacy scan interrupted by I/O errors or
+the limits on directory and entry counts produces no membership finding.
+Installed `.codex/plugins/` manifests retain the existing stand-down;
+installed content is never autofixed.
 
 ## Configuration
 

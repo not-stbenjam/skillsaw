@@ -1,11 +1,13 @@
 """Optional onboarding references follow the selected Codex overlay."""
 
 import json
+from pathlib import Path
 import shutil
 
 import pytest
 
 from skillsaw.context import RepositoryContext
+from skillsaw.discovery.codex import codex_bundles_skill
 from skillsaw.rule import Severity
 from skillsaw.rules.builtin.codex import CodexPluginJsonValidRule
 from skillsaw.utils import invalidate_read_caches
@@ -289,6 +291,60 @@ def test_legacy_directory_cycle_does_not_establish_membership(tmp_path):
     _set_reference(manifest, "./private/get-started/SKILL.md")
     findings = _check(repo)
     assert len(findings) == 1 and "not a bundled skill" in findings[0].message
+
+
+@pytest.mark.parametrize("layout", ["portable", "fallback", "legacy"])
+def test_alias_to_search_root_does_not_create_a_portable_child_skill(tmp_path, layout):
+    repo, manifest = _plugin(tmp_path, layout)
+    shutil.copyfile(repo / "skills/get-started/SKILL.md", repo / "skills/SKILL.md")
+    (repo / "skills/self").symlink_to(".", target_is_directory=True)
+    _set_reference(manifest, "./skills/self/SKILL.md")
+    assert len(_check(repo)) == (0 if layout == "legacy" else 1)
+
+
+def test_unreadable_legacy_component_does_not_prove_absence(tmp_path, monkeypatch):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    blocked = repo / "blocked"
+    blocked.mkdir()
+    data = json.loads(manifest.read_text())
+    data["skills"] = ["./blocked", "./skills"]
+    manifest.write_text(json.dumps(data))
+    shutil.copytree(repo / "skills/get-started", repo / "private/get-started")
+    known = (repo / "skills/get-started/SKILL.md").resolve()
+    unbundled = (repo / "private/get-started/SKILL.md").resolve()
+    iterdir = Path.iterdir
+
+    def read_directory(path):
+        if path == blocked:
+            raise PermissionError("Cannot read the component")
+        return iterdir(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "iterdir", read_directory)
+        assert codex_bundles_skill(repo, known, portable=False) is True
+        assert codex_bundles_skill(repo, unbundled, portable=False) is None
+        _set_reference(manifest, "./private/get-started/SKILL.md")
+        assert _check(repo) == []
+    findings = _check(repo)
+    assert len(findings) == 1 and "not a bundled skill" in findings[0].message
+
+
+@pytest.mark.parametrize("directories,limit", [(True, 1_999), (False, 20_000)])
+def test_legacy_scan_count_limits_do_not_prove_absence(tmp_path, directories, limit):
+    repo, manifest = _plugin(tmp_path, "legacy")
+    component = repo / "components"
+    component.mkdir()
+    data = json.loads(manifest.read_text())
+    data["skills"] = "./components"
+    manifest.write_text(json.dumps(data))
+    for index in range(limit):
+        entry = component / f"entry-{index:05}"
+        entry.mkdir() if directories else entry.touch()
+    target = (repo / "skills/get-started/SKILL.md").resolve()
+    assert codex_bundles_skill(repo, target, portable=False) is False
+    extra = component / "one-too-many"
+    extra.mkdir() if directories else extra.touch()
+    assert codex_bundles_skill(repo, target, portable=False) is None
 
 
 @pytest.mark.parametrize("layout", ["portable", "legacy"])

@@ -58,8 +58,10 @@ def codex_bundles_skill(
     plugin directories. Incomplete scans return None instead of a false error.
     """
     if portable:
+        skills_root = resolve(plugin_dir / "skills")
         return any(
             not skill.name.startswith(".")
+            and resolve(skill) != skills_root
             and not safe_is_symlink(skill / "SKILL.md")
             and resolve(skill / "SKILL.md") == target
             for skill in discover_agent_plugin_skills(plugin_dir, resolve=resolve)
