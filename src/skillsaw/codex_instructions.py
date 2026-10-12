@@ -4,13 +4,23 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import BinaryIO, Iterator, List, Optional, Tuple
 
 from .blocks.codex import CodexConfigBlock
 from .discovery.codex_instructions import InstructionCandidate
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, instruction_bytes
 from .lint_target import LintTarget
 from .paths import relative_to_str
+
+
+def _instruction_chunks(stream: BinaryIO, limit: int) -> Iterator[bytes]:
+    """Keep read allocations bounded even when the configured byte limit is huge."""
+    while limit > 0:
+        data = stream.read(min(limit, 64 * 1024))
+        if not data:
+            break
+        yield data
+        limit -= len(data)
 
 
 @dataclass(eq=False)
@@ -80,17 +90,22 @@ class CodexInstructionsNode(LintTarget):
                     # read_text normalizes BOM/CRLF and rejects invalid UTF-8;
                     # none of those operations matches the Codex byte loader.
                     file_bytes = block.path.stat().st_size
-                    data = b""
-                    if budget_known and remaining > 0:
-                        with block.path.open("rb") as stream:
-                            data = stream.read(min(remaining, file_bytes))
+                    if budget_known:
+                        if remaining > 0:
+                            with block.path.open("rb") as stream:
+                                usage = instruction_bytes(
+                                    _instruction_chunks(stream, min(remaining, file_bytes)),
+                                    remaining,
+                                    file_bytes=file_bytes,
+                                )
+                        else:
+                            usage = instruction_bytes((), remaining, file_bytes=file_bytes)
                 except OSError as error:
                     issue = f"{label}: cannot read instruction bytes ({error})"
                 else:
                     total += file_bytes
                     entry["file_bytes"] = file_bytes
                     if budget_known:
-                        usage = instruction_bytes(data, remaining, file_bytes=file_bytes)
                         entry.update(asdict(usage))
                         charged += usage.charged_bytes
                         remaining -= usage.charged_bytes

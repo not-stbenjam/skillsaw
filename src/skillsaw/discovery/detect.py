@@ -383,6 +383,13 @@ def tool_types(
                 continue
             for name, is_dir in entries:
                 path = base / name
+                if type_value == "codex-project" and name == codex.CODEX_CONFIG_FILENAME:
+                    # Match project-config attachment, including excluded
+                    # ancestors and symlink targets, before enabling its rules.
+                    candidate = probe_file(path, root, resolve=resolve, is_excluded=is_excluded)
+                    if candidate is not None and candidate.issue is None:
+                        return True
+                    continue
                 if is_excluded(path):
                     continue
                 if path.is_dir() if is_dir else path.exists():

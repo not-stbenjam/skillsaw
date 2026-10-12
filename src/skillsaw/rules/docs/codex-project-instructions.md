@@ -137,7 +137,9 @@ Codex reads each selected file using the budget left by earlier files. Once
 the budget reaches zero, it stops loading files. The report still lists those
 later selections as `omitted`, including when the configured limit is zero.
 The byte report gets full file sizes from metadata and reads only the part
-that fits in the remaining budget.
+that fits in the remaining budget. It processes those bytes in fixed-size
+chunks, so raising the limit does not require holding the selected text in
+memory. Reading time still grows with the number of bytes inspected.
 
 - **Count bytes before decoding.** Codex cuts the raw bytes to fit the remaining
   budget, then decodes UTF-8. Invalid or cut-off characters become replacement

@@ -6,9 +6,10 @@ This models one trusted local environment with an explicitly supplied root.
 
 from __future__ import annotations
 
+import codecs
 import os
 from dataclasses import asdict, dataclass
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 DEFAULT_MAX_BYTES = 32 * 1024
 # Codex's TOML value parser accepts signed 64-bit integers.
@@ -109,22 +110,34 @@ class InstructionBytes:
 
 
 def instruction_bytes(
-    data: bytes, remaining: int, *, file_bytes: Optional[int] = None
+    chunks: Iterable[bytes], remaining: int, *, file_bytes: int
 ) -> InstructionBytes:
-    """Account for a bounded raw prefix, retaining the file's full size."""
-    size = len(data) if file_bytes is None else file_bytes
+    """Account for a raw prefix without retaining it or splitting UTF-8 decoding."""
     if remaining == 0:
-        return InstructionBytes(size, 0, 0, 0, "omitted", False)
-    prefix = data[:remaining]
-    text = prefix.decode("utf-8", errors="replace")
-    truncated = len(prefix) < size
-    if not text.strip(RUST_WHITESPACE):
-        return InstructionBytes(size, len(prefix), 0, 0, "empty", truncated)
+        return InstructionBytes(file_bytes, 0, 0, 0, "omitted", False)
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    read_bytes = text_bytes = 0
+    has_text = False
+    for chunk in chunks:
+        prefix = chunk[: remaining - read_bytes]
+        read_bytes += len(prefix)
+        text = decoder.decode(prefix)
+        text_bytes += len(text.encode("utf-8"))
+        has_text = has_text or bool(text.strip(RUST_WHITESPACE))
+        if read_bytes == remaining:
+            break
+    # A budget boundary or EOF can leave an incomplete UTF-8 sequence.
+    tail = decoder.decode(b"", final=True)
+    text_bytes += len(tail.encode("utf-8"))
+    has_text = has_text or bool(tail.strip(RUST_WHITESPACE))
+    truncated = read_bytes < file_bytes
+    if not has_text:
+        return InstructionBytes(file_bytes, read_bytes, 0, 0, "empty", truncated)
     return InstructionBytes(
-        size,
-        len(prefix),
-        len(prefix),
-        len(text.encode("utf-8")),
+        file_bytes,
+        read_bytes,
+        read_bytes,
+        text_bytes,
         "truncated" if truncated else "loaded",
         truncated,
     )

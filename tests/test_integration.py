@@ -11158,6 +11158,77 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("excluded", [False, True])
+    def test_normal_config_detection_matches_ancestor_exclusion(self, tmp_path, excluded):
+        repo = copy_fixture("codex-instructions-hooks", tmp_path)
+        (repo / "service/.codex/hooks.json").unlink()
+        config = repo / "service/.codex/config.toml"
+        config.write_text(config.read_text().replace("timeout = 30", 'timeout = "slow"'))
+        (repo / ".skillsaw.yaml").write_text(
+            'version: "99.0.0"\nplugins: false\n' + ("exclude: [service]\n" if excluded else "")
+        )
+        result = run_lint(repo, "--rule", "codex-hooks-valid", "--strict")
+        assert result["rc"] == int(not excluded), result["stdout"] + result["stderr"]
+        assert ("codex-project" in result["out"]["stats"]["repo_types"]) is (not excluded)
+        findings = [item for item in violations(result) if item["rule_id"] == "codex-hooks-valid"]
+        assert len(findings) == int(not excluded)
+        if findings:
+            assert "timeout" in findings[0]["message"]
+        explanation = run_cli(["explain", "codex-hooks-valid", repo, "--no-pager"])
+        assert explanation.returncode == 0, explanation.stderr
+        reason = (
+            "disabled — enabled: auto — no matching repo type detected"
+            if excluded
+            else "enabled — enabled: auto — detected repo type: codex-project"
+        )
+        assert reason in explanation.stdout
+
+    def test_large_project_budget_streams_selected_instruction_bytes(self, tmp_path, monkeypatch):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        (repo / ".codex").mkdir()
+        limit = 2**63 - 1
+        (repo / ".codex/config.toml").write_text(f"project_doc_max_bytes = {limit}\n")
+        (repo / ".skillsaw.yaml").write_text("plugins: false\n")
+        path = repo / "AGENTS.override.md"
+        # The first character crosses a read boundary; invalid UTF-8 expands
+        # when decoded, while the following sparse region needs no allocation.
+        path.write_bytes(b" " * 65535 + "é".encode("utf-8") + b"\xff")
+        size = 4 * 1024 * 1024 + 1
+        with path.open("r+b") as stream:
+            stream.truncate(size)
+        original = Path.open
+        reads = []
+
+        class BoundedReader:
+            def __enter__(self):
+                self.stream = original(path, "rb")
+                return self
+
+            def __exit__(self, *args):
+                self.stream.close()
+
+            def read(self, count=-1):
+                assert 0 < count <= 65536, f"unbounded instruction read: {count}"
+                reads.append(count)
+                return self.stream.read(count)
+
+        def guarded_open(file, *args, **kwargs):
+            if file == path and args and args[0] == "rb":
+                return BoundedReader()
+            return original(file, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", guarded_open)
+        result = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads(result.stdout)
+        assert report["complete"]
+        assert report["project_doc_max_bytes"] == limit
+        assert report["selected_file_bytes"] == report["charged_bytes"] == size
+        assert report["rendered_project_bytes"] == size + 2
+        assert report["selected"][0]["status"] == "loaded"
+        assert sum(reads) == size
+        assert len(reads) > 1
+
     @pytest.mark.parametrize("key", ["project_doc_max_bytes", "project_doc_fallback_filenames"])
     @pytest.mark.parametrize(
         "raw", ["[9223372036854775808]", "{ nested = [-9223372036854775809] }"]

@@ -493,12 +493,18 @@ def test_root_to_cwd_excludes_siblings_deeper_and_above_root(tmp_path):
         (b"A\xffB", 3, 3, 5, "loaded", False),
         (b"\xef\xbb\xbfA\r\n", 6, 6, 6, "loaded", False),
         (b"   text", 3, 0, 0, "empty", True),
+        ("\u2003\u00a0".encode(), 5, 0, 0, "empty", False),
+        ("\u2003".encode(), 2, 2, 3, "truncated", True),
         (b"\x1c", 1, 1, 1, "loaded", False),
         (b"anything", 0, 0, 0, "omitted", False),
     ],
 )
-def test_raw_bytes_lossy_utf8_and_rust_whitespace(data, limit, charged, text, status, truncated):
-    result = instruction_bytes(data, limit)
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 65536])
+def test_raw_bytes_lossy_utf8_and_rust_whitespace(
+    data, limit, charged, text, status, truncated, chunk_size
+):
+    chunks = (data[index : index + chunk_size] for index in range(0, len(data), chunk_size))
+    result = instruction_bytes(chunks, limit, file_bytes=len(data))
     assert (result.charged_bytes, result.text_bytes, result.status, result.truncated) == (
         charged,
         text,
@@ -772,9 +778,10 @@ def test_ordinary_override_discovery_never_reads_excluded_content(tmp_path, monk
 
 
 @pytest.mark.parametrize("scope", ["included", "excluded-ancestor", "excluded-target", "escape"])
-def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scope):
+@pytest.mark.parametrize("config", [False, True])
+def test_codex_detection_matches_attachment_scope(tmp_path, monkeypatch, scope, config):
     root = tmp_path / "repo"
-    path = root / "service/AGENTS.override.md"
+    path = root / "service" / (".codex/config.toml" if config else "AGENTS.override.md")
     path.parent.mkdir(parents=True)
     target = path
     if scope == "excluded-target":
@@ -784,7 +791,11 @@ def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scop
     elif scope == "escape":
         target = tmp_path / "guide.md"
         path.symlink_to(target)
-    target.write_text("# Service instructions\n\nRun the service tests before deployment.\n")
+    target.write_text(
+        "project_doc_max_bytes = 32768\n"
+        if config
+        else "# Service instructions\n\nRun the service tests before deployment.\n"
+    )
     exclusions = {"excluded-ancestor": ["service"], "excluded-target": [".private"]}
     original = Path.open
     allow_read = scope == "included"
@@ -802,7 +813,8 @@ def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scop
     tree = context.lint_tree
     assert not forbidden_reads
     assert not context.lint_tree_errors
-    assert bool(tree.find(CodexInstructionBlock)) is (scope == "included")
+    block_class = CodexConfigBlock if config else CodexInstructionBlock
+    assert bool(tree.find(block_class)) is (scope == "included")
     if scope == "included":
         allow_read = False
         context.exclude_patterns = ["service"]
@@ -811,7 +823,7 @@ def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scop
         tree = context.lint_tree
         assert not forbidden_reads
         assert not context.lint_tree_errors
-        assert not tree.find(CodexInstructionBlock)
+        assert not tree.find(block_class)
 
 
 @pytest.mark.parametrize("lint_external", [False, True])
