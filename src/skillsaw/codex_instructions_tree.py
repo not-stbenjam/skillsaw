@@ -1,8 +1,9 @@
-"""Attach the inputs for a requested Codex instruction projection."""
+"""Attach Codex instruction content and requested selection inputs."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Sequence
 
 from .blocks.codex import CodexConfigBlock
 from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ReadmeBlock
@@ -103,6 +104,21 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     node.sources = select_instructions(
         directories, node.filenames, resolve=resolve, is_excluded=context.is_path_excluded
     )
+    attach_instruction_content(state, [source.path for source in node.sources if not source.issue])
+    state.root.children.append(node)
+    state.root.invalidate_find_cache()
+
+
+def attach_instruction_content(
+    state: _TreeBuildState,
+    paths: Sequence[Path],
+    *,
+    suppressed: frozenset[Path] = frozenset(),
+) -> None:
+    """Retain semantic owners while giving display-only READMEs a prose role."""
+    if not paths:
+        return
+    resolve = state.context.resolve_path
     claimed = set()
     readmes = {}
     for parent in state.root.walk():
@@ -112,25 +128,25 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
                 readmes[resolved] = (parent, block)
             else:
                 claimed.add(resolved)
-    for source in node.sources:
-        if source.issue is not None or source.resolved_path in claimed:
+    for path in paths:
+        resolved = resolve(path)
+        if resolved is None or resolved in claimed:
             continue
-        # Keep existing skill/command/config roles. A selected README also
-        # needs prose checks: its display role does not expose any content.
-        block_type = AgentsMdBlock if source.path.name == "AGENTS.md" else CodexInstructionBlock
-        if source.resolved_path in readmes:
-            parent, readme = readmes[source.resolved_path]
+        # Keep existing skill/command/config roles. A README also needs
+        # prose checks: its display role does not expose any content.
+        block_type = AgentsMdBlock if path.name == "AGENTS.md" else CodexInstructionBlock
+        if resolved in readmes:
+            parent, readme = readmes[resolved]
             block = state.add_parser_block(
                 parent,
-                source.path,
+                path,
                 block_type,
                 owner=readme.plugin_owner,
-                content_suppressed=readme.content_suppressed,
+                content_suppressed=readme.content_suppressed or path in suppressed,
             )
             if block is not None:
                 block.externally_sourced = readme.externally_sourced
         else:
-            state.add_block(state.root, source.path, block_type)
-        claimed.add(source.resolved_path)
-    state.root.children.append(node)
+            state.add_block(state.root, path, block_type, content_suppressed=path in suppressed)
+        claimed.add(resolved)
     state.root.invalidate_find_cache()

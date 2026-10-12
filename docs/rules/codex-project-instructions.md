@@ -184,9 +184,10 @@ instruction files are never read.
 Standard content checks recognize `AGENTS.override.md`. They discover custom
 fallbacks when this analysis is requested. An override loaded as a plugin agent,
 command, or rule keeps that role and its existing checks. Its full file bytes
-still count if Codex selects it. A plugin's `README.md` receives
-instruction content checks when selected as a fallback. Known configuration
-files keep their configuration checks even when named as fallbacks. Other hosts'
+still count if Codex selects it. The content checks also apply when a plugin's
+`README.md` shares a file with an override through a symlink, or is selected
+as a fallback. Known configuration files keep their configuration checks even
+when named as fallbacks. Other hosts'
 files count toward the Codex budget only if explicitly configured as fallbacks.
 
 An explicit working directory can reach instructions inside directories such as

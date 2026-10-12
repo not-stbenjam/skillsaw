@@ -11158,6 +11158,31 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("override_is_alias", [False, True])
+    @pytest.mark.parametrize("rule_id", ["context-budget", "security-invisible-unicode"])
+    def test_override_readme_alias_gets_ordinary_content_checks(
+        self, tmp_path, override_is_alias, rule_id
+    ):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        readme = repo / "README.md"
+        readme.write_text(
+            readme.read_text()
+            + "\nDeployment guidance\u200b follows.\n"
+            + "Run deployment checks before promoting the release.\n" * 3000
+        )
+        override = repo / "AGENTS.override.md"
+        if override_is_alias:
+            override.symlink_to("README.md")
+        else:
+            readme.rename(override)
+            readme.symlink_to("AGENTS.override.md")
+        result = run_lint(repo, "--rule", rule_id, "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = violations(result)
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == rule_id
+        assert findings[0]["file_path"].endswith("AGENTS.override.md")
+
     @pytest.mark.parametrize("inspect", [False, True])
     @pytest.mark.parametrize("kind", ["agent", "command"])
     def test_plugin_override_keeps_frontmatter_validation(self, tmp_path, inspect, kind):

@@ -37,7 +37,6 @@ from .blocks import (
     CodexHooksBlock,
     CodexInlineHooksBlock,
     CodexInlineMcpBlock,
-    CodexInstructionBlock,
     CommandBlock,
     ContextFileBlock,
     CopilotAgentBlock,
@@ -2152,12 +2151,15 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # An override can also be a plugin agent, command, rule, or skill reference.
     # Let those existing roles attach first; path deduplication then retains
     # their parser and ownership without repeating their discovery here.
-    for path in codex_overrides:
-        state.add_block(
-            root,
-            path,
-            CodexInstructionBlock,
-            content_suppressed=_is_apm_compiled_github(path.parent),
+    if codex_overrides:
+        from .codex_instructions_tree import attach_instruction_content
+
+        attach_instruction_content(
+            state,
+            codex_overrides,
+            suppressed=frozenset(
+                path for path in codex_overrides if _is_apm_compiled_github(path.parent)
+            ),
         )
 
     # --- Extra content paths from config ---

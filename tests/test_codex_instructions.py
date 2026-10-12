@@ -160,6 +160,43 @@ def test_override_alias_keeps_canonical_plugin_role(tmp_path, directory, block_t
     assert report["charged_bytes"] == target.stat().st_size
 
 
+@pytest.mark.parametrize("inspect", [False, True])
+@pytest.mark.parametrize("plugin_location", [".", "plugins/tools"])
+@pytest.mark.parametrize("override_is_alias", [False, True])
+def test_override_readme_alias_retains_prose_and_display(
+    tmp_path, inspect, plugin_location, override_is_alias
+):
+    root = tmp_path / "repo"
+    plugin = root / plugin_location
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", plugin)
+    readme_path = plugin / "README.md"
+    override = plugin / "AGENTS.override.md"
+    if override_is_alias:
+        override.symlink_to("README.md")
+    else:
+        readme_path.rename(override)
+        readme_path.symlink_to("AGENTS.override.md")
+    options = CodexInstructionOptions(cwd=plugin_location) if inspect else None
+    context = RepositoryContext(root, codex_instructions=options)
+    tree = context.lint_tree
+    readme = tree.find(ReadmeBlock)[0]
+    instructions = tree.find(CodexInstructionBlock)
+    assert len(instructions) == 1
+    instruction = instructions[0]
+    assert instruction.path == override
+    assert instruction.parent is readme.parent
+    assert instruction.plugin_owner == readme.plugin_owner == plugin.resolve()
+    assert instruction.content_suppressed == readme.content_suppressed
+    assert instruction.externally_sourced == readme.externally_sourced
+    assert len([b for b in tree.find(ContentBlock) if b.path.resolve() == override.resolve()]) == 1
+    assert not context.lint_tree_errors
+    if inspect:
+        report = tree.find(CodexInstructionsNode)[0].report(tree)
+        assert report["complete"]
+        assert [entry["path"] for entry in report["selected"]] == [str(override.relative_to(root))]
+        assert report["charged_bytes"] == override.stat().st_size
+
+
 def test_override_outside_plugin_glob_stays_instruction(tmp_path):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
