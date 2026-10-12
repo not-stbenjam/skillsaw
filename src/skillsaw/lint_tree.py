@@ -1013,9 +1013,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             if skip_dirs and relative and relative[0] in skip_dirs:
                 continue
             if safe_is_file(match):
-                if block_cls is CursorRuleBlock:
-                    cursor_prose.append((parent, match, block_cls, None, content_suppressed))
-                    continue
                 state.add_block(parent, match, block_cls, content_suppressed=content_suppressed)
 
     # Cursor reads the legacy file from the nearest enclosing directory too,
@@ -1660,7 +1657,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 ):
                     for path in components[field]:
                         if _inside_plugin(path, resolved_plugin):
-                            cursor_prose.append((container, path, cls, resolved_plugin, False))
+                            cursor_prose.append((container, path, cls, resolved_plugin))
                 for field, cls in (
                     ("hooks", CursorPluginHooksBlock),
                     ("mcpServers", CursorPluginMcpBlock),
@@ -2104,7 +2101,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
                 prose_paths.add(block.resolved_path)
             if isinstance(block, CursorRuleBlock):
                 cursor_rule_paths.add(block.resolved_path)
-        for parent, path, cls, owner, suppressed in cursor_prose:
+        for parent, path, cls, owner in cursor_prose:
             if cls is not CursorRuleBlock:
                 state.add_block(parent, path, cls, owner=owner)
                 prose_paths.add(resolve(path))
@@ -2113,9 +2110,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             if resolved is None or resolved in cursor_rule_paths:
                 continue
             role = CursorRuleValidationBlock if resolved in prose_paths else CursorRuleBlock
-            if state.add_parser_block(
-                parent, path, role, owner=owner, content_suppressed=suppressed
-            ):
+            if state.add_parser_block(parent, path, role, owner=owner):
                 state.seen.add(resolved)
                 prose_paths.add(resolved)
                 cursor_rule_paths.add(resolved)

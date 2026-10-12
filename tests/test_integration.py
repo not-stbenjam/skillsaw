@@ -11159,29 +11159,56 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
-    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
-    def test_source_alias_keeps_cursor_relative_references(self, generator, tmp_path):
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync", None])
+    @pytest.mark.parametrize(
+        "other_consumer", [None, ".cursor/commands/release.md", "agents/release.md"]
+    )
+    def test_source_alias_keeps_cursor_relative_references(
+        self, generator, other_consumer, tmp_path
+    ):
         from skillsaw.blocks.cursor import CursorRuleBlock, CursorRuleValidationBlock
         from skillsaw.context import RepositoryContext
 
-        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        repo = copy_fixture(f"generators/{generator or 'ruler'}", tmp_path)
+        if generator is None:
+            shutil.rmtree(repo / ".ruler")
         target = repo / ".cursor/rules/policy.mdc"
         target.parent.mkdir(parents=True, exist_ok=True)
         inputs = FIXTURES / "generators/consumer-aliases"
         target.write_text((inputs / "cursor.mdc").read_text())
-        source = repo / (
-            ".ruler/policy.md" if generator == "ruler" else ".rulesync/rules/policy.md"
+        source = (
+            repo
+            / {
+                "ruler": ".ruler/policy.md",
+                "rulesync": ".rulesync/rules/policy.md",
+                None: "docs/policy.md",
+            }[generator]
         )
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(target.read_text())
         # The link works beside the source, but not at the consumer path.
         (source.parent / "release-checklist.txt").write_text(
             (inputs / "release-checklist.txt").read_text()
         )
+        if other_consumer:
+            other = repo / other_consumer
+            other.parent.mkdir(parents=True, exist_ok=True)
+            other.symlink_to(os.path.relpath(source, other.parent))
+            (other.parent / "release-checklist.txt").write_text(
+                (inputs / "release-checklist.txt").read_text()
+            )
+            if other_consumer.startswith("agents/"):
+                marker = repo / ".claude-plugin/plugin.json"
+                marker.parent.mkdir()
+                marker.write_text(json.dumps({"name": "inventory-tools"}))
         args = ("--strict", "--rule", "content-broken-internal-reference")
         before = run_lint(repo, *args)
-        target.rename(source)
+        target.unlink()
         target.symlink_to(os.path.relpath(source, target.parent))
         after = run_lint(repo, *args)
         assert before["rc"] == after["rc"] == 1
+        if generator is None:
+            assert not {"ruler", "rulesync"}.intersection(after["out"]["stats"]["repo_types"])
         assert len(violations(before)) == 1
         # The diagnostic survives unchanged, but symlinks are not autofixed.
         expected = {**violations(before)[0], "fixable": False}
