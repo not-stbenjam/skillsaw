@@ -176,8 +176,10 @@ environments are not modeled.
 
 skillsaw respects excluded directories and `lint-external-content: false`.
 Excluded, unreadable, unresolved, or out-of-root instruction or config paths
-make the result incomplete. Excluding the working directory still produces a
-finding at the supplied root. Global and user instruction files are never read.
+make the result incomplete. An exclusion for a file that does not exist has no
+effect on selection. Excluding the working directory still produces a finding
+at the supplied root, even if it contains no instruction files. Global and user
+instruction files are never read.
 
 Standard content checks recognize `AGENTS.override.md`. They discover custom
 fallbacks when this analysis is requested. A plugin's `README.md` receives
@@ -188,7 +190,9 @@ files count toward the Codex budget only if explicitly configured as fallbacks.
 An explicit working directory can reach instructions inside directories such as
 `vendor/` that the ordinary repository scan skips. Those selected files also
 count as repository-type evidence, so rules configured with `enabled: auto`
-can run. Explicit exclusions and the external-content policy still apply.
+can run. `skillsaw explain` uses the same configured working directory when
+showing whether a rule is enabled. Explicit exclusions and the external-content
+policy still apply.
 
 Selected `.codex/` layers also receive the existing hook checks for both
 `hooks.json` and inline hooks in `config.toml`. Hook discovery does not change

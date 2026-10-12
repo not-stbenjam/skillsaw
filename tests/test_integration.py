@@ -11158,6 +11158,39 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("non_file", [False, True])
+    @pytest.mark.parametrize(
+        "excluded,selected",
+        [
+            ("AGENTS.override.md", "AGENTS.md"),
+            ("AGENTS.md", "TEAM.md"),
+            ("FIRST.md", "TEAM.md"),
+            (".codex", "AGENTS.md"),
+            (".codex/config.toml", "AGENTS.md"),
+        ],
+    )
+    def test_excluded_absent_or_non_file_candidates_do_not_block_selection(
+        self, tmp_path, non_file, excluded, selected
+    ):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        (repo / "AGENTS.override.md").rename(repo / selected)
+        if non_file:
+            (repo / excluded).mkdir(parents=True)
+        (repo / ".skillsaw.yaml").write_text(
+            f"plugins: false\nexclude: [{excluded}]\n"
+            "codex-instructions:\n  project_doc_fallback_filenames: [FIRST.md, TEAM.md]\n"
+        )
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 0, inspection.stdout + inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert report["complete"]
+        assert report["issues"] == []
+        assert [entry["path"] for entry in report["selected"]] == [selected]
+        assert report["charged_bytes"] == (repo / selected).stat().st_size
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 0, result["stdout"] + result["stderr"]
+        assert violations(result) == []
+
     @pytest.mark.parametrize("cwd", ["vendor/pkg", "node_modules/pkg"])
     @pytest.mark.parametrize("filename", ["AGENTS.override.md", "AGENTS.md", "TEAM.md"])
     @pytest.mark.parametrize("forced_type", [None, "agentskills"])
@@ -11180,6 +11213,11 @@ class TestCodexInstructionSelection:
         assert f"{cwd}/{filename}" in findings[0]["message"]
         expected_type = "agents-md" if filename == "AGENTS.md" else "codex-project"
         assert expected_type in result["out"]["stats"]["repo_types"]
+        explanation = run_cli(["explain", "codex-project-instructions", repo, "--no-pager"])
+        assert explanation.returncode == 0, explanation.stderr
+        assert (
+            f"enabled — enabled: auto — detected repo type: {expected_type}" in explanation.stdout
+        )
         inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
         report = json.loads(inspection.stdout)
         assert inspection.returncode == 0
@@ -11187,6 +11225,33 @@ class TestCodexInstructionSelection:
         assert report["requested_cwd"] == cwd
         assert report["cwd"] == str(repo / cwd)
         assert report["affected_paths"] == [f"{cwd}/{filename}"]
+
+    @pytest.mark.parametrize("scope", ["unconfigured", "excluded", "external", "missing"])
+    def test_explain_projected_auto_rule_respects_authoring_scope(self, tmp_path, scope):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        cwd = "apm_modules/vendor" if scope == "external" else "vendor/pkg"
+        path = repo / cwd / "AGENTS.override.md"
+        path.parent.mkdir(parents=True)
+        (repo / "AGENTS.override.md").rename(path)
+        config = (
+            'version: "99.0.0"\nplugins: false\n'
+            "rules:\n  codex-project-instructions:\n    enabled: auto\n"
+        )
+        if scope != "unconfigured":
+            requested_cwd = "missing" if scope == "missing" else cwd
+            config += f"codex-instructions:\n  cwd: {requested_cwd}\n"
+        if scope == "excluded":
+            config += "exclude: [vendor]\n"
+        elif scope == "external":
+            config += "lint-external-content: false\n"
+            (repo / "apm.yml").write_text("name: package\nversion: 1.0.0\ntargets: []\n")
+        (repo / ".skillsaw.yaml").write_text(config)
+        explanation = run_cli(["explain", "codex-project-instructions", repo, "--no-pager"])
+        assert explanation.returncode == 0, explanation.stderr
+        assert "disabled — enabled: auto — no matching repo type detected" in explanation.stdout
+        result = run_lint(repo)
+        assert "codex-project" not in result["out"]["stats"]["repo_types"]
+        assert not any(f["rule_id"] == "codex-project-instructions" for f in violations(result))
 
     @pytest.mark.parametrize("source", ["config", "cli"])
     @pytest.mark.parametrize("cwd", ["missing", "../outside", "AGENTS.md"])
@@ -11278,6 +11343,9 @@ class TestCodexInstructionSelection:
         assert len(findings) == 1
         assert findings[0]["rule_id"] == "codex-hooks-valid"
         assert findings[0]["file_path"] == f"{cwd}/.codex/{filename}"
+        explanation = run_cli(["explain", "codex-hooks-valid", repo, "--no-pager"])
+        assert explanation.returncode == 0, explanation.stderr
+        assert "enabled — enabled: auto — detected repo type: codex-project" in explanation.stdout
 
     @pytest.mark.parametrize("cwd", ["service", "vendor/pkg", "node_modules/pkg"])
     @pytest.mark.parametrize("rule", ["codex-hooks-valid", "hooks-dangerous", "hooks-prohibited"])
@@ -11337,7 +11405,8 @@ class TestCodexInstructionSelection:
         assert findings[0]["file_path"] == f"{cwd}/.codex/config.toml"
 
     @pytest.mark.parametrize("external", [False, True])
-    def test_out_of_scope_cwd_retains_incomplete_analysis(self, tmp_path, external):
+    @pytest.mark.parametrize("empty", [False, True])
+    def test_out_of_scope_cwd_retains_incomplete_analysis(self, tmp_path, external, empty):
         repo = copy_fixture("codex-instructions", tmp_path)
         if external:
             cwd = "apm_modules/vendor"
@@ -11347,6 +11416,10 @@ class TestCodexInstructionSelection:
         else:
             cwd = "service"
             policy = "exclude: [service]\n"
+        if empty:
+            (repo / cwd / "AGENTS.md").unlink(missing_ok=True)
+        elif external:
+            shutil.copyfile(repo / "service/AGENTS.md", repo / cwd / "AGENTS.md")
         (repo / ".skillsaw.yaml").write_text("codex-instructions:\n  cwd: " + cwd + "\n" + policy)
         inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
         assert inspection.returncode == 1

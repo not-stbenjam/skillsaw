@@ -37,19 +37,29 @@ def probe_file(
 ) -> Optional[InstructionCandidate]:
     """None means absent/non-file; uncertainty stops precedence, never falls through."""
     label = relative_to_str(path, root) or str(path)
-    if is_root_or_ancestor_excluded(path, root, is_excluded):
-        return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
     resolved = contained_resolve(path, root, resolve)
     if resolved is None:
         return InstructionCandidate(path, f"{label}: unresolved or outside the requested root")
-    if resolved != path and is_root_or_ancestor_excluded(resolved, root, is_excluded):
-        return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
     try:
-        mode = path.stat().st_mode
-    except FileNotFoundError:
+        mode = path.lstat().st_mode
+    except (FileNotFoundError, NotADirectoryError):
         return None
     except (OSError, ValueError) as error:
         return InstructionCandidate(path, f"{label}: cannot inspect file ({error})")
+    if not (stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
+        return None
+    # Exclusions cannot shadow a lower-priority file when the candidate is absent.
+    if is_root_or_ancestor_excluded(path, root, is_excluded):
+        return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
+    if resolved != path and is_root_or_ancestor_excluded(resolved, root, is_excluded):
+        return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
+    if stat.S_ISLNK(mode):
+        try:
+            mode = path.stat().st_mode
+        except (FileNotFoundError, NotADirectoryError):
+            return None
+        except (OSError, ValueError) as error:
+            return InstructionCandidate(path, f"{label}: cannot inspect file ({error})")
     return InstructionCandidate(path, resolved_path=resolved) if stat.S_ISREG(mode) else None
 
 

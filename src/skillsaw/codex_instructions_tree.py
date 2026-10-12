@@ -8,6 +8,7 @@ from .blocks.codex import CodexConfigBlock
 from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ReadmeBlock
 from .codex_instructions import CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
+from .discovery.excludes import is_root_or_ancestor_excluded
 from .formats.codex import CODEX_HOOKS_FILENAME
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, candidate_filenames
 from .paths import relative_to_str
@@ -31,6 +32,8 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
         state.root.children.append(node)
         return
     node.cwd = directories[-1]
+    if is_root_or_ancestor_excluded(node.cwd, context.root_path, context.is_path_excluded):
+        node.issues.append("Codex cwd is excluded from the requested authoring scope")
     if not context.lint_external_content and context.is_externally_sourced(node.cwd):
         node.issues.append("Codex cwd is outside the retained authoring scope")
     configs = {resolve(block.path): block for block in state.root.find(CodexConfigBlock)}

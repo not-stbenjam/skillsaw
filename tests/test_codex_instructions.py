@@ -17,6 +17,7 @@ from skillsaw.blocks import (
 from skillsaw.codex_instructions import CodexInstructionsNode
 from skillsaw.config import LinterConfig
 from skillsaw.context import RepositoryContext, RepositoryType
+from skillsaw.discovery.codex_instructions import select_instructions
 from skillsaw.formats.codex_instructions import CodexInstructionOptions, instruction_bytes
 from skillsaw.linter import Linter
 from skillsaw.rule import Severity
@@ -219,13 +220,57 @@ def test_bad_local_config_is_incomplete(tmp_path, text):
     assert report["issues"]
 
 
-def test_exclusion_does_not_fall_through_to_standard(tmp_path):
+@pytest.mark.parametrize("symlink", [False, True])
+def test_exclusion_does_not_fall_through_to_standard(tmp_path, monkeypatch, symlink):
     context, _ = project(tmp_path, {"AGENTS.override.md": "override", "AGENTS.md": "standard"})
-    context.exclude_patterns = ["AGENTS.override.md"]
+    override = context.root_path / "AGENTS.override.md"
+    if symlink:
+        override.rename(context.root_path / "private.txt")
+        override.symlink_to("private.txt")
+    original = Path.open
+    forbidden_reads = []
+
+    def scoped_open(path, *args, **kwargs):
+        if path.resolve() == override.resolve():
+            forbidden_reads.append(path)
+            raise AssertionError(f"excluded read: {path}")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    context.exclude_patterns = ["private.txt" if symlink else "AGENTS.override.md"]
     context.apply_excludes()
     report = context.lint_tree.find(CodexInstructionsNode)[0].report(context.lint_tree)
+    assert forbidden_reads == []
+    assert not context.lint_tree_errors
     assert not report["complete"]
     assert [e["path"] for e in report["selected"]] == ["AGENTS.override.md"]
+
+
+@pytest.mark.parametrize("symlink", [False, True])
+def test_uninspectable_candidate_keeps_selection_unknown(tmp_path, monkeypatch, symlink):
+    override = tmp_path / "AGENTS.override.md"
+    if symlink:
+        override.symlink_to("private.txt")
+    else:
+        override.write_text("Private instructions")
+    (tmp_path / "AGENTS.md").write_text("Standard instructions")
+    original = Path.stat if symlink else Path.lstat
+
+    def fail_candidate(path, *args, **kwargs):
+        if path == override and kwargs.get("follow_symlinks", True):
+            raise PermissionError("candidate metadata is inaccessible")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat" if symlink else "lstat", fail_candidate)
+    selected = select_instructions(
+        (tmp_path,),
+        ("AGENTS.override.md", "AGENTS.md"),
+        resolve=lambda path: path,
+        is_excluded=lambda path: False,
+    )
+    assert len(selected) == 1
+    assert selected[0].path == override
+    assert "cannot inspect file" in selected[0].issue
 
 
 @pytest.mark.parametrize("symlink", [False, True])
@@ -239,9 +284,12 @@ def test_excluded_config_directory_is_never_read(tmp_path, monkeypatch, symlink)
         (root / ".codex/config.toml").symlink_to("../private/config.toml")
     (root / "AGENTS.md").write_text("Repository instructions")
     original = Path.open
+    forbidden_reads = []
 
     def scoped_open(path, *args, **kwargs):
-        assert not path.resolve().is_relative_to(excluded), f"excluded read: {path}"
+        if path.resolve().is_relative_to(excluded):
+            forbidden_reads.append(path)
+            raise AssertionError(f"excluded read: {path}")
         return original(path, *args, **kwargs)
 
     context = RepositoryContext(
@@ -251,6 +299,8 @@ def test_excluded_config_directory_is_never_read(tmp_path, monkeypatch, symlink)
     tree = context.lint_tree
     assert not tree.find(CodexConfigBlock)
     report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert forbidden_reads == []
+    assert not context.lint_tree_errors
     assert not report["complete"]
     assert report["project_doc_max_bytes"] == 32768
     assert report["charged_bytes"] is None
