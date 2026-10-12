@@ -139,19 +139,20 @@ def attach_instruction_content(
         resolved = resolve(path)
         if resolved is None:
             continue
-        if resolved in claimed:
-            owner = claimed[resolved]
-            if isinstance(owner, (ContentBlock, FrontmatteredBlock)):
-                # Record file validation separately from the existing prose
-                # parser, including empty frontmattered files without a body.
-                state.add_parser_block(
-                    owner, owner.path, CodexInstructionFileNode, owner=owner.plugin_owner
-                )
+        owner = claimed.get(resolved)
+        if isinstance(owner, (ContentBlock, FrontmatteredBlock)):
+            # Record file validation separately from the existing prose
+            # parser, including empty frontmattered files without a body.
+            state.add_parser_block(
+                owner, owner.path, CodexInstructionFileNode, owner=owner.plugin_owner
+            )
             continue
-        # Keep existing skill/command/config roles. Generic extra prose yields
-        # to the instruction role; a README retains its separate display role.
-        block_type = AgentsMdBlock if path.name == "AGENTS.md" else CodexInstructionBlock
         existing = extras.get(resolved) or readmes.get(resolved)
+        if resolved in claimed and (owner is None or existing is None):
+            continue
+        # Generic prose still gains its instruction role beside any config
+        # role. A README also retains its separate display role.
+        block_type = AgentsMdBlock if path.name == "AGENTS.md" else CodexInstructionBlock
         if existing is not None:
             parent, previous = existing
             block = state.add_parser_block(

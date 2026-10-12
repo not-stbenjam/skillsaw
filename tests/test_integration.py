@@ -11159,6 +11159,46 @@ class TestGoose:
 @pytest.mark.integration
 class TestCodexInstructionSelection:
     @pytest.mark.parametrize("config_name", ["hooks.json", "config.toml"])
+    @pytest.mark.parametrize("content", ["empty", "invalid-utf8", "over-budget"])
+    def test_generic_fallback_prose_keeps_checks_alongside_projected_config(
+        self, tmp_path, config_name, content
+    ):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        package = repo / "vendor/pkg"
+        (package / ".codex").mkdir(parents=True)
+        source = package / "TEAM.md"
+        (repo / "AGENTS.override.md").rename(source)
+        source.write_bytes(
+            b""
+            if content == "empty"
+            else (
+                b"\xff"
+                if content == "invalid-utf8"
+                else source.read_bytes()
+                + b"Run deployment checks before promoting the release.\n" * 600
+            )
+        )
+        (package / ".codex" / config_name).symlink_to("../TEAM.md")
+        (repo / ".skillsaw.yaml").write_text(
+            'version: "99.0.0"\nplugins: false\n'
+            "content-paths: [vendor/pkg/TEAM.md]\n"
+            "codex-instructions:\n  cwd: vendor/pkg\n"
+            "  project_doc_fallback_filenames: [TEAM.md]\n"
+        )
+        rule = "context-budget" if content == "over-budget" else "instruction-file-valid"
+        result = run_lint(repo, "--rule", rule, "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        found = violations(result)
+        assert len(found) == 1
+        assert found[0]["file_path"] == "vendor/pkg/TEAM.md"
+        expected = {
+            "empty": "is empty",
+            "invalid-utf8": "Failed to read",
+            "over-budget": "agents-md warn limit of 6,000",
+        }
+        assert expected[content] in found[0]["message"]
+
+    @pytest.mark.parametrize("config_name", ["hooks.json", "config.toml"])
     @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
     @pytest.mark.parametrize("invalid_utf8", [False, True])
     def test_instruction_validation_keeps_prose_alongside_config_roles(

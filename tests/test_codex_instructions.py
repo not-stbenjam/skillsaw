@@ -77,11 +77,15 @@ def test_fallback_order_empty_standard_and_directory_candidates(tmp_path):
     assert any(b.path.name == "FIRST.md" for b in context.lint_tree.find(ContentBlock))
 
 
-def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp_path):
+@pytest.mark.parametrize("config_name", [None, "hooks.json", "config.toml"])
+def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp_path, config_name):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
     (root / "child").mkdir()
     (root / "child/README.md").symlink_to("../README.md")
+    if config_name:
+        (root / ".codex").mkdir()
+        (root / ".codex" / config_name).symlink_to("../README.md")
     context = RepositoryContext(
         root,
         codex_instructions=CodexInstructionOptions(
@@ -97,9 +101,13 @@ def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp
     assert instructions[0].plugin_owner == readme.plugin_owner == root
     assert instructions[0].category == "agents-md"
     report = tree.find(CodexInstructionsNode)[0].report(tree)
-    assert report["complete"]
+    # The Markdown README cannot parse as TOML, but keeps its prose role.
+    assert report["complete"] is (config_name != "config.toml")
     assert [entry["path"] for entry in report["selected"]] == ["README.md", "child/README.md"]
-    assert report["charged_bytes"] == 2 * (root / "README.md").stat().st_size
+    expected_bytes = (
+        None if config_name == "config.toml" else 2 * (root / "README.md").stat().st_size
+    )
+    assert report["charged_bytes"] == expected_bytes
 
 
 @pytest.mark.parametrize("path_source", ["content_paths", "plugin_content_paths"])
@@ -133,13 +141,17 @@ def test_selected_fallback_replaces_generic_extra_role(tmp_path, path_source, al
 
 @pytest.mark.parametrize("custom_role", [False, True])
 @pytest.mark.parametrize("lint_external", [False, True])
+@pytest.mark.parametrize("config_name", [None, "hooks.json", "config.toml"])
 def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
-    tmp_path, custom_role, lint_external
+    tmp_path, custom_role, lint_external, config_name
 ):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
     path = root / "TEAM.md"
     (root / "AGENTS.override.md").rename(path)
+    if config_name:
+        (root / ".codex").mkdir()
+        (root / ".codex" / config_name).symlink_to("../TEAM.md")
 
     class CustomProse(ExtraBlock):
         pass
@@ -183,6 +195,9 @@ def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
         assert validation[0].in_external_source
     assert child.parent is block
     assert child.in_external_source
+    if config_name:
+        config_type = CodexHooksBlock if config_name == "hooks.json" else CodexConfigBlock
+        assert len([node for node in tree.find(config_type) if node.resolved_path == path]) == 1
 
 
 @pytest.mark.parametrize("structured", [False, True])
