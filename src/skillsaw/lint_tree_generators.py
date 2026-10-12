@@ -8,6 +8,7 @@ from skillsaw.blocks.generators import (
     RulesyncRuleBlock,
 )
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
+from skillsaw.claude_tree import attach_claude_rule_files
 
 
 def attach_rulesync_claude_rules(state, readable_matches):
@@ -25,6 +26,7 @@ def attach_rulesync_claude_rules(state, readable_matches):
             directory, context.root_path, context.is_path_excluded
         ):
             continue
+        attach_claude_rule_files(state, directory, readable_matches)
         for path in readable_matches(directory, "**/*.md"):
             state.add_parser_block(state.root, path, PluginRuleBlock)
 

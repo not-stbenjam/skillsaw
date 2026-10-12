@@ -159,6 +159,10 @@ def tag_generator_copies(context, tree):
     if not context.rulesync_generated:
         return
     rules = {n.path: n for n in tree.find(RulesyncRuleBlock)}
+    consumers = {
+        "cursor": {n.path: n for n in tree.find(CursorRuleBlock)},
+        "claudecode": {n.path: n for n in tree.find(PluginRuleBlock)},
+    }
     for project in projects:
         if project.generator != "rulesync":
             continue
@@ -175,13 +179,11 @@ def tag_generator_copies(context, tree):
                     destination = (
                         project.root / ".cursor/rules" / Path(relative).with_suffix(".mdc")
                     )
-                    cls = CursorRuleBlock
                 else:
                     destination = project.root / ".claude/rules" / relative
-                    cls = PluginRuleBlock
-                output = nodes.get(destination)
+                output = consumers[target].get(destination)
                 if (
-                    isinstance(output, cls)
+                    output is not None
                     and not output.content_suppressed
                     and _rulesync_copy(source, target, output)
                 ):

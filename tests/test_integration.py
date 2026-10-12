@@ -11159,6 +11159,45 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize("recognized", [True, False])
+    def test_nested_claude_rules_keep_structural_validation(self, recognized, tmp_path):
+        repo = tmp_path / "monorepo"
+        project = copy_fixture("generators/rulesync", repo / "packages")
+        (repo / ".skillsaw.yaml").write_text(
+            "rulesync-generated: true\nrules:\n  claude-rules-valid:\n    severity: warning\n"
+        )
+        source = project / ".rulesync/rules/backend/api.md"
+        output = project / ".claude/rules/backend/api.md"
+        if recognized:
+            source.write_text(source.read_text().replace("src/**/*.ts", "../shared/**/*.ts"))
+            output.write_text(output.read_text().replace("src/**/*.ts", "../shared/**/*.ts"))
+        else:
+            output.write_text(
+                output.read_text().replace("paths:\n  - src/**/*.ts", "paths: src/**/*.ts")
+            )
+        result = run_lint(repo)
+        found = by_rule(result).get("claude-rules-valid", [])
+        assert len(found) == 1
+        assert found[0]["file_path"] == str(output.relative_to(repo))
+        assert found[0]["line"] == 2
+        assert found[0]["severity"] == "warning"
+        assert (found[0].get("generator") == "rulesync") is recognized
+
+    def test_nested_claude_inventory_keeps_explicit_content_paths(self, tmp_path):
+        repo = tmp_path / "monorepo"
+        project = copy_fixture("generators/rulesync", repo / "packages")
+        notes = project / ".claude/rules/checklist.txt"
+        notes.write_text("Read the release\u200bchecklist before deployment.\n")
+        (repo / ".skillsaw.yaml").write_text("content-paths: ['**/*.txt']\n")
+        result = run_lint(
+            repo, "--rule", "claude-rules-valid", "--rule", "security-invisible-unicode"
+        )
+        assert {v["rule_id"] for v in violations(result)} == {
+            "claude-rules-valid",
+            "security-invisible-unicode",
+        }
+        assert all(v["file_path"] == str(notes.relative_to(repo)) for v in violations(result))
+
     @pytest.mark.parametrize("owned", [True, False])
     def test_nested_rulesync_claude_outputs_keep_consumer_checks(self, owned, tmp_path):
         repo = tmp_path / "monorepo"
@@ -11448,6 +11487,46 @@ class TestGeneratorWorkflows:
         assert target in {n.path for n in context.lint_tree.find(ExtraBlock)}
         if generator is None:
             assert not {"ruler", "rulesync"}.intersection(after["out"]["stats"]["repo_types"])
+
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
+    @pytest.mark.parametrize("filename", ["AGENTS.md", "CLAUDE.md"])
+    @pytest.mark.parametrize("alias_count", [1, 2])
+    def test_native_source_content_alias_keeps_relative_references(
+        self, generator, filename, alias_count, tmp_path
+    ):
+        from skillsaw.blocks import ExtraBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        source = repo / (".ruler" if generator == "ruler" else ".rulesync/rules") / filename
+        inputs = FIXTURES / "generators/consumer-aliases"
+        source.write_text((inputs / "cursor.mdc").read_text())
+        (source.parent / "release-checklist.txt").write_text(
+            (inputs / "release-checklist.txt").read_text()
+        )
+        targets = [repo / "consumer/policy.md", repo / "review/policy.md"][:alias_count]
+        for target in targets:
+            target.parent.mkdir()
+            target.write_text(source.read_text())
+        config = repo / ".skillsaw.yaml"
+        config.write_text(config.read_text() + "\ncontent-paths: ['**/*.md']\n")
+        args = ("--strict", "--rule", "content-broken-internal-reference")
+        before = run_lint(repo, *args)
+        for target in targets:
+            target.unlink()
+            target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 1
+        assert len(violations(before)) == alias_count
+        expected = [{**v, "fixable": False} for v in violations(before)]
+        for v in expected:
+            v.pop("fix_confidence", None)
+        assert violations(after) == expected
+        assert {v["file_path"] for v in expected} == {str(p.relative_to(repo)) for p in targets}
+        assert all(v["line"] == 7 for v in expected)
+        blocks = RepositoryContext(repo, content_paths=["**/*.md"]).lint_tree.find(ExtraBlock)
+        assert set(targets) <= {n.path for n in blocks}
+        assert source not in {n.path for n in blocks}
 
     @pytest.mark.parametrize("generator", ["ruler", "rulesync", None])
     @pytest.mark.parametrize(

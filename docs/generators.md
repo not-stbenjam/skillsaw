@@ -37,6 +37,8 @@ different findings remain visible. An alias is not treated as generated output.
 This also applies to a differently named alias explicitly selected through
 `content-paths`, including a raw Markdown view of generator configuration.
 Globs matching the canonical source or configuration path retain its native role.
+Sources named `AGENTS.md` or `CLAUDE.md` keep both their native instruction role
+and any separately configured alias's location-dependent reference checks.
 
 The following optional checks use pinned release contracts:
 
@@ -82,6 +84,10 @@ and size checks. Only a fixed set of editorial checks, such as weak language
 and repeated directives, is suppressed on verified copies. Source findings
 keep the authored file and line. APM's existing generated-context handling is
 unchanged.
+
+The existing `claude-rules-valid` check reads these consumer files from the lint
+tree, including nested projects. Invalid `paths` metadata and unloaded file
+extensions remain visible independently of source validation and copy ownership.
 
 For **Ruler**, recognition is automatic for conventional project `AGENTS.md`
 and `CLAUDE.md` outputs. It requires Ruler's source comments, the `AGENTS.md`
