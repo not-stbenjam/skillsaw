@@ -295,21 +295,31 @@ def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scop
     target.write_text("# Service instructions\n\nRun the service tests before deployment.\n")
     exclusions = {"excluded-ancestor": ["service"], "excluded-target": [".private"]}
     original = Path.open
+    allow_read = scope == "included"
+    forbidden_reads = []
 
     def scoped_open(file, *args, **kwargs):
-        if scope != "included":
-            assert file.resolve() != target.resolve(), f"out-of-scope read: {file}"
+        if not allow_read and file.resolve() == target.resolve():
+            forbidden_reads.append(file)
+            raise AssertionError(f"out-of-scope read: {file}")
         return original(file, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", scoped_open)
     context = RepositoryContext(root, exclude_patterns=exclusions.get(scope, []))
     assert (RepositoryType.CODEX_PROJECT in context.repo_types) is (scope == "included")
-    assert bool(context.lint_tree.find(CodexInstructionBlock)) is (scope == "included")
+    tree = context.lint_tree
+    assert not forbidden_reads
+    assert not context.lint_tree_errors
+    assert bool(tree.find(CodexInstructionBlock)) is (scope == "included")
     if scope == "included":
+        allow_read = False
         context.exclude_patterns = ["service"]
         context.apply_excludes()
         assert RepositoryType.CODEX_PROJECT not in context.repo_types
-        assert not context.lint_tree.find(CodexInstructionBlock)
+        tree = context.lint_tree
+        assert not forbidden_reads
+        assert not context.lint_tree_errors
+        assert not tree.find(CodexInstructionBlock)
 
 
 @pytest.mark.parametrize("lint_external", [False, True])
