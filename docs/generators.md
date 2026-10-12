@@ -17,7 +17,8 @@ with the rules for their consumers. Run the generator yourself or in CI;
   comments and trailing commas. Nested project directories are discovered.
 
 Description findings point to the YAML field's key line, including folded
-strings. Decoded descriptions are diagnostic-only because their Markdown spans
+strings. Descriptions inherited through YAML merges have file-level locations.
+Decoded descriptions are diagnostic-only because their Markdown spans
 do not map directly to the YAML file for safe autofix.
 
 Sources get the `instruction` budget role, rather than the generic `extra`

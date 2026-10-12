@@ -279,12 +279,12 @@ class _TreeBuildState:
     ) -> None:
         """Add one safely resolved block unless its role is already present."""
         resolved = self.resolve_repo_path(p)
-        if resolved in self.generator_source_paths and not issubclass(
-            block_cls, (ContentBlock, FrontmatteredBlock)
-        ):
-            # A consumer config can alias authored Markdown. Its independent
-            # parser still owns structural/security checks for that location.
-            self.add_parser_block(parent, p, block_cls, owner, content_suppressed)
+        if resolved in self.generator_source_paths and not issubclass(block_cls, ContentBlock):
+            # Native frontmatter and config retain their independent parser
+            # roles, including embedded hooks/MCP, without a second prose body.
+            block = self.add_parser_block(parent, p, block_cls, owner, content_suppressed)
+            if isinstance(block, FrontmatteredBlock):
+                block.body_owned_elsewhere = True
             return
         if (
             resolved is None

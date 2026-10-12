@@ -11,10 +11,7 @@ import re
 
 import yaml
 
-from skillsaw.utils import _SAFE_LOADER
-
-# Unlike portable skill frontmatter, an entirely empty rule header is valid.
-_RULE_FRONTMATTER_RE = re.compile(r"^---[ \t]*\r?\n((?:.*?\r?\n)?)---[ \t]*\r?(?:\n|\Z)", re.DOTALL)
+from skillsaw.utils import _SAFE_LOADER, FRONTMATTER_RE_EMPTY_OK
 
 STRING = {"type": "string"}
 BOOLEAN = {"type": "boolean"}
@@ -152,6 +149,17 @@ class _RulesyncLoader(_SAFE_LOADER):
             if key.tag == "tag:yaml.org,2002:merge":
                 continue
             value = self.construct_object(key)
+            # js-yaml stores object keys as strings, so true and 1 are distinct
+            # even though Python's bool/int keys compare equal. Quoted scalar
+            # spellings still collide with their corresponding native values.
+            if value is True or value is False:
+                value = str(value).lower()
+            elif value is None:
+                value = "null"
+            elif isinstance(value, int):
+                value = str(value)
+            elif isinstance(value, float):
+                value = str(int(value)) if value.is_integer() else str(value)
             try:
                 duplicate = value in seen
                 seen.add(value)
@@ -173,15 +181,23 @@ _RulesyncLoader.add_implicit_resolver(
     list("tTfF"),
 )
 
+# gray-matter 4.0.3 uses js-yaml 3.14: unlike PyYAML, exponents need neither
+# a decimal point nor an explicit sign. Keep the other safe scalar resolvers.
+_RulesyncLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(r"^(?:[-+]?(?:0|[1-9][0-9_]*)(?:\.[0-9_]*)?|\.[0-9_]+)[eE][-+]?[0-9]+$"),
+    list("-+0123456789."),
+)
+
 
 def parse_rulesync_frontmatter(content):
     """Parse conventional YAML frontmatter, retaining honest body line offsets.
 
     Rulesync drops null object fields and array entries before validation.
-    Noncanonical gray-matter
-    fences and target-specific extensions are outside this validator's scope.
+    Noncanonical gray-matter fences and target-specific extensions are outside
+    this validator's scope.
     """
-    match = _RULE_FRONTMATTER_RE.match(content.lstrip("\ufeff"))
+    match = FRONTMATTER_RE_EMPTY_OK.match(content.lstrip("\ufeff"))
     if match is None:
         return None, None, None, content, 0
     normalized = content.lstrip("\ufeff")

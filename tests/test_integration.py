@@ -11159,6 +11159,115 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
+    @pytest.mark.parametrize(
+        "consumer,block_type",
+        [
+            ("skills/audit/SKILL.md", "SkillBlock"),
+            ("agents/audit.md", "AgentBlock"),
+            (".github/agents/audit.agent.md", "CopilotAgentBlock"),
+        ],
+    )
+    def test_frontmatter_alias_keeps_native_roles(self, generator, consumer, block_type, tmp_path):
+        from skillsaw import blocks
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        if block_type == "AgentBlock":
+            marker = repo / ".claude-plugin/plugin.json"
+            marker.parent.mkdir()
+            marker.write_text(json.dumps({"name": "inventory-tools"}))
+        target = repo / consumer
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((FIXTURES / "generators/consumer-aliases/agent.md").read_text())
+        before = run_lint(repo, "--rule", "hooks-dangerous", "--rule", "mcp-prohibited")
+        source = repo / (".ruler/audit.md" if generator == "ruler" else ".rulesync/rules/audit.md")
+        target.rename(source)
+        target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, "--rule", "hooks-dangerous", "--rule", "mcp-prohibited")
+        assert before["rc"] == after["rc"] == 1
+        assert violations(after) == violations(before)
+        assert any(v["rule_id"] == "hooks-dangerous" for v in violations(after))
+        if block_type == "CopilotAgentBlock":
+            assert any(v["rule_id"] == "mcp-prohibited" for v in violations(after))
+        context = RepositoryContext(repo)
+        native = next(
+            n for n in context.lint_tree.find(getattr(blocks, block_type)) if n.path == target
+        )
+        assert native.body_owned_elsewhere
+        assert not native.content_blocks()
+        assert native.estimate_tokens() == 0
+        prose = [n for n in context.lint_tree.content_blocks() if n.resolved_path == source]
+        assert sum("Review transaction boundaries" in (n.read_body() or "") for n in prose) == 1
+        findings = violations(run_lint(repo, "--rule", "content-weak-language"))
+        assert [
+            v["file_path"]
+            for v in findings
+            if v["file_path"] in {consumer, str(source.relative_to(repo))}
+        ] == [str(source.relative_to(repo))]
+
+    @pytest.mark.parametrize(
+        "generator,alias,payload",
+        [
+            (
+                "ruler",
+                ".ruler/ruler.toml",
+                "# Keep the inventory\u200bpolicy current.\n[gitignore]\nenabled = false\n",
+            ),
+            (
+                "rulesync",
+                "rulesync.jsonc",
+                '{\n// Keep the inventory\u200bpolicy current.\n"targets": ["opencode"], "features": ["rules"]\n}\n',
+            ),
+        ],
+    )
+    def test_config_alias_keeps_configured_instructions(self, generator, alias, payload, tmp_path):
+        from skillsaw.blocks import InstructionBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        target = repo / "docs/policy.md"
+        target.parent.mkdir()
+        target.write_text(payload)
+        (repo / "opencode.json").write_text(json.dumps({"instructions": ["docs/policy.md"]}))
+        before = run_lint(repo, "--rule", "security-invisible-unicode")
+        config = repo / alias
+        config.unlink()
+        config.symlink_to(os.path.relpath(target, config.parent))
+        after = run_lint(repo, "--rule", "security-invisible-unicode")
+        assert before["rc"] == after["rc"] == 1
+        assert violations(after) == violations(before)
+        assert any(v["file_path"] == "docs/policy.md" for v in violations(after))
+        assert target in {n.path for n in RepositoryContext(repo).lint_tree.find(InstructionBlock)}
+
+    @pytest.mark.parametrize("rule", ["security-invisible-unicode", "security-encoded-payload"])
+    def test_description_security_scans_value_once(self, rule, tmp_path):
+        import base64
+
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        description = (
+            "HTTP\u200bAPI"
+            if rule == "security-invisible-unicode"
+            else base64.b64encode(bytes(range(128))).decode()
+        )
+        source = repo / ".rulesync/rules/release.md"
+        source.write_text(f"---\ndescription: {description}\n---\n\n# Release\n\nRun the tests.\n")
+        result = run_lint(repo, "--rule", rule)
+        assert [(v["file_path"], v["line"]) for v in violations(result)] == [
+            (str(source.relative_to(repo)), 2)
+        ]
+
+    def test_description_unknown_location_is_file_level(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/release.md"
+        source.write_text(
+            "---\ndefaults: &defaults\n  description: Consider adding a release test.\n<<: *defaults\n---\n\n# Release\n\nRun the tests.\n"
+        )
+        result = run_lint(repo, "--rule", "content-weak-language")
+        found = [v for v in violations(result) if v["file_path"] == str(source.relative_to(repo))]
+        assert len(found) == 1
+        assert found[0]["line"] is None
+
     @pytest.mark.parametrize(
         "generator,alias", [("ruler", ".ruler/ruler.toml"), ("rulesync", "rulesync.jsonc")]
     )

@@ -183,6 +183,8 @@ class FrontmatteredBlock(LintTarget):
 
     category: str = ""
     content_lintable_fields: Tuple[str, ...] = ()
+    # Independent native parser view when another node owns this file's prose.
+    body_owned_elsewhere: bool = False
 
     def file_line(self, line: int) -> int:
         """For FrontmatteredBlock, line numbers are already file-absolute."""
@@ -253,7 +255,7 @@ class FrontmatteredBlock(LintTarget):
                     )
                 )
         body_text = self._fm_parsed[3]
-        if body_text:
+        if body_text and not self.body_owned_elsewhere:
             self.children.append(
                 BodyContent(
                     path=self.path,
@@ -320,6 +322,8 @@ class FrontmatteredBlock(LintTarget):
         return _yaml_line_map(fm_text, line_offset=offset)
 
     def estimate_tokens(self) -> int:
+        if self.body_owned_elsewhere:
+            return 0
         self._ensure_parsed()
         return super().estimate_tokens()
 

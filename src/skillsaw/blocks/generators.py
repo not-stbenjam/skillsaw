@@ -33,7 +33,7 @@ class RulesyncDescriptionBlock(FrontmatterField, ContentBlock):
         raise NotImplementedError("Decoded frontmatter descriptions are diagnostic-only")
 
     def file_line(self, body_line):
-        return self.field_line or 0
+        return self.field_line
 
 
 @dataclass(eq=False)

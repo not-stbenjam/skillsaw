@@ -23,10 +23,8 @@ def attach_generator_configs(state):
     for project in state.context.generator_projects():
         ruler = project.generator == "ruler"
         if project.config is not None:
-            block = state.add_parser_block(
+            state.add_parser_block(
                 state.root,
                 project.config,
                 RulerConfigBlock if ruler else RulesyncConfigBlock,
             )
-            if block is not None:
-                state.seen.add(block.resolved_path)
