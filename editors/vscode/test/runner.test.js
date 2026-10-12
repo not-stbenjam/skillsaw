@@ -66,7 +66,9 @@ async function ready(options, name = 'ready') {
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
     try {
-      return Number(await fs.readFile(path.join(options.cwd, name), 'utf8'));
+      const contents = await fs.readFile(path.join(options.cwd, name), 'utf8');
+      const pid = Number(contents);
+      if (/^[1-9]\d*\n$/.test(contents) && validPid(pid)) return pid;
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }
@@ -75,7 +77,12 @@ async function ready(options, name = 'ready') {
   assert.fail('fake CLI did not become ready');
 }
 
+function validPid(pid) {
+  return Number.isSafeInteger(pid) && pid > 1 && pid <= 2147483647;
+}
+
 function alive(pid) {
+  assert(validPid(pid), 'refuse to signal an invalid PID or process group');
   try {
     process.kill(pid, 0);
     return true;
@@ -84,6 +91,28 @@ function alive(pid) {
     return false;
   }
 }
+
+test('readiness waits for a complete valid PID and cleanup rejects process groups', async (t) => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw readiness '));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+  const marker = path.join(cwd, 'ready');
+  await fs.writeFile(marker, '');
+  let settled = false;
+  const pending = ready({ cwd }).then((pid) => {
+    settled = true;
+    return pid;
+  });
+  for (const incomplete of ['', '0\n', '-1\n', '1\n', '123', '999999999999999999\n']) {
+    await fs.writeFile(marker, incomplete);
+    await delay(20);
+    assert.equal(settled, false);
+  }
+  await fs.writeFile(`${marker}.tmp`, `${process.pid}\n`);
+  await fs.rename(`${marker}.tmp`, marker);
+  assert.equal(await pending, process.pid);
+  for (const invalid of [0, -1, 1, NaN, 1.5, 2147483648])
+    assert.throws(() => alive(invalid), /invalid PID/);
+});
 
 test(
   'cancellation forcibly terminates a ready CLI ignoring SIGTERM',
@@ -96,7 +125,8 @@ test(
       t,
       `
     process.on('SIGTERM', () => {});
-    require('node:fs').writeFileSync('ready', String(process.pid));
+    require('node:fs').writeFileSync('ready.tmp', String(process.pid) + '\\n');
+    require('node:fs').renameSync('ready.tmp', 'ready');
     setInterval(() => {}, 1000);
   `,
     );
@@ -126,9 +156,10 @@ test(
     const options = await fake(
       t,
       `
-    require('node:fs').writeFileSync('parent', String(process.pid));
+    require('node:fs').writeFileSync('parent.tmp', String(process.pid) + '\\n');
+    require('node:fs').renameSync('parent.tmp', 'parent');
     const child = require('node:child_process').spawn(process.execPath, ['-e',
-      "require('node:fs').writeFileSync('ready', String(process.pid)); setInterval(() => {}, 1000);"
+      "require('node:fs').writeFileSync('ready.tmp', String(process.pid) + '\\\\n'); require('node:fs').renameSync('ready.tmp', 'ready'); setInterval(() => {}, 1000);"
     ], { stdio: 'inherit' });
     child.unref();
   `,
