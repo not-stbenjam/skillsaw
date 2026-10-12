@@ -349,11 +349,11 @@ class _TreeBuildState:
         if resolved is None:
             return None
         role = (resolved, block_cls)
-        if (
-            role in self.seen_roles
-            or not safe_is_file(resolved)
-            or self.context.is_path_excluded(p)
-        ):
+        if not safe_is_file(resolved) or self.context.is_path_excluded(p):
+            return None
+        if role in self.seen_roles:
+            if preserve_content_aliases:
+                self.extra_content_paths.add(p)
             return None
         # seen_roles only — never the path-only ``seen`` set: a manifest can
         # declare ``hooks``/``mcpServers`` at any in-plugin markdown file,

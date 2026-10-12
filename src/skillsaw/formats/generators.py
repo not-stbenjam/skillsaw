@@ -75,7 +75,7 @@ RULESYNC_CONFIG = object_schema(
     {
         "$schema": STRING,
         "targets": {"anyOf": [STRINGS, {"type": "object"}]},
-        "features": {"anyOf": [STRINGS, {"type": "object"}]},
+        "features": STRINGS,
         "outputRoots": {
             "anyOf": [
                 STRINGS,
@@ -128,6 +128,19 @@ def schema_problems(data, schema):
     ]
 
 
+def _rulesync_scalar_key(value):
+    """Preserve boolean and numeric keys using the loader's string spellings."""
+    if value is True or value is False:
+        return str(value).lower()
+    if value is None:
+        return "null"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else str(value)
+    return value
+
+
 class _RulesyncLoader(_SAFE_LOADER):
     # js-yaml's default schema accepts true/false, not YAML 1.1's yes/no/on/off.
     yaml_implicit_resolvers = {
@@ -148,18 +161,10 @@ class _RulesyncLoader(_SAFE_LOADER):
         for key, _value in node.value:
             if key.tag == "tag:yaml.org,2002:merge":
                 continue
-            value = self.construct_object(key)
+            value = _rulesync_scalar_key(self.construct_object(key))
             # js-yaml stores object keys as strings, so true and 1 are distinct
             # even though Python's bool/int keys compare equal. Quoted scalar
             # spellings still collide with their corresponding native values.
-            if value is True or value is False:
-                value = str(value).lower()
-            elif value is None:
-                value = "null"
-            elif isinstance(value, int):
-                value = str(value)
-            elif isinstance(value, float):
-                value = str(int(value)) if value.is_integer() else str(value)
             try:
                 duplicate = value in seen
                 seen.add(value)
@@ -173,6 +178,23 @@ class _RulesyncLoader(_SAFE_LOADER):
                     key.start_mark,
                 )
         return super().flatten_mapping(node)
+
+    def construct_mapping(self, node, deep=False):
+        """Normalize keys before dict insertion can collapse True and 1."""
+        if isinstance(node, yaml.MappingNode):
+            self.flatten_mapping(node)
+        mapping = {}
+        for index, (key, value) in enumerate(self.construct_pairs(node, deep=deep)):
+            try:
+                mapping[_rulesync_scalar_key(key)] = value
+            except TypeError:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    "found unhashable key",
+                    node.value[index][0].start_mark,
+                ) from None
+        return mapping
 
 
 _RulesyncLoader.add_implicit_resolver(

@@ -62,12 +62,8 @@ class RulesyncSourceValidRule(Rule):
             problems = schema_problems(data, RULESYNC_CONFIG)
             if "inputRoot" in data and "inputRoots" in data:
                 problems.append(((), "choose either inputRoot or inputRoots"))
-            if (
-                "targets" in data
-                and "features" in data
-                and (isinstance(data["targets"], dict) or isinstance(data["features"], dict))
-            ):
-                problems.append(((), "object-form targets and features cannot be combined"))
+            if "targets" in data and "features" in data and isinstance(data["targets"], dict):
+                problems.append(((), "object-form targets cannot be combined with features"))
             if problems:
                 violations.append(
                     self.violation(

@@ -11159,6 +11159,102 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize(
+        "generator,config_path,comment,pattern,config_type,rule",
+        [
+            (
+                "ruler",
+                ".ruler/ruler.toml",
+                "#",
+                "**/*.toml",
+                "RulerConfigBlock",
+                "ruler-config-valid",
+            ),
+            (
+                "rulesync",
+                "rulesync.jsonc",
+                "//",
+                "**/*.jsonc",
+                "RulesyncConfigBlock",
+                "rulesync-source-valid",
+            ),
+        ],
+    )
+    def test_shared_canonical_configs_keep_native_roles(
+        self, generator, config_path, comment, pattern, config_type, rule, tmp_path
+    ):
+        from skillsaw.blocks import ExtraBlock, generators
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        config = repo / config_path
+        config.write_text(
+            config.read_text() + f"\n{comment} Keep the release\u200bpolicy current.\n"
+        )
+        shared = repo / "packages/web" / config_path
+        shared.parent.mkdir(parents=True)
+        shared.write_text(config.read_text())
+        settings = repo / ".skillsaw.yaml"
+        settings.write_text(settings.read_text() + f"\ncontent-paths: ['{pattern}']\n")
+        args = ("--strict", "--rule", "security-invisible-unicode", "--rule", rule)
+        before = run_lint(repo, *args)
+        shared.unlink()
+        shared.symlink_to(os.path.relpath(config, shared.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 0
+        assert violations(before) == violations(after) == []
+        tree = RepositoryContext(repo, content_paths=[pattern]).lint_tree
+        assert len(tree.find(getattr(generators, config_type))) == 1
+        assert not {config, shared}.intersection(n.path for n in tree.find(ExtraBlock))
+
+    @pytest.mark.parametrize("boolean,number", [("true", 1), ("false", 0)])
+    def test_rulesync_scalar_keys_preserve_security_values(self, boolean, number, tmp_path):
+        from skillsaw.blocks.generators import RulesyncRuleBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/policy.md"
+        source.write_text(
+            f'---\nmetadata: {{{boolean}: "release\u200bpolicy", {number}: clean}}\n'
+            "description: Inventory release policy\n---\n\n# Release\n\nRun the reservation tests.\n"
+        )
+        result = run_lint(
+            repo, "--rule", "security-invisible-unicode", "--rule", "rulesync-source-valid"
+        )
+        assert result["rc"] == 1
+        found = violations(result)
+        assert len(found) == 1
+        assert found[0]["rule_id"] == "security-invisible-unicode"
+        assert found[0]["file_path"] == ".rulesync/rules/policy.md"
+        assert found[0]["line"] == 2
+        block = next(
+            n for n in RepositoryContext(repo).lint_tree.find(RulesyncRuleBlock) if n.path == source
+        )
+        assert block.raw_data["metadata"] == {boolean: "release\u200bpolicy", str(number): "clean"}
+
+    @pytest.mark.parametrize(
+        "selection,valid",
+        [
+            ({"features": {"cursor": ["rules"]}}, False),
+            ({"features": ["rules"], "targets": ["cursor"]}, True),
+            ({"targets": {"cursor": ["rules"]}}, True),
+            ({"targets": {"cursor": ["rules"]}, "features": ["rules"]}, False),
+        ],
+    )
+    def test_rulesync_config_feature_selection(self, selection, valid, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        (repo / "rulesync.jsonc").write_text(json.dumps(selection))
+        result = run_lint(repo, "--rule", "rulesync-source-valid")
+        assert result["rc"] == (0 if valid else 1)
+        if valid:
+            assert violations(result) == []
+        else:
+            found = violations(result)
+            assert len(found) == 1
+            assert found[0]["file_path"] == "rulesync.jsonc"
+            assert found[0]["line"] is None
+            assert "features" in found[0]["message"]
+
     @pytest.mark.parametrize("generator", ["ruler", "rulesync", None])
     def test_content_path_alias_keeps_relative_references(self, generator, tmp_path):
         from skillsaw.blocks import ExtraBlock

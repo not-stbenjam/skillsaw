@@ -24,9 +24,10 @@ Start rule files with YAML frontmatter delimited by `---`. Use booleans for
 `globs`, and target-specific path lists; and a string for `description`.
 Optional null frontmatter values are treated as absent, matching Rulesync.
 
-Use a JSONC object for project configuration. Choose `inputRoot` or `inputRoots`,
-and do not combine object-form `targets` or `features` with the other selection
-field. Rulesync's own validation remains responsible for target/feature names,
+Use a JSONC object for project configuration. Choose `inputRoot` or `inputRoots`.
+Use an array of strings for `features`, or put per-target feature selections
+under object-form `targets` and omit `features`.
+Rulesync's own validation remains responsible for target/feature names,
 per-target options, and frontmatter extensions outside the documented subset.
 
 Generate explicitly, then lint the resulting native consumer files. Enable

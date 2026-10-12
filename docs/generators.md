@@ -54,9 +54,11 @@ runtime behavior.
 `rulesync-source-valid` checks conventional YAML rule frontmatter and the common
 fields `root`, `localRoot`, `targets`, `description`, `globs`, `claudecode.paths`,
 `cursor`, and `agentsmd.subprojectPath`. It checks JSONC syntax, common configuration
-field shapes, and the `inputRoot`/`inputRoots` and object-form `targets`/`features`
-exclusions. It removes null optional frontmatter fields and null entries in
-the supported arrays, as Rulesync does. Rulesync itself remains responsible for
+field shapes, and the `inputRoot`/`inputRoots` exclusion. `features` must be an
+array of strings; per-target feature selections use object-form `targets`,
+which cannot be combined with `features`. It removes null optional frontmatter
+fields and null entries in the supported arrays, as Rulesync does. Rulesync
+itself remains responsible for
 target/feature names, per-target
 configuration, other frontmatter extensions, and full compiler validation.
 These checks are opt-in because their scope and release pins are narrower than
