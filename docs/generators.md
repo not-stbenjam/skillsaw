@@ -134,6 +134,10 @@ transformed output or MCP configuration, so skillsaw does not remap those
 findings to guessed source lines. Matching copies are diagnostic-only for
 autofix: edit the source or generator settings, generate again, then re-lint.
 
+Lint grades and badges count distinct authored prose tokens. Recognized copies
+and identical native/source views do not inflate that total; their consumer
+checks still run. Edited or unrecognized output continues to count.
+
 ## Author → generate → lint
 
 For Ruler, author Markdown in `.ruler/` and select consumers in

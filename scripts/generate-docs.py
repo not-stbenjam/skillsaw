@@ -174,7 +174,7 @@ RULE_GROUPS = [
         ["ruler-config-valid", "rulesync-source-valid"],
         "Opt-in checks for local Ruler configuration and common Rulesync source fields. "
         "Generate explicitly, then validate emitted files with their consumer rules. "
-        "See the [generator workflow](../generators.md) for copy attribution and limits.",
+        "See the [generator workflow](docs/generators.md) for copy attribution and limits.",
     ),
     (
         "Goose",

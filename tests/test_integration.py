@@ -11159,6 +11159,61 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize(
+        "generator,ownership",
+        [
+            ("ruler", "recognized"),
+            ("ruler", "edited"),
+            ("rulesync", "recognized"),
+            ("rulesync", "edited"),
+            ("rulesync", "unowned"),
+        ],
+    )
+    def test_lint_and_badge_grades_count_distinct_authored_prose(
+        self, generator, ownership, tmp_path
+    ):
+        from skillsaw.config import LinterConfig
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        rules = {rule: {"enabled": False} for rule in LinterConfig.default().rules}
+        rules["content-weak-language"] = {"enabled": True}
+        (repo / ".skillsaw.yaml").write_text(
+            json.dumps({"rulesync-generated": ownership != "unowned", "rules": rules})
+        )
+        outputs = (
+            ["AGENTS.md", "CLAUDE.md"]
+            if generator == "ruler"
+            else [
+                ".claude/rules/backend/api.md",
+                ".claude/rules/release.md",
+                ".cursor/rules/backend/api.mdc",
+                ".cursor/rules/release.mdc",
+            ]
+        )
+        if ownership == "edited":
+            for output in outputs:
+                path = repo / output
+                path.write_text(path.read_text() + "\nReview the deployment checklist.\n")
+        before = run_lint(repo, "--no-custom-rules", "--no-plugins")
+        badge_before = run_cli(["badge", str(repo), "--no-custom-rules", "--no-plugins"])
+        for output in outputs:
+            (repo / output).unlink()
+        # Renaming identical source prose must not change its token count just
+        # because AGENTS.md had both a native instruction and a source role.
+        if generator == "ruler":
+            (repo / ".ruler/AGENTS.md").rename(repo / ".ruler/project.md")
+        after = run_lint(repo, "--no-custom-rules", "--no-plugins")
+        badge_after = run_cli(["badge", str(repo), "--no-custom-rules", "--no-plugins"])
+        before_grade = summary(before)["grade"]
+        after_grade = summary(after)["grade"]
+        if ownership == "recognized":
+            assert before_grade == after_grade
+        else:
+            assert before_grade["content_tokens"] > after_grade["content_tokens"]
+        for badge, grade in ((badge_before, before_grade), (badge_after, after_grade)):
+            assert badge.returncode == 0, badge.stderr
+            assert f"across ~{grade['content_tokens']:,} content tokens" in badge.stdout
+
     @pytest.mark.parametrize("excluded", [".rulesync", ".rulesync/rules", ".rulesync/**"])
     def test_excluded_rulesync_sources_keep_config_and_consumer_validation(
         self, excluded, tmp_path
