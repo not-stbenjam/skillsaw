@@ -97,6 +97,12 @@ filenames. It reads `project_doc_max_bytes` and
 supplied root and working directory. For each setting, the nearest file wins.
 A fallback list replaces the earlier list rather than extending it.
 
+Byte limits must be non-negative integers no larger than
+`9,223,372,036,854,775,807`, the maximum accepted by Codex's TOML parser.
+An integer outside the signed 64-bit range makes a project config unreadable
+to Codex, even if a later setting overrides it. skillsaw reports that analysis
+as incomplete.
+
 To supply values from a global config, profile, or CLI flag, set them explicitly
 in `.skillsaw.yaml`. These values take priority for both `tree` and `lint`:
 

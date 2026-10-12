@@ -11,6 +11,9 @@ from dataclasses import asdict, dataclass
 from typing import Optional, Tuple
 
 DEFAULT_MAX_BYTES = 32 * 1024
+# Codex's TOML value parser accepts signed 64-bit integers.
+TOML_INTEGER_MIN = -(2**63)
+TOML_INTEGER_MAX = 2**63 - 1
 STANDARD_FILENAMES = ("AGENTS.override.md", "AGENTS.md")
 # Rust str::trim uses Unicode White_Space; Python also strips U+001C..U+001F.
 RUST_WHITESPACE = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
@@ -39,9 +42,10 @@ class CodexInstructionOptions:
         if not isinstance(cwd, str) or not cwd or "\0" in cwd:
             raise ValueError("codex-instructions.cwd must be a non-empty directory path")
         limit = value.get("project_doc_max_bytes")
-        if limit is not None and (type(limit) is not int or limit < 0):
+        if limit is not None and (type(limit) is not int or not 0 <= limit <= TOML_INTEGER_MAX):
             raise ValueError(
-                "codex-instructions.project_doc_max_bytes must be a non-negative integer"
+                "codex-instructions.project_doc_max_bytes must be a non-negative integer "
+                f"at most {TOML_INTEGER_MAX}"
             )
         names = value.get("project_doc_fallback_filenames")
         if names is not None and (

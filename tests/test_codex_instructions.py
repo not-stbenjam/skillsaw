@@ -561,6 +561,8 @@ def test_explicit_inputs_override_local_config_and_empty_fallback_list(tmp_path)
     [
         "project_doc_max_bytes = -1",
         "project_doc_max_bytes = true",
+        "project_doc_max_bytes = 9223372036854775808",
+        "project_doc_max_bytes = -9223372036854775809",
         'project_doc_fallback_filenames = "TEAM.md"',
         "not valid toml = [",
     ],
@@ -570,6 +572,26 @@ def test_bad_local_config_is_incomplete(tmp_path, text):
     assert not report["complete"]
     assert report["charged_bytes"] is None
     assert report["issues"]
+
+
+@pytest.mark.parametrize("limit", [-(2**63) - 1, 2**63])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_unparseable_byte_limit_cannot_be_shadowed(tmp_path, limit, explicit):
+    _, report = project(
+        tmp_path,
+        {
+            ".codex/config.toml": f"project_doc_max_bytes = {limit}\n",
+            "child/.codex/config.toml": "project_doc_max_bytes = 65536\n",
+            "child/AGENTS.md": "Run the package tests before committing.\n",
+        },
+        cwd="child",
+        project_doc_max_bytes=65536 if explicit else None,
+    )
+    assert not report["complete"]
+    assert report["charged_bytes"] is None
+    assert report["issues"] == [
+        ".codex/config.toml: project_doc_max_bytes is outside Codex's signed 64-bit TOML integer range"
+    ]
 
 
 @pytest.mark.parametrize("symlink", [False, True])
@@ -928,6 +950,7 @@ def test_config_roundtrip_nulls_and_validation(tmp_path):
         {"cwd": 3},
         {"project_doc_max_bytes": True},
         {"project_doc_max_bytes": -1},
+        {"project_doc_max_bytes": 2**63},
         {"project_doc_fallback_filenames": [1]},
         {"typo": 1},
         {1: True},

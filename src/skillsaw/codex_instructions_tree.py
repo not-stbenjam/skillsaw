@@ -13,7 +13,12 @@ from .codex_instructions import CodexInstructionFileNode, CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
 from .discovery.excludes import is_root_or_ancestor_excluded
 from .formats.codex import CODEX_HOOKS_FILENAME
-from .formats.codex_instructions import DEFAULT_MAX_BYTES, candidate_filenames
+from .formats.codex_instructions import (
+    DEFAULT_MAX_BYTES,
+    TOML_INTEGER_MAX,
+    TOML_INTEGER_MIN,
+    candidate_filenames,
+)
 from .paths import relative_to_str
 
 if TYPE_CHECKING:
@@ -73,9 +78,18 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
         if config.parse_error:
             node.issues.append(f"{label}: {config.parse_error}")
             continue
+        data = config.raw_data or {}
+        raw_limit = data.get("project_doc_max_bytes")
+        if type(raw_limit) is int and not TOML_INTEGER_MIN <= raw_limit <= TOML_INTEGER_MAX:
+            # Python's TOML parser accepts integers Codex cannot parse. A
+            # later override cannot repair an unparseable project layer.
+            node.issues.append(
+                f"{label}: project_doc_max_bytes is outside Codex's signed 64-bit TOML integer range"
+            )
+            continue
         for key in ("project_doc_max_bytes", "project_doc_fallback_filenames"):
-            if key in (config.raw_data or {}):
-                merged[key] = config.raw_data[key]
+            if key in data:
+                merged[key] = data[key]
                 origins[key] = label
     if options.project_doc_max_bytes is not None:
         merged["project_doc_max_bytes"] = options.project_doc_max_bytes
@@ -86,9 +100,10 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     if "project_doc_max_bytes" in merged:
         value = merged["project_doc_max_bytes"]
         node.limit_source = origins["project_doc_max_bytes"]
-        if type(value) is not int or value < 0:
+        if type(value) is not int or not 0 <= value <= TOML_INTEGER_MAX:
             node.issues.append(
-                f"{node.limit_source}: project_doc_max_bytes must be a non-negative integer"
+                f"{node.limit_source}: project_doc_max_bytes must be a non-negative integer "
+                f"at most {TOML_INTEGER_MAX}"
             )
         else:
             limit = value

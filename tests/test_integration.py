@@ -11158,6 +11158,44 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("format", ["text", "dot"])
+    def test_ordinary_tree_identifies_codex_selection(self, tmp_path, format):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        result = run_cli(["tree", repo, "--format", format])
+        assert result.returncode == 0, result.stderr
+        assert "Codex instruction selection [cwd: service]" in result.stdout
+
+    @pytest.mark.parametrize("limit", [2**63 - 1, 2**63])
+    @pytest.mark.parametrize("explicit", [False, True])
+    def test_byte_limit_matches_codex_integer_boundary(self, tmp_path, limit, explicit):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        config = "plugins: false\ncodex-instructions: {}\n"
+        if explicit:
+            config = f"plugins: false\ncodex-instructions:\n  project_doc_max_bytes: {limit}\n"
+        else:
+            (repo / ".codex").mkdir()
+            (repo / ".codex/config.toml").write_text(f"project_doc_max_bytes = {limit}\n")
+        (repo / ".skillsaw.yaml").write_text(config)
+        valid = limit < 2**63
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == int(not valid), inspection.stdout + inspection.stderr
+        if explicit and not valid:
+            assert "project_doc_max_bytes must be a non-negative integer" in inspection.stderr
+        else:
+            report = json.loads(inspection.stdout)
+            assert report["complete"] is valid
+            if valid:
+                assert report["project_doc_max_bytes"] == limit
+                assert report["charged_bytes"] == (repo / "AGENTS.override.md").stat().st_size
+            else:
+                assert report["charged_bytes"] is None
+                assert "signed 64-bit TOML integer range" in report["issues"][0]
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == int(not valid), result["stdout"] + result["stderr"]
+        if not explicit and not valid:
+            assert len(violations(result)) == 1
+            assert "analysis is incomplete" in violations(result)[0]["message"]
+
     @pytest.mark.parametrize("config_name", ["hooks.json", "config.toml"])
     @pytest.mark.parametrize("content", ["empty", "invalid-utf8", "over-budget"])
     def test_generic_fallback_prose_keeps_checks_alongside_projected_config(
