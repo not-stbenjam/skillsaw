@@ -11160,6 +11160,28 @@ class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
     @pytest.mark.parametrize(
+        "header",
+        [
+            "2020-01-01: release metadata\n",
+            '2020-01-01: first\n"Wed Jan 01 2020 00:00:00 GMT+0000 (Coordinated Universal Time)": second\n',
+            "metadata: {2020-01-01: release notes}\n",
+            "? [2020-01-01]\n: release metadata\n",
+            "!!binary bWV0YWRhdGE=: release notes\n",
+        ],
+    )
+    def test_rulesync_tagged_keys_leave_copies_fully_checked(self, header, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/backend/api.md"
+        outputs = {".claude/rules/backend/api.md", ".cursor/rules/backend/api.mdc"}
+        before = run_lint(repo, "--rule", "content-weak-language")
+        assert not outputs.intersection(v["file_path"] for v in violations(before))
+        source.write_text(source.read_text().replace("---\n", "---\n" + header, 1))
+        after = run_lint(repo, "--rule", "content-weak-language")
+        found = violations(after)
+        assert outputs | {str(source.relative_to(repo))} <= {v["file_path"] for v in found}
+        assert all("generator" not in v for v in found if v["file_path"] in outputs)
+
+    @pytest.mark.parametrize(
         "generator,ownership",
         [
             ("ruler", "recognized"),
@@ -11923,21 +11945,28 @@ class TestGeneratorWorkflows:
         assert target in {n.path for n in context.lint_tree.find(native_type)}
         assert all("generator" not in v for v in violations(after))
 
-    @pytest.mark.parametrize("rule", ["security-invisible-unicode", "security-encoded-payload"])
-    def test_description_security_scans_value_once(self, rule, tmp_path):
+    @pytest.mark.parametrize(
+        "rule",
+        ["security-invisible-unicode", "security-encoded-payload", "content-embedded-secrets"],
+    )
+    @pytest.mark.parametrize("inherited", [False, True])
+    def test_description_security_scans_value_once(self, rule, inherited, tmp_path):
         import base64
 
         repo = copy_fixture("generators/rulesync", tmp_path)
-        description = (
-            "HTTP\u200bAPI"
-            if rule == "security-invisible-unicode"
-            else base64.b64encode(bytes(range(128))).decode()
-        )
+        description = {
+            "security-invisible-unicode": "HTTP\u200bAPI",
+            "security-encoded-payload": base64.b64encode(bytes(range(128))).decode(),
+            "content-embedded-secrets": "ghp_" + "abcd" * 10,  # notsecret
+        }[rule]
+        header = f"description: {json.dumps(description)}\n"
+        if inherited:
+            header = f"<<: &defaults {{description: {json.dumps(description)}}}\n"
         source = repo / ".rulesync/rules/release.md"
-        source.write_text(f"---\ndescription: {description}\n---\n\n# Release\n\nRun the tests.\n")
+        source.write_text(f"---\n{header}---\n\n# Release\n\nRun the tests.\n")
         result = run_lint(repo, "--rule", rule)
         assert [(v["file_path"], v["line"]) for v in violations(result)] == [
-            (str(source.relative_to(repo)), 2)
+            (str(source.relative_to(repo)), None if inherited else 2)
         ]
 
     def test_description_unknown_location_is_file_level(self, tmp_path):

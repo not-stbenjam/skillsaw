@@ -80,7 +80,9 @@ def test_sources_without_generated_artifacts(tmp_path):
     assert len(context.lint_tree.find(RulesyncRuleBlock)) == 3
 
 
-@pytest.mark.parametrize("change", ["globs", "targets", "cursor", "claudecode", "merge", "keys"])
+@pytest.mark.parametrize(
+    "change", ["globs", "targets", "cursor", "claudecode", "merge", "keys", "quoted-date"]
+)
 def test_native_normalization_preserves_copies(change, tmp_path):
     repo, _ = context_for("rulesync", tmp_path)
     path = repo / ".rulesync/rules/backend/api.md"
@@ -101,6 +103,8 @@ def test_native_normalization_preserves_copies(change, tmp_path):
         content = content.replace("root: false", "? [root]\n: false").replace(
             "description: HTTP service development", "? [description]\n: HTTP service development"
         )
+    elif change == "quoted-date":
+        content = content.replace("root: false\n", 'root: false\n"2020-01-01": release date\n')
     else:
         content = content.replace(
             "root: false\n",

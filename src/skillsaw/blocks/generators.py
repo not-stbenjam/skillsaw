@@ -51,6 +51,7 @@ class RulesyncRuleBlock(FrontmatteredBlock):
 
     category: str = "instruction"
     _rulesync_key_lines: dict = field(default_factory=dict, init=False, repr=False)
+    _portable_keys: bool = field(default=True, init=False, repr=False)
 
     def _build_children(self):
         super()._build_children()
@@ -80,7 +81,14 @@ class RulesyncRuleBlock(FrontmatteredBlock):
     def _parse_frontmatter_content(self, content):
         parsed = parse_rulesync_frontmatter(content)
         self._rulesync_key_lines = parsed.key_lines
+        self._portable_keys = parsed.portable_keys
         return parsed[:5]
+
+    @property
+    def portable_keys(self):
+        """Whether key normalization is within the copy recognizer's subset."""
+        self._ensure_parsed()
+        return self._portable_keys
 
     def key_line(self, key):
         self._ensure_parsed()

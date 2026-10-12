@@ -131,7 +131,7 @@ def schema_problems(data, schema):
 
 
 def _rulesync_scalar_key(value):
-    """Use JavaScript property-key spelling, including binary64 number rounding."""
+    """Normalize simple scalar keys, including JavaScript binary64 rounding."""
     if value is True or value is False:
         return str(value).lower()
     if value is None:
@@ -169,6 +169,8 @@ def _rulesync_scalar_key(value):
 
 
 class _RulesyncLoader(_SAFE_LOADER):
+    portable_keys = True
+
     # js-yaml's default schema accepts true/false, not YAML 1.1's yes/no/on/off.
     yaml_implicit_resolvers = {
         key: [(tag, pattern) for tag, pattern in values if tag != "tag:yaml.org,2002:bool"]
@@ -198,7 +200,13 @@ class _RulesyncLoader(_SAFE_LOADER):
                     else str(self.construct_property_key(item))
                 )
             return ",".join(parts)
-        return _rulesync_scalar_key(value)
+        key = _rulesync_scalar_key(value)
+        if not isinstance(key, str):
+            # Date.toString depends on the generator's runtime time zone.
+            # Timestamp and binary keys are outside the portable subset;
+            # retain their values for checks, but do not confer ownership.
+            self.portable_keys = False
+        return key
 
     def flatten_mapping(self, node):
         # js-yaml rejects duplicate explicit keys; a YAML merge followed by an
@@ -261,6 +269,7 @@ class RulesyncFrontmatter(NamedTuple):
     body: str
     line_offset: int
     key_lines: dict[str, int]
+    portable_keys: bool = True
 
 
 def parse_rulesync_frontmatter(content):
@@ -315,4 +324,4 @@ def parse_rulesync_frontmatter(content):
             for key in keys:
                 if isinstance(mapping.get(key), list):
                     mapping[key] = [item for item in mapping[key] if item is not None]
-    return RulesyncFrontmatter(data, None, None, body, offset, key_lines)
+    return RulesyncFrontmatter(data, None, None, body, offset, key_lines, loader.portable_keys)

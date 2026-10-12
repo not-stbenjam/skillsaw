@@ -77,6 +77,13 @@ serializers. The source check preserves those released parser semantics.
 Sequence and mapping keys use the parser's JavaScript property-key spelling
 (for example, `? [root]` names `root`), including duplicate-key detection and
 source key locations. Nested arrays in keys are rejected, as js-yaml does.
+Timestamp and binary mapping keys, including those inside metadata, remain
+outside this portable subset. In particular, JavaScript timestamp-key spelling
+depends on the generator's time zone: a date key can collide with a quoted UTC
+date string in UTC while remaining distinct in another zone. skillsaw leaves
+that validation to the released generator and does not recognize copies from
+sources with these keys. Their source prose and consumer files remain checked.
+Quote date-like keys when they are intended as literal strings.
 
 ## Copy recognition and attribution
 

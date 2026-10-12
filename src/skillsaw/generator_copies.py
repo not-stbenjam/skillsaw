@@ -112,7 +112,12 @@ def _rulesync_copy(source, target, output):
     if output.resolved_path != output.path:
         return False
     fm = source.raw_data
-    if source.frontmatter_error or fm is None or schema_problems(fm, RULESYNC_RULE):
+    if (
+        source.frontmatter_error
+        or not source.portable_keys
+        or fm is None
+        or schema_problems(fm, RULESYNC_RULE)
+    ):
         return False
     if fm.get("root", False) or fm.get("localRoot", False):
         return False
