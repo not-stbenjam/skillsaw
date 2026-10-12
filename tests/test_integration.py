@@ -11328,6 +11328,20 @@ class TestKiro:
         }
         assert all(not v["line"] for v in found)
 
+    def test_malformed_field_types_and_yaml_locations(self, tmp_path):
+        repo = copy_fixture("kiro/malformed-fields", tmp_path)
+        result = self.selected(repo, "kiro-agent-valid", "kiro-mcp-valid", "mcp-valid-json")
+        assert result["rc"] == 1
+        groups = by_rule(result)
+        assert set(groups) == {"kiro-agent-valid", "kiro-mcp-valid"}
+        assert len(groups["kiro-agent-valid"]) == 6
+        assert len(groups["kiro-mcp-valid"]) == 9
+        for rule, lines in (("kiro-agent-valid", {4, 5, 6}), ("kiro-mcp-valid", {10, 11, 13})):
+            assert {v["line"] for v in groups[rule] if v["file_path"].endswith(".md")} == lines
+        assert all(
+            v["line"] is None for v in violations(result) if v["file_path"].endswith(".json")
+        )
+
     @pytest.mark.parametrize("structural_enabled", [False, True])
     def test_malformed_yaml_keeps_other_resources_linted(self, tmp_path, structural_enabled):
         repo = copy_fixture("kiro/security", tmp_path)

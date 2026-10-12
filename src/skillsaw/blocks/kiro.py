@@ -50,8 +50,7 @@ class KiroInlinePromptBlock(ContentBlock):
         return 0
 
     def fingerprint_identity(self, body_line: Optional[int]) -> str:
-        lines = (self.body or "").split("\n")
-        content = lines[body_line - 1].strip() if body_line and 1 <= body_line <= len(lines) else ""
+        content = self.markdown.line(body_line or 0).strip()
         return f"6:prompt\0{content}"
 
 
