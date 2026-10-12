@@ -11159,6 +11159,64 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize("excluded", [".rulesync", ".rulesync/rules", ".rulesync/**"])
+    def test_excluded_rulesync_sources_keep_config_and_consumer_validation(
+        self, excluded, tmp_path
+    ):
+        from skillsaw.blocks.generators import RulesyncRuleBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = tmp_path / "monorepo"
+        project = copy_fixture("generators/rulesync", repo / "packages")
+        excluded_path = str((project / excluded).relative_to(repo))
+        (repo / ".skillsaw.yaml").write_text(
+            f'exclude: ["{excluded_path}"]\nrulesync-generated: true\nrules:\n'
+            "  rulesync-source-valid:\n    enabled: true\n"
+        )
+        config = project / "rulesync.jsonc"
+        config.write_text('{"targets": ["claudecode"], "features": "rules"}')
+        output = project / ".claude/rules/backend/api.md"
+        output.write_text(
+            output.read_text().replace("paths:\n  - src/**/*.ts", "paths: src/**/*.ts")
+        )
+        result = run_lint(repo)
+        assert result["rc"] == 1
+        assert "rulesync" in result["out"]["stats"]["repo_types"]
+        found = by_rule(result)
+        assert [v["file_path"] for v in found["rulesync-source-valid"]] == [
+            str(config.relative_to(repo))
+        ]
+        assert [(v["file_path"], v["line"]) for v in found["claude-rules-valid"]] == [
+            (str(output.relative_to(repo)), 2)
+        ]
+        assert not any(v.get("generator") for v in violations(result))
+        context = RepositoryContext(repo, exclude_patterns=[excluded_path])
+        assert not context.lint_tree.find(RulesyncRuleBlock)
+
+    @pytest.mark.parametrize("nested", [True, False])
+    def test_claude_mixed_unknown_keys_do_not_stop_later_validation(self, nested, tmp_path):
+        project = copy_fixture("generators/rulesync", tmp_path / "packages")
+        repo = tmp_path if nested else project
+        mixed = project / ".claude/rules/00-metadata.md"
+        mixed.write_text(
+            "---\n2: Review policy\nextra: Local ownership\nnull: Release notes\n"
+            "true: Testing guide\n---\n# Review requirements\n\nRun the release tests.\n"
+        )
+        later = project / ".claude/rules/99-paths.md"
+        later.write_text("---\npaths: src/**\n---\n# Release checks\n\nReview the API tests.\n")
+        result = run_lint(repo, "--rule", "claude-rules-valid")
+        assert result["rc"] == 1
+        found = violations(result)
+        assert {v["rule_id"] for v in found} == {"claude-rules-valid"}
+        assert {(v["file_path"], v["line"]) for v in found} == {
+            (str(mixed.relative_to(repo)), line) for line in (2, 3, 4, 5)
+        } | {(str(later.relative_to(repo)), 2)}
+        assert all(
+            "Unknown frontmatter key" in v["message"]
+            for v in found
+            if v["file_path"] == str(mixed.relative_to(repo))
+        )
+
     @pytest.mark.parametrize("recognized", [True, False])
     def test_nested_claude_rules_keep_structural_validation(self, recognized, tmp_path):
         repo = tmp_path / "monorepo"
@@ -11297,6 +11355,30 @@ class TestGeneratorWorkflows:
         assert [(v["rule_id"], v["file_path"], v["line"]) for v in violations(result)] == [
             ("security-invisible-unicode", ".rulesync/rules/policy.md", 3)
         ]
+
+    @pytest.mark.parametrize("key", ["[description]", "{owner: api}"])
+    def test_rulesync_complex_keys_keep_field_checks_and_lines(self, key, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/policy.md"
+        source.write_text(
+            f"---\n? [root]\n: true\n? {key}\n: release\u200bpolicy\n---\n# Release checks\n"
+        )
+        result = run_lint(
+            repo, "--rule", "security-invisible-unicode", "--rule", "rulesync-source-valid"
+        )
+        assert [(v["rule_id"], v["file_path"], v["line"]) for v in violations(result)] == [
+            ("security-invisible-unicode", ".rulesync/rules/policy.md", 4)
+        ]
+
+    def test_rulesync_complex_key_schema_errors_keep_source_line(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/policy.md"
+        source.write_text("---\n? [root]\n: not-a-boolean\n---\n# Release checks\n")
+        result = run_lint(repo, "--rule", "rulesync-source-valid")
+        found = violations(result)
+        assert len(found) == 1
+        assert found[0]["line"] == 2
+        assert "root: expected boolean" in found[0]["message"]
 
     @pytest.mark.parametrize(
         "key,canonical",

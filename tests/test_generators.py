@@ -80,7 +80,7 @@ def test_sources_without_generated_artifacts(tmp_path):
     assert len(context.lint_tree.find(RulesyncRuleBlock)) == 3
 
 
-@pytest.mark.parametrize("change", ["globs", "targets", "cursor", "claudecode", "merge"])
+@pytest.mark.parametrize("change", ["globs", "targets", "cursor", "claudecode", "merge", "keys"])
 def test_native_normalization_preserves_copies(change, tmp_path):
     repo, _ = context_for("rulesync", tmp_path)
     path = repo / ".rulesync/rules/backend/api.md"
@@ -96,6 +96,10 @@ def test_native_normalization_preserves_copies(change, tmp_path):
     elif change == "claudecode":
         content = content.replace(
             "root: false\n", 'root: false\nclaudecode:\n  paths: [null, "src/**/*.ts"]\n'
+        )
+    elif change == "keys":
+        content = content.replace("root: false", "? [root]\n: false").replace(
+            "description: HTTP service development", "? [description]\n: HTTP service development"
         )
     else:
         content = content.replace(
@@ -153,7 +157,9 @@ def test_nested_rulesync_claude_exclusions(excluded, tmp_path):
     assert (project / ".claude/rules/release.md" in paths) is ("backend" in excluded)
 
 
-@pytest.mark.parametrize("source_state", ["excluded", "missing", "other-target"])
+@pytest.mark.parametrize(
+    "source_state", ["excluded", ".rulesync", ".rulesync/rules", "missing", "other-target"]
+)
 def test_nested_rulesync_claude_parsing_is_independent_of_sources(source_state, tmp_path):
     project = copy_fixture("generators/rulesync", tmp_path / "packages")
     if source_state == "missing":
@@ -166,6 +172,13 @@ def test_nested_rulesync_claude_parsing_is_independent_of_sources(source_state, 
             str((project / ".rulesync/rules").relative_to(tmp_path)) + "/**"
         )
         context.apply_excludes()
+    elif source_state.startswith(".rulesync"):
+        context.exclude_patterns.append(str((project / source_state).relative_to(tmp_path)))
+        context.apply_excludes()
+    assert RepositoryType.RULESYNC in context.repo_types
+    assert [n.path for n in context.lint_tree.find(RulesyncConfigBlock)] == [
+        project / "rulesync.jsonc"
+    ]
     blocks = context.lint_tree.find(PluginRuleBlock)
     assert {n.path for n in blocks} == set((project / ".claude/rules").rglob("*.md"))
     assert all(n.generated_copy is None for n in blocks)
@@ -270,6 +283,47 @@ def test_rulesync_numeric_property_keys_match_released_parser(key, canonical):
         f"---\n{key}: first\n{json.dumps(canonical)}: second\n---\n# Release\n"
     )
     assert duplicate[1:3] == ("Invalid YAML frontmatter", 3)
+
+
+@pytest.mark.parametrize(
+    "key,canonical",
+    [
+        ("[root]", "root"),
+        ("[]", ""),
+        ("[null]", ""),
+        (
+            "[one, null, true, 1000000000000000128, {x: y}]",
+            "one,,true,1000000000000000100,[object Object]",
+        ),
+        ("{root: false}", "[object Object]"),
+        ("&loop {self: *loop}", "[object Object]"),
+    ],
+)
+def test_rulesync_complex_keys_match_released_parser(key, canonical):
+    parsed = parse_rulesync_frontmatter(f"---\n? {key}\n: true\n---\n# Release\n")
+    assert parsed.data == {canonical: True}
+    assert parsed.key_lines == {canonical: 2}
+    duplicate = parse_rulesync_frontmatter(
+        f"---\n? {key}\n: true\n{json.dumps(canonical)}: false\n---\n# Release\n"
+    )
+    assert duplicate.error == "Invalid YAML frontmatter"
+    assert duplicate.error_line == 4
+
+
+@pytest.mark.parametrize("key", ["[[root]]", "&loop [*loop]"])
+def test_rulesync_rejects_nested_array_keys_without_expanding_aliases(key):
+    parsed = parse_rulesync_frontmatter(f"---\n? {key}\n: true\n---\n# Release\n")
+    assert parsed.error == "Invalid YAML frontmatter"
+    assert parsed.error_line == 2
+
+
+def test_rulesync_complex_key_alias_and_merge_override():
+    parsed = parse_rulesync_frontmatter(
+        "---\nbase: &base {root: false}\n<<: *base\n"
+        "key: &key [root]\n? *key\n: true\n---\n# Release\n"
+    )
+    assert parsed.error is None
+    assert parsed.data["root"] is True
 
 
 def test_rulesync_jsonc_config_and_severity(tmp_path):

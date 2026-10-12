@@ -42,13 +42,18 @@ def discover_projects(
     for directory in sorted(candidates):
         if contained_resolve(directory.parent, root, resolve) is None:
             continue
-        if is_root_or_ancestor_excluded(directory, root, is_excluded):
-            continue
         ruler = directory.name == ".ruler"
         source = directory if ruler else directory / "rules"
         source_resolved = contained_resolve(source, root, resolve)
         files = []
-        if source_resolved is not None and not source.is_symlink() and not directory.is_symlink():
+        # Rulesync's config is a sibling of its source tree. Excluding the
+        # source directory must not hide that config or its consumer project.
+        if (
+            source_resolved is not None
+            and not source.is_symlink()
+            and not directory.is_symlink()
+            and not is_root_or_ancestor_excluded(source, root, is_excluded)
+        ):
             seen = set()
             for here, dirs, names in os.walk(source):
                 base = Path(here)

@@ -24,6 +24,8 @@ do not map directly to the YAML file for safe autofix.
 Sources get the `instruction` budget role, rather than the generic `extra`
 role of `content-paths`. This describes authored rules, not which files an agent
 will load in a particular session. Ordinary exclusions apply to discovery.
+Excluding `.rulesync/` leaves its sibling `rulesync.jsonc` and in-scope consumer
+files available for validation; excluded sources cannot establish copy ownership.
 Symlink files must resolve inside the source tree; directory symlinks are not
 followed. Home configuration and remote sources are never loaded.
 Generator tool types do not replace a plugin or marketplace's primary repository
@@ -72,6 +74,9 @@ Rulesync 32.0.0 parses source frontmatter through gray-matter's js-yaml 3 engine
 Its integer syntax includes legacy octal (`010`) and sexagesimal (`1:20`);
 `0o10` is a string. This differs from the newer YAML engine used by some output
 serializers. The source check preserves those released parser semantics.
+Sequence and mapping keys use the parser's JavaScript property-key spelling
+(for example, `? [root]` names `root`), including duplicate-key detection and
+source key locations. Nested arrays in keys are rejected, as js-yaml does.
 
 ## Copy recognition and attribution
 

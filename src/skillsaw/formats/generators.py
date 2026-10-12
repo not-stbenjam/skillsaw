@@ -175,6 +175,31 @@ class _RulesyncLoader(_SAFE_LOADER):
         for key, values in _SAFE_LOADER.yaml_implicit_resolvers.items()
     }
 
+    def construct_property_key(self, node):
+        """Match js-yaml's storeMappingPair without expanding alias graphs."""
+        value = self.construct_object(node)
+        if isinstance(node, yaml.MappingNode):
+            return "[object Object]"
+        if isinstance(node, yaml.SequenceNode):
+            parts = []
+            for item in node.value:
+                # js-yaml rejects nested arrays here to prevent explosive
+                # stringification of aliases; mapping keys use a constant.
+                if isinstance(item, yaml.SequenceNode):
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping key",
+                        node.start_mark,
+                        "nested arrays are not supported inside keys",
+                        item.start_mark,
+                    )
+                parts.append(
+                    ""
+                    if item.tag == "tag:yaml.org,2002:null"
+                    else str(self.construct_property_key(item))
+                )
+            return ",".join(parts)
+        return _rulesync_scalar_key(value)
+
     def flatten_mapping(self, node):
         # js-yaml rejects duplicate explicit keys; a YAML merge followed by an
         # explicit override is valid and is left to SafeLoader's merge logic.
@@ -188,15 +213,12 @@ class _RulesyncLoader(_SAFE_LOADER):
         for key, _value in node.value:
             if key.tag == "tag:yaml.org,2002:merge":
                 continue
-            value = _rulesync_scalar_key(self.construct_object(key))
+            value = self.construct_property_key(key)
             # js-yaml stores object keys as strings, so true and 1 are distinct
             # even though Python's bool/int keys compare equal. Quoted scalar
             # spellings still collide with their corresponding native values.
-            try:
-                duplicate = value in seen
-                seen.add(value)
-            except TypeError:
-                continue  # SafeLoader reports an unhashable mapping key.
+            duplicate = value in seen
+            seen.add(value)
             if duplicate:
                 raise yaml.constructor.ConstructorError(
                     "while constructing a mapping",
@@ -208,20 +230,13 @@ class _RulesyncLoader(_SAFE_LOADER):
 
     def construct_mapping(self, node, deep=False):
         """Normalize keys before dict insertion can collapse True and 1."""
-        if isinstance(node, yaml.MappingNode):
-            self.flatten_mapping(node)
-        mapping = {}
-        for index, (key, value) in enumerate(self.construct_pairs(node, deep=deep)):
-            try:
-                mapping[_rulesync_scalar_key(key)] = value
-            except TypeError:
-                raise yaml.constructor.ConstructorError(
-                    "while constructing a mapping",
-                    node.start_mark,
-                    "found unhashable key",
-                    node.value[index][0].start_mark,
-                ) from None
-        return mapping
+        if not isinstance(node, yaml.MappingNode):
+            return super().construct_mapping(node, deep=deep)
+        self.flatten_mapping(node)
+        return {
+            self.construct_property_key(key): self.construct_object(value, deep=deep)
+            for key, value in node.value
+        }
 
 
 _RulesyncLoader.add_implicit_resolver(
@@ -269,9 +284,9 @@ def parse_rulesync_frontmatter(content):
         # The same constructors and normalization serve data and line lookup.
         if isinstance(node, yaml.MappingNode):
             key_lines = {
-                _rulesync_scalar_key(loader.construct_object(key)): key.start_mark.line + 2
+                loader.construct_property_key(key): key.start_mark.line + 2
                 for key, _value in node.value
-                if isinstance(key, yaml.ScalarNode) and key.tag != "tag:yaml.org,2002:merge"
+                if key.tag != "tag:yaml.org,2002:merge"
             }
         data = loader.construct_document(node) if node is not None else None
     except (yaml.YAMLError, ValueError, RecursionError) as error:

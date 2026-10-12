@@ -94,7 +94,7 @@ class RulesValidRule(Rule):
 
             unknown_keys = set(frontmatter.keys()) - _VALID_FRONTMATTER_KEYS
             if unknown_keys:
-                for key in sorted(unknown_keys):
+                for key in sorted(unknown_keys, key=str):
                     violations.append(
                         self.violation(
                             f"Unknown frontmatter key '{key}'. " f"Only 'paths' is supported",
