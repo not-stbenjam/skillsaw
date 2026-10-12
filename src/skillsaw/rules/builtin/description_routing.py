@@ -19,6 +19,7 @@ from skillsaw.rules.builtin.content_analysis import (
 from skillsaw.blocks import DevinSkillBlock
 from skillsaw.blocks.pi import PiPromptBlock, PiSkillBlock
 from skillsaw.blocks.cursor import CursorAgentBlock
+from skillsaw.blocks.kiro import KiroJsonAgentBlock, KiroMarkdownAgentBlock, KiroSteeringBlock
 from skillsaw.rules.builtin.utils import read_frontmatter_commented
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -98,6 +99,7 @@ class DescriptionRoutingRule(Rule):
     surface_dependencies = ("copilot-agent-valid", "pi-skill-valid")
     repo_types = {
         RepositoryType.PI,
+        RepositoryType.KIRO,
         RepositoryType.PI_PACKAGE,
         RepositoryType.AGENTSKILLS,
         RepositoryType.CURSOR,
@@ -206,6 +208,9 @@ class DescriptionRoutingRule(Rule):
         violations: List[RuleViolation] = []
         for block_type in (
             PiSkillBlock,
+            KiroJsonAgentBlock,
+            KiroMarkdownAgentBlock,
+            KiroSteeringBlock,
             PiPromptBlock,
             SkillBlock,
             DevinSkillBlock,
@@ -219,6 +224,8 @@ class DescriptionRoutingRule(Rule):
             GrokCommandBlock,
         ):
             for block in self.dependency_scoped_find(context, block_type):
+                if block_type is KiroSteeringBlock and block.field_value("inclusion") != "auto":
+                    continue
                 if block.frontmatter_error:
                     continue
                 # Devin's native skill dialect makes frontmatter optional —

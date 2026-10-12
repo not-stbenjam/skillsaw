@@ -11153,3 +11153,98 @@ class TestGoose:
         ]
         assert len(set(blocks)) == 2
         assert len({b.fingerprint_identity(1) for b in blocks}) == 2
+
+
+@pytest.mark.integration
+class TestKiro:
+    """Native Kiro resources, including nested monorepo workspaces."""
+
+    RULES = ("kiro-agent-valid", "kiro-mcp-valid", "kiro-references")
+
+    @staticmethod
+    def selected(repo, *rules):
+        return run_lint(repo, *(arg for rule in rules for arg in ("--rule", rule)))
+
+    def test_documented_json_markdown_and_legacy_permissions(self, tmp_path):
+        repo = copy_fixture("kiro/valid", tmp_path)
+        result = self.selected(
+            repo,
+            *self.RULES,
+            "mcp-valid-json",
+            "content-description-routing",
+            "content-broken-internal-reference",
+        )
+        assert result["rc"] == 0, result
+        assert violations(result) == []
+
+    def test_nested_prose_and_config_are_separate(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        result = self.selected(repo, "content-weak-language", "content-broken-internal-reference")
+        groups = by_rule(result)
+        expected = {
+            "packages/api/.kiro/steering/nested/policy.md": 6,
+            "packages/api/.kiro/agents/team/reviewer.md": 17,
+            "packages/api/.kiro/agents/inline.json": 0,
+        }
+        for rule in ("content-weak-language", "content-broken-internal-reference"):
+            found = groups[rule]
+            assert len(found) == 3
+            assert {v["file_path"] for v in found} == set(expected)
+        assert {v["file_path"]: v["line"] for v in groups["content-weak-language"]} == expected
+
+    def test_malformed_data_and_missing_references(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        result = self.selected(repo, *self.RULES)
+        assert result["rc"] == 1
+        groups = by_rule(result)
+        assert "rule-execution-error" not in groups
+        assert len(groups["kiro-agent-valid"]) == 5
+        assert len(groups["kiro-mcp-valid"]) == 5
+        references = groups["kiro-references"]
+        assert len(references) == 4
+        assert sorted(v["line"] for v in references if v["line"] is not None) == [5, 8, 8]
+        assert not any("example-only" in v["message"] for v in references)
+        md_mcp = [v for v in groups["kiro-mcp-valid"] if v["file_path"].endswith(".md")]
+        assert {v["line"] for v in md_mcp} == {8, 9}
+        assert all(
+            v["line"] is None
+            for v in groups["kiro-agent-valid"]
+            if v["file_path"].endswith(".json")
+        )
+
+    def test_shared_mcp_security_and_policy(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        result = self.selected(repo, "mcp-valid-json", "mcp-prohibited")
+        groups = by_rule(result)
+        assert len(groups["mcp-valid-json"]) == 2, result
+        assert len(groups["mcp-prohibited"]) == 2
+        assert {v["line"] for v in groups["mcp-valid-json"]} == {None, 13}
+        assert all("ghp_" not in v["message"] for v in violations(result))
+        # The opt-in host shape rule stays off while credential checks run.
+        assert not set(self.RULES) & set(groups)
+
+    def test_new_rules_are_opt_in_and_respect_severity(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        config = repo / ".skillsaw.yaml"
+        config.write_text('version: "99.0.0"\n')
+        assert not set(self.RULES) & rule_ids(run_lint(repo))
+        config.write_text(
+            'version: "99.0.0"\nrules:\n  kiro-agent-valid:\n    enabled: auto\n    severity: info\n'
+        )
+        found = by_rule(run_lint(repo))["kiro-agent-valid"]
+        assert len(found) == 5
+        assert {v["severity"] for v in found} == {"info"}
+
+    def test_nested_only_configuration_detects_kiro(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        result = self.selected(repo, "kiro-agent-valid")
+        assert "kiro" in result["out"]["stats"]["repo_types"]
+        assert len(violations(result)) == 5
+
+    def test_json_prompt_fixes_leave_config_unchanged(self, tmp_path):
+        repo = copy_fixture("kiro/broken", tmp_path)
+        path = repo / "packages/api/.kiro/agents/inline.json"
+        original = path.read_bytes()
+        result = run_cli(["fix", str(repo), "--rule", "content-weak-language"])
+        assert result.returncode in (0, 1), result.stderr
+        assert path.read_bytes() == original
