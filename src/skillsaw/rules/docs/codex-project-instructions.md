@@ -1,128 +1,173 @@
 ## Why
 
-Diagnoses the cumulative Codex project instruction byte limit for one supplied
-repository root and working directory. This rule is **opt-in**: `AGENTS.md` is
-shared by several hosts, and a static checkout cannot reveal a developer's
-global Codex settings or trust decision.
+OpenAI Codex reads instruction files such as `AGENTS.md` to learn how to work
+in your repository. These files can live at the project root and in
+subdirectories. Codex combines the files that apply to your working directory.
 
-Two 18 KiB files at the root and in a child directory are individually below
-the generic `context-budget` warning threshold. With Codex's default 32 KiB
-project cap, the child contributes only 14 KiB. This rule reports cumulative
-byte loss; `context-budget` estimates tokens per file.
+Codex limits their **combined size to 32 KiB by default**. If they exceed that
+limit, some instructions are left out, even though each file may seem small
+enough on its own. Guidance you wrote in a child directory may never reach Codex.
 
-## Usage
+This rule checks which files Codex would select for the project root and
+working directory you specify. It then checks their combined byte usage and
+warns when the limit would cut off a file or leave later files out entirely.
+The rule is disabled by default; enable it when you want to check Codex's
+project instructions.
+
+For example, these two files exceed the default budget together:
+
+| Selected file | File size | Bytes loaded | Bytes lost |
+|---|---|---|---|
+| `AGENTS.md` | 18 KiB | 18 KiB | 0 |
+| `services/payments/AGENTS.md` | 18 KiB | 14 KiB | 4 KiB |
+
+The existing `context-budget` rule still checks estimated tokens per file.
+
+## Inspect a working directory
+
+Pass the project root as the path and the working directory relative to it:
 
 ```sh
-# The path is the project root; --cwd is relative to that root.
 skillsaw tree /path/to/repo --codex-instructions --cwd services/payments
-skillsaw tree /path/to/repo --codex-instructions --cwd services/payments --format json
-
-# Inspect at the supplied root with assumed defaults and in-scope project config.
-skillsaw lint /path/to/repo --rule codex-project-instructions --strict
 ```
 
-For a repeatable CI check, configure the projection in `.skillsaw.yaml`:
+The report shows the selected files in loading order, how many bytes each
+uses, and the running total. `Truncated or omitted` lists files that lose
+content. It also shows where the settings came from and what skillsaw assumed.
+Add `--format json` for machine-readable output.
+
+An `Incomplete` result means skillsaw could not inspect part of the chain.
+Check the reported paths, permissions, and exclusions before relying on the
+byte count. skillsaw does not skip an inaccessible override and assume Codex
+will use another file.
+
+## How to fix
+
+Shorten the selected instruction files, or raise `project_doc_max_bytes` in
+the Codex configuration you use. Moving text between selected files does not
+help: they still share the budget. There is no autofix.
+
+## Enable the check in CI
+
+Add the working directory and enable the rule in `.skillsaw.yaml`:
 
 ```yaml
 codex-instructions:
   cwd: services/payments
-  # Optional explicit effective settings, for example from your Codex CLI/profile:
-  project_doc_max_bytes: 65536
-  project_doc_fallback_filenames: [TEAM_GUIDE.md, .agents.md]
 rules:
   codex-project-instructions:
     enabled: true
     severity: warning
 ```
 
-`codex-instructions` is a shared analysis input for lint and tree inspection,
-separate from rule enablement. It makes selected fallback files part of the
-typed content tree before content checks run. The two `project_doc_*` settings
-are optional; omit them or use `null` to read the in-scope project settings and
-then assume Codex defaults. An explicit empty fallback list disables fallbacks
-in the projection, and a byte limit of zero models disabled project loading.
-`cwd: null` means the supplied root. `tree --cwd` overrides the configured cwd.
-These inputs do **not** modify Codex configuration.
+Then run:
 
-## Selection model
+```sh
+skillsaw lint /path/to/repo --strict
+```
 
-The model follows the released
-[Codex 0.162.1 loader](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core/src/agents_md.rs)
-and [configuration conversion](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core/src/config/mod.rs),
-verified with the installed `codex-cli 0.162.1` `debug prompt-input` command.
-The [official guide](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
-documents the 32 KiB default and precedence; the released source resolves the
-empty-file and byte-boundary details.
+`--strict` makes warnings fail CI; `--fail-on warning` also works. The `tree`
+command is for inspection: it exits 0 when it can compute the result, even if
+instructions are cut off, and 1 when the result is incomplete.
 
-1. Treat the supplied path as the project root, resolve cwd inside it, and
-   visit only the directories on that root-to-cwd chain, inclusively. Siblings,
-   deeper directories, and ancestors above the supplied root cannot contribute.
-2. Assuming the project is trusted, merge the two supported settings from each
-   `.codex/config.toml` on the chain. The closest layer wins; fallback arrays
-   replace earlier arrays. Explicit skillsaw analysis inputs win last. The
-   resulting fallback order applies to **every** directory, including ancestors.
-3. In each directory select the first regular file: `AGENTS.override.md`, then
-   `AGENTS.md`, then configured fallbacks in order. There is at most one
-   selection per directory. Fallbacks are trimmed and deduplicated. Path syntax
-   is ignored before probing, using the local OS convention: `/`, NUL, `.` and
-   `..` are rejected everywhere, plus `\` and `:` on Windows.
-4. Selection precedes reading. An empty or whitespace-only override shadows the
-   standard file and fallbacks. Its empty content is dropped **without trying
-   the next name**. Directories named like candidates are skipped. In-scope
-   symlinks are supported; the same target selected at two directory levels
-   consumes bytes twice, while its content checks run once.
-5. Load selected files in root-to-cwd order. Read at most the remaining **raw
-   bytes**, then decode that prefix as lossy UTF-8. Invalid or split sequences
-   become replacement characters. BOM and CRLF bytes count. If the decoded
-   prefix contains only Unicode whitespace, drop it without spending the
-   budget. Otherwise debit the raw prefix length. At zero remaining bytes,
-   later selections are omitted. A zero configured limit omits every selection.
-6. Join included project entries with `\n\n`. These separators, UTF-8
-   replacement expansion, user/global instructions, and prompt wrappers do not
-   consume the project-file cap. Rendered project text can exceed the cap for
-   those reasons. The report distinguishes raw file size, bytes read, bytes
-   charged, cumulative bytes, and rendered project bytes.
+## Which settings skillsaw uses
 
-The selection view lists candidates even when a zero or exhausted budget means
-Codex would stop before loading them. Status `empty` refers to the **read
-prefix**; `truncated: true` still records a discarded suffix. JSON `complete`
-means the local projection was computable under its stated assumptions, not
-that skillsaw observed a running Codex session.
+skillsaw starts with the Codex defaults: **32,768 bytes** and no fallback
+filenames. It reads `project_doc_max_bytes` and
+`project_doc_fallback_filenames` from `.codex/config.toml` files between the
+supplied root and working directory. For each setting, the nearest file wins.
+A fallback list replaces the earlier list rather than extending it.
 
-## How to fix
+To supply values from a global config, profile, or CLI flag, set them explicitly
+in `.skillsaw.yaml`. These values take priority for both `tree` and `lint`:
 
-One consolidated warning identifies truncated or omitted files for the chosen
-cwd. Reduce the selected ancestor chain or raise `project_doc_max_bytes` in the
-Codex configuration actually used by the developer. Splitting a large file
-between ancestors on the **same** chain does not avoid the cumulative cap.
+```yaml
+codex-instructions:
+  cwd: services/payments
+  project_doc_max_bytes: 65536
+  project_doc_fallback_filenames: [TEAM_GUIDE.md, .agents.md]
+```
 
-Inspection exits zero for a complete model, including one that diagnoses lost
-content. Use the lint rule with `--strict` or `--fail-on warning` for CI failure.
-Inspection exits one for incomplete local evidence; the rule reports that
-uncertainty instead of asserting an exact truncation result. There is no autofix.
+These settings tell skillsaw what to check. **They do not change Codex's
+configuration.** skillsaw never reads global, managed, profile, or CLI settings.
 
-## Limits
+| Setting | Special values |
+|---|---|
+| `cwd` | Omitted or `null` means the supplied root. `tree --cwd` overrides it. |
+| `project_doc_max_bytes` | Omitted or `null` uses project config, then the default. `0` means no project instructions load. |
+| `project_doc_fallback_filenames` | Omitted or `null` uses project config, then the default. `[]` disables fallbacks. |
 
-Global, managed, profile, and CLI Codex settings and global/user instructions
-are **never read**. Pass effective values explicitly when they differ from the
-assumed defaults. The analysis assumes one trusted local environment: the
-released loader skips project instructions entirely for an untrusted project.
-Multi-environment budget sharing, automatic root-marker discovery, remote
-executor path conventions, and runtime trust/profile resolution are deferred.
-Without a root marker Codex normally considers only cwd; supply cwd itself as
-skillsaw's root to model that case. A nested Git repository may similarly need
-a different explicit root.
+## Which files Codex selects
 
-skillsaw honors its authoring scope, including excluded directories and
-`lint-external-content: false`. Excluded, unreadable, unresolved, or
-out-of-root instruction/config paths make the projection incomplete and never
-cause silent selection of a lower-precedence file. Existing structured parser
-roles remain configuration, even if explicitly named as a fallback; novel
-fallback files become instruction prose. `AGENTS.override.md` is discovered
-for content checks without opting into this diagnostic. Arbitrary fallback
-discovery is limited to the requested projection. Other hosts' files contribute
-only when explicitly named as Codex fallbacks.
+Codex visits each directory from the root to the working directory, including
+both ends. It selects at most one file per directory, in this order:
 
-The analysis and its finding are attached to the supplied root. A cwd excluded
-by these policies remains an incomplete analysis; excluding that directory
-does not silently suppress the requested CI check.
+1. `AGENTS.override.md`
+2. `AGENTS.md`
+3. The first existing file in the configured fallback list
+
+For `services/payments`, the directories are the root, `services`, and
+`services/payments`. Siblings and deeper directories do not contribute.
+The final fallback list applies to every directory on this path.
+
+**An empty override still wins.** Codex selects the file before reading it.
+If that file is empty or contains only whitespace, Codex does not try the
+standard file or a fallback. A directory with a candidate filename is skipped.
+
+Fallback names are trimmed and duplicates removed. Entries must be filenames:
+skillsaw ignores `.`, `..`, and names containing `/` or NUL; on Windows it also
+ignores names containing `\` or `:`. Symlinks are supported within the allowed
+scope. If two selected paths point to the same file, its bytes count twice.
+
+## How bytes are counted
+
+Codex reads each selected file using the budget left by earlier files. Once
+the budget reaches zero, it stops loading files. The report still lists those
+later selections as `omitted`, including when the configured limit is zero.
+
+- **Count bytes before decoding.** Codex cuts the raw bytes to fit the remaining
+  budget, then decodes UTF-8. Invalid or cut-off characters become replacement
+  characters. A byte-order mark (BOM) and CRLF line endings count toward the limit.
+- **Whitespace-only content is skipped.** If the part read is empty or contains only
+  Unicode whitespace, Codex drops it without spending any bytes. The `empty`
+  status describes that part; `truncated: true` can still mean a suffix was lost.
+- **Added text is separate.** The two newlines (`\n\n`) between included files
+  and any extra bytes from UTF-8 replacement characters do not count toward the
+  limit. The final rendered project text can therefore exceed it. Global, user,
+  and thread instructions and prompt wrappers are also outside this budget.
+
+The report distinguishes file size, bytes read, bytes counted against the
+budget (`charged_bytes`), the running total (`cumulative_bytes`), and the size
+of the rendered project text.
+
+## Assumptions and limits
+
+This check assumes **one trusted local project**. Codex 0.162.1 skips project
+instructions for an untrusted project. skillsaw does not inspect that trust
+decision or observe a running Codex session. JSON `complete: true` means the
+calculation succeeded under the report's assumptions.
+
+You choose the root. skillsaw does not search parent directories for root
+markers. Without a root marker, Codex normally uses only the working directory;
+pass that directory as skillsaw's root to check this case. A nested Git repository
+may need its own root. Remote execution and shared budgets across multiple
+environments are not modeled.
+
+skillsaw respects excluded directories and `lint-external-content: false`.
+Excluded, unreadable, unresolved, or out-of-root instruction or config paths
+make the result incomplete. Excluding the working directory still produces a
+finding at the supplied root. Global and user instruction files are never read.
+
+Standard content checks recognize `AGENTS.override.md`. They discover custom
+fallbacks when this analysis is requested, and check known configuration files
+as configuration even when named as fallbacks. Other hosts' files count toward
+the Codex budget only if explicitly configured as fallbacks.
+
+## Sources
+
+The selection and byte rules were verified against the released
+[Codex 0.162.1 loader](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core/src/agents_md.rs),
+its [configuration code](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core/src/config/mod.rs),
+and local `codex debug prompt-input` checks. The
+[official guide](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+explains the default limit and file precedence.
