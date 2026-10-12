@@ -131,8 +131,10 @@ def attach_instruction_content(
                 readmes[resolved] = (parent, block)
             elif type(block) is ExtraBlock:
                 extras[resolved] = (parent, block)
-            else:
-                claimed.setdefault(resolved, block)
+            elif not isinstance(claimed.get(resolved), (ContentBlock, FrontmatteredBlock)):
+                # A physical file may have both config and prose roles.
+                # Validate retained prose regardless of attachment order.
+                claimed[resolved] = block
     for path in paths:
         resolved = resolve(path)
         if resolved is None:

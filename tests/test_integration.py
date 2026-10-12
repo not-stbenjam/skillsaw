@@ -11158,6 +11158,29 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("config_name", ["hooks.json", "config.toml"])
+    @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
+    @pytest.mark.parametrize("invalid_utf8", [False, True])
+    def test_instruction_validation_keeps_prose_alongside_config_roles(
+        self, tmp_path, config_name, filename, invalid_utf8
+    ):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        source = repo / "commands/status.md"
+        source.write_bytes(source.read_bytes() + b"\xff\n" if invalid_utf8 else b"")
+        (repo / ".codex").mkdir()
+        (repo / ".codex" / config_name).symlink_to("../commands/status.md")
+        (repo / filename).symlink_to("commands/status.md")
+        settings = "plugins: false\n"
+        if filename == "TEAM.md":
+            settings += "codex-instructions:\n  project_doc_fallback_filenames: [TEAM.md]\n"
+        (repo / ".skillsaw.yaml").write_text(settings)
+        result = run_lint(repo, "--rule", "instruction-file-valid", "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        found = violations(result)
+        assert len(found) == 1
+        assert found[0]["file_path"] == "commands/status.md"
+        assert ("Failed to read" if invalid_utf8 else "is empty") in found[0]["message"]
+
     @pytest.mark.parametrize(
         "source", ["commands/status.md", "agents/reviewer.md", "skills/release-notes/SKILL.md"]
     )

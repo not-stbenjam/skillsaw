@@ -24,6 +24,8 @@ prose selected by `codex-instructions` analysis. Overrides need no analysis
 configuration. These files are checked even when they also serve as a
 command, agent, or skill; their existing roles and format checks remain
 intact. Excluded and external content removed from the lint tree is not checked.
+When a physical file has both configuration and prose roles, its retained prose
+role still receives this validation. Files with only configuration roles do not.
 
 Codex itself accepts empty files and decodes invalid UTF-8 with replacement
 characters. This warning identifies missing guidance or text that skillsaw
