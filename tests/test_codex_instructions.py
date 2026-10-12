@@ -572,10 +572,13 @@ def test_projected_file_detection_obeys_authoring_scope(
         else "{}" if path.name == "hooks.json" else "# Package guidance\n\nRun package tests.\n"
     )
     original = Path.open
+    allow_read = scope == "included"
+    forbidden_reads = []
 
     def scoped_open(file, *args, **kwargs):
-        if scope != "included":
-            assert file.resolve() != target.resolve(), f"out-of-scope read: {file}"
+        if not allow_read and file.resolve() == target.resolve():
+            forbidden_reads.append(file)
+            raise AssertionError(f"out-of-scope read: {file}")
         return original(file, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", scoped_open)
@@ -589,12 +592,21 @@ def test_projected_file_detection_obeys_authoring_scope(
         lint_external_content=False,
     )
     assert (repo_type in context.repo_types) is (scope == "included")
-    assert bool(context.lint_tree.find(block_type)) is (scope == "included")
+    tree = context.lint_tree
+    assert not forbidden_reads
+    assert not context.lint_tree_errors
+    assert len(tree.find(CodexInstructionsNode)) == 1
+    assert bool(tree.find(block_type)) is (scope == "included")
     if scope == "included":
+        allow_read = False
         context.exclude_patterns = ["vendor"]
         context.apply_excludes()
         assert repo_type not in context.repo_types
-        assert not context.lint_tree.find(block_type)
+        tree = context.lint_tree
+        assert not forbidden_reads
+        assert not context.lint_tree_errors
+        assert len(tree.find(CodexInstructionsNode)) == 1
+        assert not tree.find(block_type)
 
 
 def test_instruction_projection_refreshes_types_and_auto_rule_activation(tmp_path):
