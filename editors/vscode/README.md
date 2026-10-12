@@ -120,7 +120,8 @@ repository with the existing skillsaw GitHub Action.
   need that command. This pilot does not maintain a filesystem watcher.
 - Virtual workspaces, browser-only VS Code and untitled files are unsupported.
   Remote extension hosts need their own CLI installation; linting uses that
-  host's filesystem. The automated extension-host smoke test runs on Linux.
+  host's filesystem. The automated extension-host smoke test runs on Linux;
+  installed-CLI and interpreter cancellation tests also run on Windows.
 - Cancellation terminates the CLI process, with a forced kill after a short
   grace period. Custom rules are trusted code: processes they detach are not
   managed by the extension.

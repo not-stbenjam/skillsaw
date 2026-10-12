@@ -74,7 +74,7 @@ async function ready(options, name = 'ready') {
     }
     await delay(10);
   }
-  assert.fail('fake CLI did not become ready');
+  assert.fail('CLI did not become ready');
 }
 
 function validPid(pid) {
@@ -91,6 +91,59 @@ function alive(pid) {
     return false;
   }
 }
+
+test('installed CLI stops its Python interpreter on cancellation and timeout', async (t) => {
+  const executable =
+    process.env.SKILLSAW_CLI ||
+    path.resolve(
+      __dirname,
+      '../../../.venv',
+      process.platform === 'win32' ? 'Scripts/skillsaw.exe' : 'bin/skillsaw',
+    );
+  // On Windows this exercises pip's real console launcher and its Job Object.
+  for (const reason of ['cancellation', 'timeout']) {
+    await t.test(reason, async (t) => {
+      const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw interpreter ; '));
+      let controller, outcome, pid;
+      t.after(async () => {
+        controller?.abort();
+        await outcome;
+        if (pid !== undefined && alive(pid)) process.kill(pid, 'SIGKILL');
+        await fs.rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      });
+      await fs.cp(path.resolve(__dirname, '../../../examples/editor-onboarding'), cwd, {
+        recursive: true,
+      });
+      await fs.copyFile(
+        path.resolve(__dirname, '../../../tests/fixtures/editor-slow-rule/slow_rule.py'),
+        path.join(cwd, 'slow_rule.py'),
+      );
+      await fs.appendFile(path.join(cwd, '.skillsaw.yaml'), '\ncustom-rules:\n  - slow_rule.py\n');
+      // Repeated cancellation must not accumulate surviving interpreters.
+      for (let attempt = 0; attempt < (reason === 'cancellation' ? 3 : 1); attempt++) {
+        await fs.rm(path.join(cwd, 'ready'), { force: true });
+        controller = new AbortController();
+        outcome = runCli({
+          executable,
+          cwd,
+          timeoutMs: reason === 'timeout' ? 5000 : 10000,
+          signal: controller.signal,
+        }).then(
+          () => null,
+          (error) => error,
+        );
+        pid = await ready({ cwd });
+        assert(alive(pid), 'the custom rule must be running before cancellation');
+        if (reason === 'cancellation') controller.abort();
+        const error = await outcome;
+        assert(error instanceof Error, 'the slow CLI must not complete normally');
+        assert.match(error.message, reason === 'timeout' ? /exceeded 5000 ms/ : /cancelled/);
+        assert.equal(alive(pid), false, 'the interpreter must exit before releasing the runner');
+        pid = undefined;
+      }
+    });
+  }
+});
 
 test('readiness waits for a complete valid PID and cleanup rejects process groups', async (t) => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw readiness '));

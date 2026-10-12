@@ -35,3 +35,24 @@ jobs:
         with:
           name: skillsaw-vscode-pilot
           path: editors/vscode/*.vsix
+  windows-cli:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install the CLI with pip's Windows console launcher
+        shell: pwsh
+        run: |
+          & "$env:pythonLocation/python.exe" -m venv .venv
+          .venv/Scripts/python.exe -m pip install .
+          .venv/Scripts/python.exe -c "from pip._vendor import distlib; print('distlib launcher:', distlib.__version__)"
+      - name: Test the installed CLI and interpreter cancellation
+        run: node --test test/cli.test.js test/runner.test.js
+        working-directory: editors/vscode
