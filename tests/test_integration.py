@@ -11160,6 +11160,51 @@ class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
     @pytest.mark.parametrize("generator", ["ruler", "rulesync", None])
+    def test_content_path_alias_keeps_relative_references(self, generator, tmp_path):
+        from skillsaw.blocks import ExtraBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator or 'ruler'}", tmp_path)
+        if generator is None:
+            shutil.rmtree(repo / ".ruler")
+        inputs = FIXTURES / "generators/consumer-aliases"
+        target = repo / "consumer/policy.md"
+        target.parent.mkdir()
+        target.write_text((inputs / "cursor.mdc").read_text())
+        source = (
+            repo
+            / {
+                "ruler": ".ruler/policy.md",
+                "rulesync": ".rulesync/rules/policy.md",
+                None: "docs/policy.md",
+            }[generator]
+        )
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(target.read_text())
+        (source.parent / "release-checklist.txt").write_text(
+            (inputs / "release-checklist.txt").read_text()
+        )
+        config = repo / ".skillsaw.yaml"
+        config.write_text(config.read_text() + "\ncontent-paths: [consumer/policy.md]\n")
+        args = ("--strict", "--rule", "content-broken-internal-reference")
+        before = run_lint(repo, *args)
+        target.unlink()
+        target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 1
+        assert len(violations(before)) == 1
+        expected = {**violations(before)[0], "fixable": False}
+        expected.pop("fix_confidence", None)
+        assert violations(after) == [expected]
+        assert expected["file_path"] == "consumer/policy.md"
+        assert expected["line"] == 7
+        assert "generator" not in expected
+        context = RepositoryContext(repo, content_paths=["consumer/policy.md"])
+        assert target in {n.path for n in context.lint_tree.find(ExtraBlock)}
+        if generator is None:
+            assert not {"ruler", "rulesync"}.intersection(after["out"]["stats"]["repo_types"])
+
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync", None])
     @pytest.mark.parametrize(
         "other_consumer", [None, ".cursor/commands/release.md", "agents/release.md"]
     )
@@ -11286,7 +11331,9 @@ class TestGeneratorWorkflows:
             if v["file_path"] in {consumer, str(source.relative_to(repo))}
         ] == []
 
-    @pytest.mark.parametrize("consumer", ["AGENTS.md", "CLAUDE.md", "docs/policy.md"])
+    @pytest.mark.parametrize(
+        "consumer", ["AGENTS.md", "CLAUDE.md", "docs/policy.md", "content/policy.md"]
+    )
     def test_source_alias_keeps_whole_file_checks(self, consumer, tmp_path):
         repo = copy_fixture("generators/rulesync", tmp_path)
         target = repo / consumer
@@ -11299,6 +11346,8 @@ class TestGeneratorWorkflows:
             config.read_text() + "\n  content-banned-references:\n    banned:\n"
             "      - pattern: forbidden-endpoint\n        message: Use the supported endpoint\n"
         )
+        if consumer == "content/policy.md":
+            config.write_text(config.read_text() + "\ncontent-paths: [content/policy.md]\n")
         args = (
             "--rule",
             "security-invisible-unicode",
@@ -11376,24 +11425,42 @@ class TestGeneratorWorkflows:
             ),
         ],
     )
-    def test_config_alias_keeps_configured_instructions(self, generator, alias, payload, tmp_path):
-        from skillsaw.blocks import InstructionBlock
+    @pytest.mark.parametrize("selection", ["opencode", "content-paths"])
+    @pytest.mark.parametrize("direction", ["config-alias", "consumer-alias"])
+    def test_config_alias_keeps_configured_instructions(
+        self, generator, alias, payload, selection, direction, tmp_path
+    ):
+        from skillsaw.blocks import ExtraBlock, InstructionBlock
         from skillsaw.context import RepositoryContext
 
         repo = copy_fixture(f"generators/{generator}", tmp_path)
         target = repo / "docs/policy.md"
         target.parent.mkdir()
         target.write_text(payload)
-        (repo / "opencode.json").write_text(json.dumps({"instructions": ["docs/policy.md"]}))
+        if selection == "opencode":
+            (repo / "opencode.json").write_text(json.dumps({"instructions": ["docs/policy.md"]}))
+        else:
+            settings = repo / ".skillsaw.yaml"
+            settings.write_text(settings.read_text() + "\ncontent-paths: [docs/policy.md]\n")
         before = run_lint(repo, "--rule", "security-invisible-unicode")
         config = repo / alias
-        config.unlink()
-        config.symlink_to(os.path.relpath(target, config.parent))
+        if direction == "config-alias":
+            config.unlink()
+            config.symlink_to(os.path.relpath(target, config.parent))
+        else:
+            config.write_text(payload)
+            target.unlink()
+            target.symlink_to(os.path.relpath(config, target.parent))
         after = run_lint(repo, "--rule", "security-invisible-unicode")
         assert before["rc"] == after["rc"] == 1
         assert violations(after) == violations(before)
         assert any(v["file_path"] == "docs/policy.md" for v in violations(after))
-        assert target in {n.path for n in RepositoryContext(repo).lint_tree.find(InstructionBlock)}
+        context = RepositoryContext(
+            repo, content_paths=["docs/policy.md"] if selection == "content-paths" else []
+        )
+        native_type = ExtraBlock if selection == "content-paths" else InstructionBlock
+        assert target in {n.path for n in context.lint_tree.find(native_type)}
+        assert all("generator" not in v for v in violations(after))
 
     @pytest.mark.parametrize("rule", ["security-invisible-unicode", "security-encoded-payload"])
     def test_description_security_scans_value_once(self, rule, tmp_path):

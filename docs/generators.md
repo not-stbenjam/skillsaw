@@ -32,6 +32,9 @@ the tree. Native whole-file and decoded-field checks still run, and relative
 references are checked from the consumer's location. Identical
 editorial findings at the same physical line are reported on the source once;
 different findings remain visible. An alias is not treated as generated output.
+This also applies to a differently named alias explicitly selected through
+`content-paths`, including a raw Markdown view of generator configuration.
+Globs matching the canonical source or configuration path retain its native role.
 
 The following optional checks use pinned release contracts:
 

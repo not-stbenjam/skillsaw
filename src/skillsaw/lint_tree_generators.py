@@ -15,7 +15,12 @@ def attach_generator_sources(state):
             # A source may also be a native instruction or an alias of a
             # consumer config. Preserve both interpretations: their decoded
             # fields, frontmatter and whole-file views need different checks.
-            state.add_parser_block(state.root, path, RulerRuleBlock if ruler else RulesyncRuleBlock)
+            state.add_parser_block(
+                state.root,
+                path,
+                RulerRuleBlock if ruler else RulesyncRuleBlock,
+                preserve_content_aliases=True,
+            )
 
 
 def attach_generator_configs(state):
@@ -27,4 +32,5 @@ def attach_generator_configs(state):
                 state.root,
                 project.config,
                 RulerConfigBlock if ruler else RulesyncConfigBlock,
+                preserve_content_aliases=True,
             )
