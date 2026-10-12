@@ -7,6 +7,7 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
+from .discovery.codex_instructions import project_configs, project_directories
 from .formats.openclaw import MANIFEST
 from .repository_types import RepositoryType, TOOL_REPO_TYPES
 from .utils import read_json
@@ -14,6 +15,7 @@ from .paths import contained_resolve, safe_resolve
 
 if TYPE_CHECKING:
     from .discovery.detect import RepositoryScan
+    from .formats.codex_instructions import CodexInstructionOptions
     from .repository_provenance import PluginProvenance
 
 
@@ -39,6 +41,10 @@ class RepositoryScanMixin:
         _pi_packages_cache: Optional[Tuple[Tuple[str, ...], List[Path], Set[Path]]]
         plugins: List[Path]
         codex_plugins: List[Path]
+        codex_instructions: Optional[CodexInstructionOptions]
+        lint_external_content: bool
+
+        def is_externally_sourced(self, path: Path) -> bool: ...
 
         def openclaw_plugin_roots(self) -> List[Path]: ...
 
@@ -215,7 +221,7 @@ class RepositoryScanMixin:
         Values rather than members: discovery stays state-free and imports
         nothing from ``context``, which owns the enum.
         """
-        return detect_discovery.tool_types(
+        values = detect_discovery.tool_types(
             self.root_path,
             self.instruction_files,
             self.is_path_excluded,
@@ -223,6 +229,22 @@ class RepositoryScanMixin:
             self._repository_scan().legacy_editor_files,
             self._repository_scan().skills_lock_files,
         )
+        if self.codex_instructions is not None and "codex-project" not in values:
+            try:
+                directories = project_directories(
+                    self.root_path, self.codex_instructions.cwd, resolve=self.resolve_path
+                )
+            except (ValueError, OSError):
+                return values
+            if any(
+                candidate.issue is None
+                and (self.lint_external_content or not self.is_externally_sourced(candidate.path))
+                for candidate in project_configs(
+                    directories, resolve=self.resolve_path, is_excluded=self.is_path_excluded
+                )
+            ):
+                values.add("codex-project")
+        return values
 
     #: Alias for the one definition in discovery. Two copies of "which
     #: directories does a walk prune" are how a checkout starts being walked

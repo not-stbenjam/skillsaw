@@ -258,13 +258,14 @@ class Linter:
         if (
             self.context.content_paths != self.config.content_paths
             or self.context.exclude_patterns != self.config.exclude_patterns
+            or self.context.codex_instructions != self.config.codex_instructions
+            or self.context.lint_external_content != self.config.lint_external_content
         ):
             self.context.content_paths = self.config.content_paths
             self.context.exclude_patterns = self.config.exclude_patterns
-            self.context.apply_excludes()
-        if self.context.lint_external_content != self.config.lint_external_content:
+            self.context.codex_instructions = self.config.codex_instructions
             self.context.lint_external_content = self.config.lint_external_content
-            self.context.rebuild_lint_tree()
+            self.context.apply_excludes()
         self.rules: List[Rule] = []
         self._load_rules()
         # Selection inputs are shared by the diagnostic and tree inspection.

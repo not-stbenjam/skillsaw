@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .blocks.codex import CodexConfigBlock
 from .blocks.content import AgentsMdBlock, CodexInstructionBlock
 from .codex_instructions import CodexInstructionsNode
-from .discovery.codex_instructions import probe_file, project_directories, select_instructions
+from .discovery.codex_instructions import project_configs, project_directories, select_instructions
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, candidate_filenames
 from .paths import relative_to_str
 
@@ -37,15 +37,9 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     fallbacks = ()
     merged = {}
     origins = {}
-    for directory in directories:
-        candidate = probe_file(
-            directory / ".codex" / "config.toml",
-            context.root_path,
-            resolve=resolve,
-            is_excluded=context.is_path_excluded,
-        )
-        if candidate is None:
-            continue
+    for candidate in project_configs(
+        directories, resolve=resolve, is_excluded=context.is_path_excluded
+    ):
         if candidate.issue:
             node.issues.append(candidate.issue)
             continue

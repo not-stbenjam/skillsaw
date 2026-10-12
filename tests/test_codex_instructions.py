@@ -444,6 +444,63 @@ def test_default_lint_and_other_ecosystems_unaffected(tmp_path):
     assert report["selected"] == []
 
 
+@pytest.mark.parametrize("scope", ["included", "excluded", "external", "escape", "missing"])
+def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, scope):
+    root = tmp_path / "repo"
+    path = root / "vendor/pkg/.codex/config.toml"
+    path.parent.mkdir(parents=True)
+    target = path
+    if scope == "external":
+        target = root / "apm_modules/vendor/config.toml"
+        target.parent.mkdir(parents=True)
+        (root / "apm.yml").write_text("name: instructions\nversion: 1.0.0\ntargets: []\n")
+        path.symlink_to(target)
+    elif scope == "escape":
+        target = tmp_path / "outside.toml"
+        path.symlink_to(target)
+    target.write_text("project_doc_max_bytes = 65536\n")
+    original = Path.open
+
+    def scoped_open(file, *args, **kwargs):
+        if scope != "included":
+            assert file.resolve() != target.resolve(), f"out-of-scope read: {file}"
+        return original(file, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(
+            cwd="missing" if scope == "missing" else "vendor/pkg"
+        ),
+        exclude_patterns=["vendor"] if scope == "excluded" else [],
+        lint_external_content=False,
+    )
+    assert (RepositoryType.CODEX_PROJECT in context.repo_types) is (scope == "included")
+    assert bool(context.lint_tree.find(CodexConfigBlock)) is (scope == "included")
+    if scope == "included":
+        context.exclude_patterns = ["vendor"]
+        context.apply_excludes()
+        assert RepositoryType.CODEX_PROJECT not in context.repo_types
+        assert not context.lint_tree.find(CodexConfigBlock)
+
+
+def test_linter_refreshes_selected_config_types_before_loading_rules(tmp_path):
+    path = tmp_path / "vendor/pkg/.codex/config.toml"
+    path.parent.mkdir(parents=True)
+    path.write_text("project_doc_max_bytes = 65536\n")
+    context = RepositoryContext(tmp_path)
+    config = LinterConfig.default()
+    config.codex_instructions = CodexInstructionOptions(cwd="vendor/pkg")
+    enabled = Linter(context, config, no_plugins=True)
+    assert any(rule.rule_id == "codex-hooks-valid" for rule in enabled.rules)
+    assert RepositoryType.CODEX_PROJECT in context.repo_types
+    assert len(context.lint_tree.find(CodexConfigBlock)) == 1
+    disabled = Linter(context, no_plugins=True)
+    assert not any(rule.rule_id == "codex-hooks-valid" for rule in disabled.rules)
+    assert RepositoryType.CODEX_PROJECT not in context.repo_types
+    assert not context.lint_tree.find(CodexConfigBlock)
+
+
 def test_override_only_repository_gets_content_coverage(tmp_path):
     context, _ = project(tmp_path, {"a/AGENTS.override.md": "Override instructions"})
     assert RepositoryType.CODEX_PROJECT in context.repo_types

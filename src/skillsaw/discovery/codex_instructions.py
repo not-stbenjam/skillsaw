@@ -68,3 +68,23 @@ def select_instructions(
                 selected.append(candidate)
                 break
     return tuple(selected)
+
+
+def project_configs(
+    directories: Tuple[Path, ...],
+    *,
+    resolve: Resolver,
+    is_excluded: Callable[[Path], bool],
+) -> Tuple[InstructionCandidate, ...]:
+    """Project configuration evidence shared by detection and tree attachment."""
+    candidates = []
+    for directory in directories:
+        candidate = probe_file(
+            directory / ".codex" / "config.toml",
+            directories[0],
+            resolve=resolve,
+            is_excluded=is_excluded,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    return tuple(candidates)

@@ -11158,6 +11158,26 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("cwd", ["service", "vendor/pkg", "node_modules/pkg"])
+    @pytest.mark.parametrize("forced_type", [None, "agentskills"])
+    def test_selected_config_activates_automatic_hook_validation(self, tmp_path, cwd, forced_type):
+        repo = copy_fixture("codex-instructions-hooks", tmp_path)
+        package = repo / cwd
+        if cwd != "service":
+            package.parent.mkdir(parents=True)
+            (repo / "service").rename(package)
+        path = package / ".codex/config.toml"
+        path.write_text(path.read_text().replace("timeout = 30", 'timeout = "slow"'))
+        config = repo / ".skillsaw.yaml"
+        config.write_text(config.read_text().replace("cwd: service", f"cwd: {cwd}"))
+        flags = ["--type", forced_type] if forced_type else []
+        result = run_lint(repo, "--strict", *flags)
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = violations(result)
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == "codex-hooks-valid"
+        assert findings[0]["file_path"] == f"{cwd}/.codex/config.toml"
+
     @pytest.mark.parametrize("cwd", ["hooks", "vendor/pkg", "node_modules/pkg"])
     @pytest.mark.parametrize("rule", ["codex-hooks-valid", "hooks-dangerous", "hooks-prohibited"])
     def test_selected_project_config_keeps_hook_checks(self, tmp_path, cwd, rule):
