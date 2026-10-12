@@ -330,6 +330,10 @@ class _TreeBuildState:
         parent.children.append(block)
         return block
 
+    def add_codex_config(self, parent: LintTarget, path: Path) -> Optional[CodexConfigBlock]:
+        """Attach a project config with all of its structured roles."""
+        return _add_codex_config(self, parent, path)
+
     def _claim_parser_role(self, p: Path, block_cls: type) -> Optional[Path]:
         """Claim one parser role over *p*, or ``None`` if it is not ours.
 
@@ -476,7 +480,9 @@ def _add_project_hooks(
     state.add_parser_block(root, path, block_cls)
 
 
-def _add_codex_config(state: _TreeBuildState, root: LintTarget, path: Path) -> None:
+def _add_codex_config(
+    state: _TreeBuildState, root: LintTarget, path: Path
+) -> Optional[CodexConfigBlock]:
     """Attach a ``.codex/config.toml``, and its ``[hooks]`` tables under it.
 
     Two committed executable surfaces in one file. Codex reads lifecycle
@@ -517,14 +523,15 @@ def _add_codex_config(state: _TreeBuildState, root: LintTarget, path: Path) -> N
     # twice. ``hooks.json`` and ``config.toml`` are two paths, so a directory
     # carrying both keeps a block for each — Codex merges them.
     if _attached_as_hooks(state, path):
-        return
+        return config
     data, error = config.raw_data, config.parse_error
     document = codex_config_hooks(data) if data is not None else None
     if error is None and document is None:
-        return
+        return config
     state.attach_prebuilt(
         config, CodexConfigHooksBlock(path=path, inline_data=document, toml_error=error)
     )
+    return config
 
 
 def _claim_attached_hooks(
@@ -1106,7 +1113,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # attachment.
     for codex_dir in context.agent_tool_dirs(CODEX_DIR_NAME):
         _add_project_hooks(state, root, codex_dir / CODEX_HOOKS_FILENAME, CodexHooksBlock)
-        _add_codex_config(state, root, codex_dir / CODEX_CONFIG_FILENAME)
+        state.add_codex_config(root, codex_dir / CODEX_CONFIG_FILENAME)
 
     for muse_dir in context.agent_tool_dirs(muse.TOOL_DIR_NAME):
         _add_project_hooks(state, root, muse_dir / muse.HOOKS_FILENAME, MuseHooksBlock)

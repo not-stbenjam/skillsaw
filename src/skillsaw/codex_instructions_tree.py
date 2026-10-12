@@ -56,7 +56,7 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
             continue
         config = configs.get(resolve(path))
         if config is None:
-            config = state.add_parser_block(state.root, path, CodexConfigBlock)
+            config = state.add_codex_config(state.root, path)
             if config is not None:
                 configs[resolve(path)] = config
         if config is None:

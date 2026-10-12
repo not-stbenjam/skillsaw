@@ -326,16 +326,74 @@ def test_in_scope_symlink_charged_per_directory_but_content_checked_once(tmp_pat
     assert len(tree.find(AgentsMdBlock)) == 1
 
 
+@pytest.mark.parametrize(
+    "limit,expected_reads",
+    [(0, {}), (3, {"AGENTS.md": 3}), (7, {"AGENTS.md": 4, "child/AGENTS.md": 3})],
+)
+def test_report_bounds_reads_and_keeps_full_file_sizes(
+    tmp_path, monkeypatch, limit, expected_reads
+):
+    context, _ = project(
+        tmp_path,
+        {"AGENTS.md": "root", "child/AGENTS.md": "éé"},
+        cwd="child",
+        project_doc_max_bytes=limit,
+    )
+    child = context.root_path / "child/AGENTS.md"
+    size = 8 * 1024 * 1024
+    with child.open("r+b") as stream:
+        stream.truncate(size)
+    original = Path.open
+    reads = {}
+
+    class BoundedRead:
+        def __init__(self, path, stream):
+            self.name = path.relative_to(context.root_path).as_posix()
+            self.stream = stream
+
+        def __enter__(self):
+            self.stream.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+
+        def read(self, count=-1):
+            assert 0 <= count <= expected_reads[self.name], (self.name, count)
+            reads[self.name] = count
+            return self.stream.read(count)
+
+    def guarded_open(path, *args, **kwargs):
+        assert path.relative_to(context.root_path).as_posix() in expected_reads, path
+        return BoundedRead(path, original(path, *args, **kwargs))
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+    tree = context.lint_tree
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"]
+    assert reads == expected_reads
+    assert report["selected_file_bytes"] == size + 4
+    assert [entry["file_bytes"] for entry in report["selected"]] == [4, size]
+    assert report["charged_bytes"] == limit
+    if limit == 7:
+        assert report["selected"][1]["truncated"]
+        assert report["selected"][1]["text_bytes"] == 5  # Split second é becomes U+FFFD.
+        assert report["rendered_project_bytes"] == 11
+    else:
+        assert report["selected"][1]["status"] == "omitted"
+
+
 def test_read_failure_marks_rest_of_chain_unknown(tmp_path, monkeypatch):
     context, _ = project(tmp_path, {"AGENTS.md": "root", "child/AGENTS.md": "child"}, cwd="child")
-    original = Path.read_bytes
+    original = Path.open
 
-    def fail_root(path):
+    def fail_root(path, *args, **kwargs):
         if path == context.root_path / "AGENTS.md":
             raise PermissionError("permission denied")
-        return original(path)
+        assert path != context.root_path / "child/AGENTS.md", "read after unknown budget"
+        return original(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "read_bytes", fail_root)
+    monkeypatch.setattr(Path, "open", fail_root)
     report = context.lint_tree.find(CodexInstructionsNode)[0].report(context.lint_tree)
     assert not report["complete"]
     assert [e["status"] for e in report["selected"]] == ["unknown", "unknown"]

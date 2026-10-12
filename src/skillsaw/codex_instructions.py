@@ -61,14 +61,18 @@ class CodexInstructionsNode(LintTarget):
                 try:
                     # read_text normalizes BOM/CRLF and rejects invalid UTF-8;
                     # none of those operations matches the Codex byte loader.
-                    data = block.path.read_bytes()
+                    file_bytes = block.path.stat().st_size
+                    data = b""
+                    if budget_known and remaining > 0:
+                        with block.path.open("rb") as stream:
+                            data = stream.read(min(remaining, file_bytes))
                 except OSError as error:
                     issue = f"{label}: cannot read instruction bytes ({error})"
                 else:
-                    total += len(data)
-                    entry["file_bytes"] = len(data)
+                    total += file_bytes
+                    entry["file_bytes"] = file_bytes
                     if budget_known:
-                        usage = instruction_bytes(data, remaining)
+                        usage = instruction_bytes(data, remaining, file_bytes=file_bytes)
                         entry.update(asdict(usage))
                         charged += usage.charged_bytes
                         remaining -= usage.charged_bytes
