@@ -11286,6 +11286,37 @@ class TestKiro:
         assert all("zQ7mJ9" not in v["message"] for v in found)
         assert all("placeholder-docs" not in v["message"] for v in found)
 
+    @pytest.mark.parametrize("structural_enabled", [False, True])
+    def test_mcp_syntax_and_container_diagnostic_ownership(self, tmp_path, structural_enabled):
+        repo = copy_fixture("kiro/malformed-mcp", tmp_path)
+        rules = ["mcp-valid-json"]
+        if structural_enabled:
+            rules.extend(("kiro-agent-valid", "kiro-mcp-valid"))
+        result = self.selected(repo, *rules)
+        assert result["rc"] == (1 if structural_enabled else 0)
+        groups = by_rule(result)
+        assert not {"repository-path-error", "rule-execution-error"} & set(groups)
+        if structural_enabled:
+            assert set(groups) == {"kiro-agent-valid", "kiro-mcp-valid"}
+            assert len(groups["kiro-mcp-valid"]) == 6
+            assert len(groups["kiro-agent-valid"]) == 2
+            md_findings = {
+                v["file_path"]: v["line"]
+                for v in violations(result)
+                if v["file_path"].endswith(".md")
+            }
+            assert md_findings == {
+                ".kiro/agents/map-array.md": 4,
+                ".kiro/agents/server-null.md": 5,
+            }
+        else:
+            # The host surface owns syntax as well as shape. Disabling it
+            # leaves the shared credential checks, covered separately.
+            assert violations(result) == []
+        assert all(
+            v["line"] is None for v in violations(result) if v["file_path"].endswith(".json")
+        )
+
     def test_inline_prompt_has_one_security_scan_owner(self, tmp_path):
         repo = copy_fixture("kiro/security", tmp_path)
         result = self.selected(repo, "content-embedded-secrets", "security-invisible-unicode")
@@ -11327,6 +11358,21 @@ class TestKiro:
         found = violations(self.selected(repo, rule))
         assert len(found) == 1
         assert found[0]["file_path"] == "packages/api/.kiro/agents/inline.json"
+
+    def test_appended_prompt_secret_is_not_hidden_by_baseline(self, tmp_path):
+        repo = copy_fixture("kiro/security", tmp_path)
+        rule = "content-embedded-secrets"
+        result = run_cli(["baseline", str(repo)])
+        assert result.returncode == 0, result.stderr
+        assert violations(self.selected(repo, rule)) == []
+        path = repo / ".kiro/agents/reviewer.json"
+        data = json.loads(path.read_text())
+        data["prompt"] += "\nAdditional credential: ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+        path.write_text(json.dumps(data))
+        found = violations(self.selected(repo, rule))
+        assert len(found) == 1
+        assert found[0]["file_path"] == ".kiro/agents/reviewer.json"
+        assert "ghp_" not in found[0]["message"]
 
     def test_routing_selects_agents_and_auto_steering(self, tmp_path):
         repo = copy_fixture("kiro/valid", tmp_path)
