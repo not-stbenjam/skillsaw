@@ -11166,6 +11166,8 @@ class TestGeneratorWorkflows:
             '2020-01-01: first\n"Wed Jan 01 2020 00:00:00 GMT+0000 (Coordinated Universal Time)": second\n',
             "metadata: {2020-01-01: release notes}\n",
             "? [2020-01-01]\n: release metadata\n",
+            '? [2020-01-01]\n: first\n"2020-01-01": second\n',
+            "? [!!binary bWV0YWRhdGE=]\n: first\n\"b'metadata'\": second\n",
             "!!binary bWV0YWRhdGE=: release notes\n",
         ],
     )
@@ -11180,6 +11182,53 @@ class TestGeneratorWorkflows:
         found = violations(after)
         assert outputs | {str(source.relative_to(repo))} <= {v["file_path"] for v in found}
         assert all("generator" not in v for v in found if v["file_path"] in outputs)
+        assert not violations(run_lint(repo, "--rule", "rulesync-source-valid"))
+
+    @pytest.mark.parametrize("nested", [True, False])
+    @pytest.mark.parametrize("excluded", [True, False])
+    def test_claude_inventory_reports_broken_symlinks(self, nested, excluded, tmp_path):
+        project = copy_fixture("generators/rulesync", tmp_path / "packages")
+        repo = tmp_path if nested else project
+        broken = project / ".claude/rules/broken.md"
+        broken.symlink_to("missing.md")
+        if excluded:
+            (repo / ".skillsaw.yaml").write_text(
+                # Exclusions use resolved identities, including symlink targets.
+                json.dumps({"exclude": [str(broken.with_name("missing.md").relative_to(repo))]})
+            )
+        result = run_lint(repo, "--rule", "claude-rules-valid")
+        found = violations(result)
+        if excluded:
+            assert result["rc"] == 0 and not found
+        else:
+            assert result["rc"] == 1 and len(found) == 1
+            assert found[0]["file_path"] == str(broken.relative_to(repo))
+            assert "Failed to read file" in found[0]["message"]
+
+    @pytest.mark.parametrize(
+        "name,header", [("AGENTS.md", ""), ("policy.md", "---\nroot: false\n\n---\n")]
+    )
+    def test_source_views_deduplicate_only_identical_whole_file_findings(
+        self, name, header, tmp_path
+    ):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        source = repo / ".ruler" / name
+        # AGENTS.md is also a native instruction; Cursor's frontmattered view
+        # has different prose when a header is present. The blank header line
+        # keeps raw YAML from becoming a Markdown setext heading.
+        source.write_text(header + "Run the release acceptance tests before deployment.\n" * 12)
+        (repo / "AGENTS.md").unlink()
+        (repo / "CLAUDE.md").unlink()
+        cursor = repo / ".cursor/rules/policy.mdc"
+        cursor.parent.mkdir(parents=True)
+        cursor.symlink_to("../../.ruler/" + name)
+        result = run_lint(repo, "--rule", "content-cognitive-chunks")
+        found = violations(result)
+        assert {v["file_path"] for v in found} == (
+            {".ruler/policy.md", ".cursor/rules/policy.mdc"} if header else {".ruler/AGENTS.md"}
+        )
+        assert len(found) == (2 if header else 1)
+        assert all(v.get("line") is None and "generator" not in v for v in found)
 
     @pytest.mark.parametrize(
         "generator,ownership",

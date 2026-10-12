@@ -342,11 +342,26 @@ def test_rule_inventory_honors_excluded_ancestors(dot_claude_with_rules, exclude
     assert RulesValidRule().check(context) == []
 
 
-def test_rule_inventory_contains_symlink_files(dot_claude_with_rules, tmp_path):
+@pytest.mark.parametrize("missing", [True, False])
+def test_rule_inventory_contains_symlink_files(dot_claude_with_rules, tmp_path, missing):
     outside = tmp_path / "external.md"
-    outside.write_text("---\npaths: false\n---\n")
+    if not missing:
+        outside.write_text("---\npaths: false\n---\n")
     (dot_claude_with_rules / ".claude/rules/external.md").symlink_to(outside)
     assert RulesValidRule().check(RepositoryContext(dot_claude_with_rules)) == []
+
+
+def test_rule_inventory_skips_non_regular_files(dot_claude_with_rules):
+    import os
+
+    from skillsaw.blocks.claude_rules import ClaudeRuleFileNode
+
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("requires named pipes")
+    path = dot_claude_with_rules / ".claude/rules/pipe.md"
+    os.mkfifo(path)
+    path.with_name("alias.md").symlink_to(path.name)
+    assert not RepositoryContext(dot_claude_with_rules).lint_tree.find(ClaudeRuleFileNode)
 
 
 def test_rule_inventory_keeps_explicit_apm_output_validation(dot_claude_with_rules):

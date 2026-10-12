@@ -10,4 +10,10 @@ def attach_claude_rule_files(state, directory, readable_matches):
     ):
         return
     for path in readable_matches(directory, "**/*"):
-        state.add_parser_block(state.root, path, ClaudeRuleFileNode, reserve_extra_content=False)
+        state.add_parser_block(
+            state.root,
+            path,
+            ClaudeRuleFileNode,
+            reserve_extra_content=False,
+            include_broken_symlinks=True,
+        )

@@ -330,6 +330,20 @@ def test_rulesync_complex_key_alias_and_merge_override():
     assert parsed.data["root"] is True
 
 
+@pytest.mark.parametrize("key", ["[2020-01-01]", "[!!binary bWV0YWRhdGE=]"])
+def test_nonportable_keys_keep_common_field_validation(key, tmp_path):
+    repo, _ = context_for("rulesync", tmp_path)
+    source = repo / ".rulesync/rules/backend/api.md"
+    source.write_text(f"---\n? {key}\n: metadata\nroot: invalid\n---\n# Release\n")
+    found = RulesyncSourceValidRule().check(RepositoryContext(repo))
+    assert len(found) == 1 and found[0].line == 4
+    assert found[0].message == "Invalid Rulesync frontmatter: root: expected boolean"
+    duplicate = parse_rulesync_frontmatter(
+        f"---\n? {key}\n: metadata\nroot: true\nroot: false\n---\n# Release\n"
+    )
+    assert duplicate.error == "Invalid YAML frontmatter" and duplicate.error_line == 5
+
+
 def test_rulesync_jsonc_config_and_severity(tmp_path):
     repo, _ = context_for("rulesync", tmp_path)
     config = repo / "rulesync.jsonc"

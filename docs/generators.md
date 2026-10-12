@@ -34,8 +34,10 @@ type in reports; all detected types remain listed.
 If a source is also selected by a native consumer, both parser roles remain in
 the tree. Native whole-file and decoded-field checks still run, and relative
 references are checked from the consumer's location. Identical
-editorial findings at the same physical line are reported on the source once;
-different findings remain visible. An alias is not treated as generated output.
+editorial findings at the same physical line are reported on the source once.
+Whole-file findings are deduplicated only when both views have identical prose
+and starting locations; different interpretations remain visible.
+An alias is not treated as generated output.
 This also applies to a differently named alias explicitly selected through
 `content-paths`, including a raw Markdown view of generator configuration.
 Globs matching the canonical source or configuration path retain its native role.
@@ -82,7 +84,9 @@ outside this portable subset. In particular, JavaScript timestamp-key spelling
 depends on the generator's time zone: a date key can collide with a quoted UTC
 date string in UTC while remaining distinct in another zone. skillsaw leaves
 that validation to the released generator and does not recognize copies from
-sources with these keys. Their source prose and consumer files remain checked.
+sources with these keys. Keys containing these values remain opaque rather than
+using Python's spelling, which could invent duplicate keys. Common field shapes
+and duplicates remain checked, as do source prose and consumer files.
 Quote date-like keys when they are intended as literal strings.
 
 ## Copy recognition and attribution
@@ -100,6 +104,8 @@ unchanged.
 The existing `claude-rules-valid` check reads these consumer files from the lint
 tree, including nested projects. Invalid `paths` metadata and unloaded file
 extensions remain visible independently of source validation and copy ownership.
+Contained broken file symlinks retain a read-error diagnostic; excluded paths
+and symlinks escaping the repository remain outside the inventory.
 
 For **Ruler**, recognition is automatic for conventional project `AGENTS.md`
 and `CLAUDE.md` outputs. It requires Ruler's source comments, the `AGENTS.md`

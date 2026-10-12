@@ -125,6 +125,7 @@ from .paths import (
     safe_exists,
     safe_is_dir,
     safe_is_file,
+    safe_is_symlink,
     safe_resolve,
 )
 from .formats.promptfoo import (
@@ -290,7 +291,9 @@ class _TreeBuildState:
                 resolved in self.seen
                 and (resolved not in self.content_alias_files or p in self.extra_content_paths)
             )
-            or not safe_exists(resolved)
+            # Inventory nodes may represent directories (Pi extensions do),
+            # but special files must never reach a blocking prose read.
+            or not (safe_is_file(resolved) or safe_is_dir(resolved))
             or self.context.is_path_excluded(p)
         ):
             return
@@ -310,6 +313,7 @@ class _TreeBuildState:
         content_suppressed: bool = False,
         preserve_content_aliases: bool = False,
         reserve_extra_content: bool = True,
+        include_broken_symlinks: bool = False,
     ) -> Optional[LintTarget]:
         """Attach a document once for each parser role.
 
@@ -322,9 +326,17 @@ class _TreeBuildState:
         available without reattaching this native path as generic prose.
         An inventory-only role sets ``reserve_extra_content=False`` because
         it does not replace a configured prose view of the file.
+        ``include_broken_symlinks`` retains contained dangling file links for
+        inventory diagnostics, without admitting other non-file entries.
         """
         if (
-            self._claim_parser_role(p, block_cls, preserve_content_aliases, reserve_extra_content)
+            self._claim_parser_role(
+                p,
+                block_cls,
+                preserve_content_aliases,
+                reserve_extra_content,
+                include_broken_symlinks,
+            )
             is None
         ):
             return None
@@ -353,17 +365,22 @@ class _TreeBuildState:
         block_cls: type,
         preserve_content_aliases: bool = False,
         reserve_extra_content: bool = True,
+        include_broken_symlinks: bool = False,
     ) -> Optional[Path]:
         """Claim one parser role over *p*, or ``None`` if it is not ours.
 
-        Containment, existence, exclusion and role deduplication, in that
+        Containment, exclusion, file kind and role deduplication, in that
         order — the contract both attachment paths share.
         """
         resolved = self.resolve_repo_path(p)
         if resolved is None:
             return None
         role = (resolved, block_cls)
-        if not safe_is_file(resolved) or self.context.is_path_excluded(p):
+        if self.context.is_path_excluded(p):
+            return None
+        if not safe_is_file(resolved) and not (
+            include_broken_symlinks and safe_is_symlink(p) and not safe_exists(resolved)
+        ):
             return None
         if preserve_content_aliases:
             # A source may already have a native instruction/config role.

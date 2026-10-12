@@ -197,14 +197,16 @@ class _RulesyncLoader(_SAFE_LOADER):
                 parts.append(
                     ""
                     if item.tag == "tag:yaml.org,2002:null"
-                    else str(self.construct_property_key(item))
+                    else self.construct_property_key(item)
                 )
-            return ",".join(parts)
+            # A nonportable element makes the entire array key opaque. Python
+            # str(date/bytes) would invent collisions with ordinary strings.
+            return ",".join(parts) if all(isinstance(part, str) for part in parts) else tuple(parts)
         key = _rulesync_scalar_key(value)
         if not isinstance(key, str):
             # Date.toString depends on the generator's runtime time zone.
             # Timestamp and binary keys are outside the portable subset;
-            # retain their values for checks, but do not confer ownership.
+            # retain their values, without inventing property spellings.
             self.portable_keys = False
         return key
 

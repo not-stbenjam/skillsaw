@@ -1132,19 +1132,29 @@ class Linter:
     def _dedupe_source_editorial(violations):
         """Keep the source's identical editorial finding on a shared file.
 
-        Native parser views remain complete. Only matching findings at the
-        same physical line are duplicates; a different interpretation or a
-        security/policy finding survives. This confers no generated ownership.
+        Native parser views remain complete. Line findings match their physical
+        location; whole-file findings also require identical prose views. A
+        different interpretation or a security/policy finding survives. This
+        confers no generated ownership.
         """
         from .blocks.generators import is_generator_source
+        from .blocks import ContentBlock
         from .generated import EDITORIAL_COPY_RULES
 
         def key(v):
-            if v.rule_id not in EDITORIAL_COPY_RULES or v.block is None or v.file_line is None:
+            if v.rule_id not in EDITORIAL_COPY_RULES or v.block is None:
                 return None
+            location = v.file_line
+            if location is None:
+                if not isinstance(v.block, ContentBlock):
+                    return None
+                body = v.block.read_body(strip_code_blocks=False)
+                if body is None:
+                    return None
+                location = (None, v.block.file_line(1), body)
             return (
                 v.block.resolved_path,
-                v.file_line,
+                location,
                 v.rule_id,
                 v.message,
                 v.severity,
