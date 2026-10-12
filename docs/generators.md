@@ -28,7 +28,8 @@ Symlink files must resolve inside the source tree; directory symlinks are not
 followed. Home configuration and remote sources are never loaded.
 
 If a source is also selected by a native consumer, both parser roles remain in
-the tree. Native whole-file and decoded-field checks still run. Identical
+the tree. Native whole-file and decoded-field checks still run, and relative
+references are checked from the consumer's location. Identical
 editorial findings at the same physical line are reported on the source once;
 different findings remain visible. An alias is not treated as generated output.
 

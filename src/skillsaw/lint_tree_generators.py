@@ -1,4 +1,4 @@
-"""Attach authored generator sources before generic instruction-file sweeps."""
+"""Attach independent generator source and configuration parser roles."""
 
 from skillsaw.blocks.generators import (
     RulerConfigBlock,

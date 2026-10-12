@@ -11160,6 +11160,45 @@ class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
     @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
+    def test_source_alias_keeps_cursor_relative_references(self, generator, tmp_path):
+        from skillsaw.blocks.cursor import CursorRuleBlock, CursorRuleValidationBlock
+        from skillsaw.context import RepositoryContext
+
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        target = repo / ".cursor/rules/policy.mdc"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        inputs = FIXTURES / "generators/consumer-aliases"
+        target.write_text((inputs / "cursor.mdc").read_text())
+        source = repo / (
+            ".ruler/policy.md" if generator == "ruler" else ".rulesync/rules/policy.md"
+        )
+        # The link works beside the source, but not at the consumer path.
+        (source.parent / "release-checklist.txt").write_text(
+            (inputs / "release-checklist.txt").read_text()
+        )
+        args = ("--strict", "--rule", "content-broken-internal-reference")
+        before = run_lint(repo, *args)
+        target.rename(source)
+        target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 1
+        assert len(violations(before)) == 1
+        # The diagnostic survives unchanged, but symlinks are not autofixed.
+        expected = {**violations(before)[0], "fixable": False}
+        expected.pop("fix_confidence", None)
+        assert violations(after) == [expected]
+        found = violations(after)
+        assert len(found) == 1
+        assert found[0]["file_path"] == ".cursor/rules/policy.mdc"
+        assert found[0]["line"] == 7
+        assert "generator" not in found[0]
+        native = next(
+            n for n in RepositoryContext(repo).lint_tree.find(CursorRuleBlock) if n.path == target
+        )
+        assert not isinstance(native, CursorRuleValidationBlock)
+        assert native.content_blocks()
+
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
     @pytest.mark.parametrize(
         "consumer,block_type",
         [
@@ -11435,6 +11474,9 @@ class TestGeneratorWorkflows:
 
     @pytest.mark.parametrize("header", ["", "description: API rules\n"])
     def test_output_alias_keeps_authored_findings(self, header, tmp_path):
+        from skillsaw.blocks import CursorRuleBlock
+        from skillsaw.context import RepositoryContext
+
         repo = copy_fixture("generators/rulesync", tmp_path)
         source = repo / ".rulesync/rules/release.md"
         source.write_text("---\n" + header + "---\n\nConsider adding a regression test.\n")
@@ -11442,10 +11484,17 @@ class TestGeneratorWorkflows:
         output.unlink()
         output.symlink_to("../../.rulesync/rules/release.md")
         result = run_lint(repo, "--rule", "content-weak-language")
-        found = [v for v in violations(result) if v["file_path"] == ".rulesync/rules/release.md"]
+        found = [
+            v
+            for v in violations(result)
+            if v["file_path"] in {".rulesync/rules/release.md", ".cursor/rules/release.mdc"}
+        ]
         assert len(found) == 1 and "generator" not in found[0]
-        tree = run_cli(["tree", repo])
-        assert "Cursor rule validation" in tree.stdout
+        assert found[0]["file_path"] == ".rulesync/rules/release.md"
+        native = next(
+            n for n in RepositoryContext(repo).lint_tree.find(CursorRuleBlock) if n.path == output
+        )
+        assert native.content_blocks()
 
     @pytest.mark.parametrize(
         "description",

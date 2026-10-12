@@ -647,9 +647,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         root.set_parents()
         return root
     state = _TreeBuildState(context=context, root=root, repo_root=repo_root)
-    from .lint_tree_generators import attach_generator_sources
-
-    attach_generator_sources(state)
     cursor_prose = []
 
     _is_excluded = context.is_path_excluded
@@ -2127,10 +2124,14 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # Those semantic owners keep the single body and its parser role.
     attach_pi_prompts(state)
 
-    # --- Extra content paths from config ---
-    from .lint_tree_generators import attach_generator_configs
+    # Generator parser views must not replace native consumers, whose
+    # relative references and decoded content can differ from the source.
+    from .lint_tree_generators import attach_generator_configs, attach_generator_sources
 
+    attach_generator_sources(state)
     attach_generator_configs(state)
+
+    # --- Extra content paths from config ---
     # User-configured content paths plus globs contributed by detected
     # plugin repo types; the ``seen`` set dedupes any overlap.
     for glob_pattern in [*context.content_paths, *context.plugin_content_paths]:
