@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
 from .blocks.codex import CodexConfigBlock
-from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ReadmeBlock
+from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ExtraBlock, ReadmeBlock
 from .codex_instructions import CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
 from .discovery.excludes import is_root_or_ancestor_excluded
@@ -115,37 +115,45 @@ def attach_instruction_content(
     *,
     suppressed: frozenset[Path] = frozenset(),
 ) -> None:
-    """Retain semantic owners while giving display-only READMEs a prose role."""
+    """Keep semantic owners; give untyped prose the instruction role."""
     if not paths:
         return
     resolve = state.context.resolve_path
     claimed = set()
     readmes = {}
+    extras = {}
     for parent in state.root.walk():
         for block in parent.children:
             resolved = resolve(block.path)
             if isinstance(block, ReadmeBlock):
                 readmes[resolved] = (parent, block)
+            elif type(block) is ExtraBlock:
+                extras[resolved] = (parent, block)
             else:
                 claimed.add(resolved)
     for path in paths:
         resolved = resolve(path)
         if resolved is None or resolved in claimed:
             continue
-        # Keep existing skill/command/config roles. A README also needs
-        # prose checks: its display role does not expose any content.
+        # Keep existing skill/command/config roles. Generic extra prose yields
+        # to the instruction role; a README retains its separate display role.
         block_type = AgentsMdBlock if path.name == "AGENTS.md" else CodexInstructionBlock
-        if resolved in readmes:
-            parent, readme = readmes[resolved]
+        existing = extras.get(resolved) or readmes.get(resolved)
+        if existing is not None:
+            parent, previous = existing
             block = state.add_parser_block(
                 parent,
                 path,
                 block_type,
-                owner=readme.plugin_owner,
-                content_suppressed=readme.content_suppressed or path in suppressed,
+                owner=previous.plugin_owner,
+                content_suppressed=previous.content_suppressed or path in suppressed,
             )
             if block is not None:
-                block.externally_sourced = readme.externally_sourced
+                block.externally_sourced = previous.externally_sourced
+                if type(previous) is ExtraBlock:
+                    block.children = previous.children
+                    parent.children.remove(previous)
+                    state.seen_roles.discard((resolved, ExtraBlock))
         else:
             state.add_block(state.root, path, block_type, content_suppressed=path in suppressed)
         claimed.add(resolved)

@@ -14,6 +14,7 @@ from skillsaw.blocks import (
     CodexInstructionBlock,
     CommandBlock,
     ContentBlock,
+    ExtraBlock,
     PluginRuleBlock,
     ReadmeBlock,
 )
@@ -23,6 +24,7 @@ from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.discovery.codex_instructions import select_instructions
 from skillsaw.formats.codex_instructions import CodexInstructionOptions, instruction_bytes
 from skillsaw.linter import Linter
+from skillsaw.lint_target import LintTarget
 from skillsaw.rule import Severity
 from tests.cli_runner import run_cli
 
@@ -97,6 +99,83 @@ def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp
     assert report["complete"]
     assert [entry["path"] for entry in report["selected"]] == ["README.md", "child/README.md"]
     assert report["charged_bytes"] == 2 * (root / "README.md").stat().st_size
+
+
+@pytest.mark.parametrize("path_source", ["content_paths", "plugin_content_paths"])
+@pytest.mark.parametrize("alias", [False, True])
+def test_selected_fallback_replaces_generic_extra_role(tmp_path, path_source, alias):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
+    path = root / "TEAM.md"
+    (root / "AGENTS.override.md").rename(path)
+    extra_path = path
+    if alias:
+        extra_path = root / "NOTES.md"
+        extra_path.symlink_to(path.name)
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(project_doc_fallback_filenames=(path.name,)),
+    )
+    setattr(context, path_source, [extra_path.name])
+    tree = context.lint_tree
+    assert not context.lint_tree_errors
+    assert not tree.find(ExtraBlock)
+    instructions = tree.find(CodexInstructionBlock)
+    assert len(instructions) == 1
+    assert instructions[0].path == path
+    assert instructions[0].category == "agents-md"
+    assert len([b for b in tree.find(ContentBlock) if b.path.resolve() == path]) == 1
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"]
+    assert report["charged_bytes"] == path.stat().st_size
+
+
+@pytest.mark.parametrize("custom_role", [False, True])
+@pytest.mark.parametrize("lint_external", [False, True])
+def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
+    tmp_path, custom_role, lint_external
+):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
+    path = root / "TEAM.md"
+    (root / "AGENTS.override.md").rename(path)
+
+    class CustomProse(ExtraBlock):
+        pass
+
+    block_type = CustomProse if custom_role else ExtraBlock
+    child = LintTarget(path=root / "notes.txt")
+    child.path.write_text("Contributor metadata reference.\n")
+    original = block_type(
+        path=path,
+        plugin_owner=root,
+        children=[child],
+        content_suppressed=True,
+        externally_sourced=True,
+    )
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(project_doc_fallback_filenames=(path.name,)),
+        lint_external_content=lint_external,
+    )
+    context.plugin_tree_contributors = [("extra-prose", lambda _context, _tree: [original])]
+    tree = context.lint_tree
+    assert not context.lint_tree_errors
+    assert not context.plugin_extension_errors
+    blocks = [b for b in tree.find(ContentBlock) if b.path == path]
+    if not lint_external:
+        assert blocks == []
+        assert child not in list(tree.walk())
+        return
+    assert len(blocks) == 1
+    block = blocks[0]
+    assert type(block) is (CustomProse if custom_role else CodexInstructionBlock)
+    assert block.plugin_owner == root
+    assert block.content_suppressed
+    assert block.externally_sourced
+    assert block.children == [child]
+    assert child.parent is block
+    assert child.in_external_source
 
 
 @pytest.mark.parametrize("inspect", [False, True])

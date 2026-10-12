@@ -4,8 +4,10 @@ Rule: instruction-file-valid
 
 from typing import List
 
+from skillsaw.blocks import CodexInstructionBlock
 from skillsaw.rule import Rule, RuleViolation, Severity
 from skillsaw.context import RepositoryContext, INSTRUCTION_REPO_TYPES
+from skillsaw.repository_types import RepositoryType
 from skillsaw.rules.builtin.content_analysis import DevinGlobalRuleBlock, InstructionBlock
 from skillsaw.rules.builtin.utils import read_text
 
@@ -15,7 +17,7 @@ from ._helpers import is_instruction_filename
 class InstructionFileValidRule(Rule):
     """Check that instruction files are valid UTF-8 and non-empty"""
 
-    repo_types = INSTRUCTION_REPO_TYPES
+    repo_types = INSTRUCTION_REPO_TYPES | {RepositoryType.CODEX_PROJECT}
 
     @property
     def rule_id(self) -> str:
@@ -35,9 +37,9 @@ class InstructionFileValidRule(Rule):
         violations = []
 
         for block in context.lint_tree.find(InstructionBlock):
-            if not isinstance(block, DevinGlobalRuleBlock) and not is_instruction_filename(
-                block.path.name
-            ):
+            if not isinstance(
+                block, (CodexInstructionBlock, DevinGlobalRuleBlock)
+            ) and not is_instruction_filename(block.path.name):
                 continue
 
             content = read_text(block.path)

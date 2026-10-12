@@ -167,7 +167,11 @@ at the supplied root, even if it contains no instruction files. Global and user
 instruction files are never read.
 
 Standard content checks recognize `AGENTS.override.md`. They discover custom
-fallbacks when this analysis is requested. An override loaded as a plugin agent,
+fallbacks when this analysis is requested. A selected fallback matched by
+`content-paths` receives the instruction role and its per-file token budget.
+The `instruction-file-valid` rule checks override and fallback prose for empty
+content and read failures; Codex's lossy decoding and byte accounting still
+apply independently. An override loaded as a plugin agent,
 command, or rule keeps that role and its existing checks. Its full file bytes
 still count if Codex selects it. The content checks also apply when a plugin's
 `README.md` shares a file with an override through a symlink, or is selected
