@@ -26,6 +26,7 @@ from skillsaw.formats.codex_instructions import CodexInstructionOptions, instruc
 from skillsaw.linter import Linter
 from skillsaw.lint_target import LintTarget
 from skillsaw.rule import Severity
+from skillsaw.rules.builtin.instructions import InstructionFileValidRule
 from tests.cli_runner import run_cli
 
 
@@ -176,6 +177,66 @@ def test_selected_fallback_retains_contributor_metadata_and_semantic_roles(
     assert block.children == [child]
     assert child.parent is block
     assert child.in_external_source
+
+
+@pytest.mark.parametrize("structured", [False, True])
+@pytest.mark.parametrize("lint_external", [False, True])
+@pytest.mark.parametrize("excluded", [False, True])
+def test_selected_file_validation_respects_prose_roles_and_pruning(
+    tmp_path, structured, lint_external, excluded
+):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
+    path = root / "TEAM.md"
+    (root / "AGENTS.override.md").rename(path)
+    path.write_bytes(b"\xff")
+
+    class CustomProse(ExtraBlock):
+        pass
+
+    block_type = CodexConfigBlock if structured else CustomProse
+    original = block_type(path=path, plugin_owner=root, externally_sourced=True)
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(project_doc_fallback_filenames=(path.name,)),
+        lint_external_content=lint_external,
+        exclude_patterns=[path.name] if excluded else [],
+    )
+    context.plugin_tree_contributors = [("semantic-role", lambda _context, _tree: [original])]
+    found = InstructionFileValidRule().check(context)
+    assert len(found) == int(not structured and lint_external and not excluded)
+    if found:
+        assert found[0].file_path == path
+        assert "Failed to read TEAM.md" in found[0].message
+    assert not context.lint_tree_errors
+    assert not context.plugin_extension_errors
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_selected_semantic_source_aliases_are_validated_once(tmp_path, selected):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    path = root / "commands/status.md"
+    path.write_text("")
+    (root / "child").mkdir()
+    (root / "TEAM.md").symlink_to("commands/status.md")
+    (root / "child/TEAM.md").symlink_to("../commands/status.md")
+    context = RepositoryContext(
+        root,
+        codex_instructions=(
+            CodexInstructionOptions(cwd="child", project_doc_fallback_filenames=("TEAM.md",))
+            if selected
+            else None
+        ),
+    )
+    found = InstructionFileValidRule().check(context)
+    assert len(found) == int(selected)
+    if selected:
+        assert found[0].file_path == path
+        assert found[0].message == "status.md is empty"
+    commands = [b for b in context.lint_tree.find(CommandBlock) if b.path == path]
+    assert len(commands) == 1
+    assert commands[0].plugin_owner == root
 
 
 @pytest.mark.parametrize("inspect", [False, True])

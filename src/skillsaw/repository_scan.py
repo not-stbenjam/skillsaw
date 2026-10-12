@@ -222,9 +222,18 @@ class RepositoryScanMixin:
         Values rather than members: discovery stays state-free and imports
         nothing from ``context``, which owns the enum.
         """
+        instruction_files = self.instruction_files
+        if not self.lint_external_content:
+            # Ordinary overrides obey the same retained scope as explicit
+            # Codex projections; other hosts keep their existing detection.
+            instruction_files = [
+                path
+                for path in instruction_files
+                if path.name != "AGENTS.override.md" or not self.is_externally_sourced(path)
+            ]
         values = detect_discovery.tool_types(
             self.root_path,
-            self.instruction_files,
+            instruction_files,
             self.is_path_excluded,
             self._repository_scan().tool_dirs,
             self._repository_scan().legacy_editor_files,

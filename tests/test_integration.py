@@ -11158,6 +11158,43 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize(
+        "source", ["commands/status.md", "agents/reviewer.md", "skills/release-notes/SKILL.md"]
+    )
+    @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
+    @pytest.mark.parametrize("invalid_utf8", [False, True])
+    @pytest.mark.parametrize("force_rule", [False, True])
+    def test_selected_semantic_prose_receives_file_validation(
+        self, tmp_path, source, filename, invalid_utf8, force_rule
+    ):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        original = repo / source
+        # Skills retain their required entrypoint; Codex selects it through
+        # an alias just as it can select a command under another filename.
+        path = original.with_name(filename)
+        path.symlink_to(original.name)
+        data = original.read_bytes() + b"\xff\n" if invalid_utf8 else b""
+        original.write_bytes(data)
+        cwd = path.parent.relative_to(repo).as_posix()
+        (repo / ".skillsaw.yaml").write_text(
+            'version: "99.0.0"\nplugins: false\n'
+            f"codex-instructions:\n  cwd: {cwd}\n"
+            f"  project_doc_fallback_filenames: [{filename}]\n"
+        )
+        flags = ["--rule", "instruction-file-valid"] if force_rule else []
+        result = run_lint(repo, "--strict", *flags)
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        found = [v for v in violations(result) if v["rule_id"] == "instruction-file-valid"]
+        assert len(found) == 1
+        assert (repo / found[0]["file_path"]).resolve() == original
+        assert found[0]["severity"] == "warning"
+        assert ("Failed to read" if invalid_utf8 else "is empty") in found[0]["message"]
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 0, inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert report["complete"]
+        assert report["charged_bytes"] == len(data)
+
     @pytest.mark.parametrize("force_rule", [False, True])
     @pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
     @pytest.mark.parametrize("invalid_utf8", [False, True])
@@ -11444,6 +11481,42 @@ class TestCodexInstructionSelection:
         assert result["rc"] == 0, result["stdout"] + result["stderr"]
         assert "codex-project" not in result["out"]["stats"]["repo_types"]
         assert "agents-md" in result["out"]["stats"]["repo_types"]
+
+    @pytest.mark.parametrize("lint_external", [False, True])
+    @pytest.mark.parametrize("local_override", [False, True])
+    @pytest.mark.parametrize("projected", [False, True])
+    def test_external_override_type_evidence_matches_retained_content(
+        self, tmp_path, lint_external, local_override, projected
+    ):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        package = repo / "apm_modules/pkg"
+        package.mkdir(parents=True)
+        (repo / "AGENTS.override.md").rename(package / "AGENTS.override.md")
+        (repo / "apm.yml").write_text("name: project\nversion: 1.0.0\ntargets: []\n")
+        if local_override:
+            shutil.copyfile(package / "AGENTS.override.md", repo / "AGENTS.override.md")
+        config = (
+            'version: "99.0.0"\nplugins: false\n'
+            f"lint-external-content: {str(lint_external).lower()}\n"
+            "rules:\n  codex-project-instructions:\n    enabled: auto\n"
+        )
+        if projected:
+            config += "codex-instructions:\n  cwd: apm_modules/pkg\n"
+        (repo / ".skillsaw.yaml").write_text(config)
+        result = run_lint(repo, "--rule", "instruction-file-valid")
+        assert result["rc"] == 0, result["stdout"] + result["stderr"]
+        expected = lint_external or local_override
+        types = result["out"]["stats"]["repo_types"]
+        assert ("codex-project" in types) is expected
+        assert "claude-md" in types
+        explanation = run_cli(["explain", "codex-project-instructions", repo, "--no-pager"])
+        assert explanation.returncode == 0, explanation.stderr
+        reason = (
+            "enabled — enabled: auto — detected repo type: codex-project"
+            if expected
+            else "disabled — enabled: auto — no matching repo type detected"
+        )
+        assert reason in explanation.stdout
 
     @pytest.mark.parametrize("cwd", ["service", "vendor/pkg", "node_modules/pkg"])
     @pytest.mark.parametrize("forced_type", [None, "agentskills"])
