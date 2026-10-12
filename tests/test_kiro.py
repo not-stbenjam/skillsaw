@@ -1,6 +1,7 @@
 """Discovery and block contracts for repository-authored Kiro resources."""
 
 from collections import Counter
+import json
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from skillsaw.blocks.kiro import (
 from skillsaw.context import RepositoryContext, RepositoryType
 from skillsaw.formats.kiro import agent_field_problems, mcp_field_problems
 from tests.test_integration import copy_fixture
+from tests.test_integration import run_lint, violations
 
 
 def test_native_nodes_and_content_are_attached_once(tmp_path):
@@ -81,6 +83,37 @@ def test_prompt_reuses_existing_steering_content(tmp_path):
     tree = RepositoryContext(repo).lint_tree
     target = repo / ".kiro/steering/backend/api.md"
     assert sum(b.path == target for b in tree.find(ContentBlock)) == 1
+
+
+def test_native_references_respect_containment_and_exclusions(tmp_path):
+    repo = copy_fixture("kiro/valid", tmp_path)
+    outside = tmp_path / "outside.md"
+    outside.write_text("# Private instructions\n\nexternal-reference-marker\n")
+    prompts = repo / ".kiro/prompts"
+    (prompts / "external.md").symlink_to(outside)
+    excluded = prompts / "excluded/private.md"
+    excluded.parent.mkdir()
+    excluded.write_text("# Excluded instructions\n\nexcluded-reference-marker\n")
+    for name, prompt, resource in (
+        ("escape", "../../../outside.md", "../outside.md"),
+        ("symlink", "../prompts/external.md", ".kiro/prompts/external.md"),
+        ("excluded", "../prompts/excluded/private.md", ".kiro/prompts/excluded/private.md"),
+    ):
+        (repo / f".kiro/agents/{name}.json").write_text(
+            json.dumps({"prompt": f"file://{prompt}", "resources": [f"file://{resource}"]})
+        )
+    with (repo / ".skillsaw.yaml").open("a") as stream:
+        stream.write('exclude:\n  - ".kiro/prompts/excluded/**"\n')
+    tree = RepositoryContext(repo, exclude_patterns=[".kiro/prompts/excluded/**"]).lint_tree
+    contents = tree.find(ContentBlock)
+    bodies = "\n".join(block.read_body(strip_code_blocks=False) or "" for block in contents)
+    assert "external-reference-marker" not in bodies
+    assert "excluded-reference-marker" not in bodies
+    assert any(block.path == prompts / "review.md" for block in contents)
+    assert any("packages/api/.kiro" in str(block.path) for block in contents)
+    result = run_lint(repo, "--rule", "kiro-references")
+    assert result["rc"] == 0, result
+    assert violations(result) == []
 
 
 @pytest.mark.parametrize(

@@ -6,6 +6,7 @@ v1.19.7 corroborates nullable legacy fields; it is not a V3 schema.
 See docs/kiro.md for sources and intentionally unvalidated fields.
 """
 
+from types import MappingProxyType
 from typing import Any, Iterator, Tuple
 
 AGENT_STRING_FIELDS = ("name", "description", "prompt", "model", "welcomeMessage")
@@ -14,6 +15,7 @@ AGENT_BOOL_FIELDS = ("includeMcpJson", "includePowers")
 MCP_STRING_FIELDS = ("command", "url")
 MCP_LIST_FIELDS = ("args", "autoApprove", "disabledTools", "oauthScopes")
 MCP_MAP_FIELDS = ("env", "headers")
+MCP_CREDENTIAL_KEY_ALIASES = MappingProxyType({"clientSecret": "client_secret"})
 
 
 def agent_field_problems(data: dict) -> Iterator[Tuple[str, str]]:

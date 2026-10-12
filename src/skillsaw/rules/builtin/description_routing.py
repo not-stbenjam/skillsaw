@@ -96,7 +96,7 @@ class DescriptionRoutingRule(Rule):
     """Check whether descriptions provide useful routing or purpose signals."""
 
     since = "0.18.0"
-    surface_dependencies = ("copilot-agent-valid", "pi-skill-valid")
+    surface_dependencies = ("copilot-agent-valid", "pi-skill-valid", "kiro-agent-valid")
     repo_types = {
         RepositoryType.PI,
         RepositoryType.KIRO,
@@ -288,12 +288,17 @@ class DescriptionRoutingRule(Rule):
                     # content description here would emit two diagnoses for
                     # one defect. A bare `description:` key is null, which
                     # is not a type defect but an empty description, and
-                    # stays here. Other formats have no schema owner and
-                    # keep the established routing finding.
-                    if (
-                        block_type is CopilotAgentBlock
-                        and description is not None
-                        and self.surface_rule_enabled("copilot-agent-valid")
+                    # stays here. Kiro's structural rule owns the same type
+                    # defect when enabled.
+                    if description is not None and (
+                        (
+                            block_type is CopilotAgentBlock
+                            and self.surface_rule_enabled("copilot-agent-valid")
+                        )
+                        or (
+                            block_type in (KiroJsonAgentBlock, KiroMarkdownAgentBlock)
+                            and self.surface_rule_enabled("kiro-agent-valid")
+                        )
                     ):
                         continue
                     if pi_owns_description:

@@ -1,8 +1,9 @@
 """Kiro agent configuration, steering prose, and embedded MCP roles."""
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, Optional, Tuple
+from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple
 
+from skillsaw.formats.kiro import MCP_CREDENTIAL_KEY_ALIASES
 from skillsaw.lint_target import LintTarget
 from skillsaw.utils import commented_key_line, read_frontmatter_commented
 
@@ -48,6 +49,11 @@ class KiroInlinePromptBlock(ContentBlock):
     def file_line(self, body_line: int) -> int:
         return 0
 
+    def fingerprint_identity(self, body_line: Optional[int]) -> str:
+        lines = (self.body or "").split("\n")
+        content = lines[body_line - 1].strip() if body_line and 1 <= body_line <= len(lines) else ""
+        return f"6:prompt\0{content}"
+
 
 class KiroAgentConfigRole:
     """Agent metadata interface shared by JSON and frontmatter containers."""
@@ -69,12 +75,14 @@ class KiroJsonAgentBlock(JsonConfigBlock, KiroAgentConfigRole):
         data = self.raw_data
         if data is None:
             return
+        prompt = data.get("prompt")
+        inline_prompt = isinstance(prompt, str) and not prompt.startswith("file://")
         self.children.extend(
             FrontmatterField(path=self.path, name=key, value=value, parent=self)
             for key, value in data.items()
+            if key != "prompt" or not inline_prompt
         )
-        prompt = data.get("prompt")
-        if isinstance(prompt, str) and not prompt.startswith("file://"):
+        if inline_prompt:
             self.children.append(KiroInlinePromptBlock(path=self.path, body=prompt, parent=self))
         _attach_mcp(self, data)
 
@@ -145,6 +153,7 @@ class KiroMcpBlock(McpBlock):
         ("headers", True),
         ("oauth", False),
     )
+    credential_key_aliases: ClassVar[Mapping[str, str]] = MCP_CREDENTIAL_KEY_ALIASES
 
 
 @dataclass(eq=False)
@@ -158,6 +167,7 @@ class KiroInlineMcpBlock(McpConfigRole, LintTarget):
     allow_bare_server_map: ClassVar[bool] = False
     shape_deferral: ClassVar[Optional[McpShapeDeferral]] = McpShapeDeferral()
     credential_maps: ClassVar[Tuple[Tuple[str, bool], ...]] = KiroMcpBlock.credential_maps
+    credential_key_aliases: ClassVar[Mapping[str, str]] = KiroMcpBlock.credential_key_aliases
 
     @property
     def raw_data(self) -> Optional[Dict[str, Any]]:
