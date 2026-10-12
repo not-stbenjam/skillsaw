@@ -249,7 +249,12 @@ class DescriptionRoutingRule(Rule):
                     "pi-skill-valid"
                 )
                 if not block.has_frontmatter:
-                    if pi_owns_description:
+                    # A parsed JSON root without an object is a container
+                    # defect; the enabled Kiro structural rule owns it.
+                    if pi_owns_description or (
+                        block_type is KiroJsonAgentBlock
+                        and self.surface_rule_enabled("kiro-agent-valid")
+                    ):
                         continue
                     violations.append(
                         self.violation(

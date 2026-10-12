@@ -11409,6 +11409,27 @@ class TestKiro:
         assert {v["line"] for v in found} == {None, 2, 3}
 
     @pytest.mark.parametrize("structural_enabled", [False, True])
+    def test_non_object_agent_has_one_owner(self, tmp_path, structural_enabled):
+        repo = copy_fixture("kiro/malformed-agents", tmp_path)
+        rules = ["content-description-routing"]
+        if structural_enabled:
+            rules.append("kiro-agent-valid")
+        result = self.selected(repo, *rules)
+        assert result["rc"] == (1 if structural_enabled else 0)
+        found = violations(result)
+        assert len(found) == 4
+        expected = "kiro-agent-valid" if structural_enabled else "content-description-routing"
+        assert {v["file_path"]: v["rule_id"] for v in found} == {
+            ".kiro/agents/array.json": expected,
+            ".kiro/agents/null.json": expected,
+            ".kiro/agents/empty.json": "content-description-routing",
+            ".kiro/agents/manual.md": "content-description-routing",
+        }
+        structural = [v for v in found if v["rule_id"] == "kiro-agent-valid"]
+        assert all("must be an object" in v["message"] for v in structural)
+        assert all(v["line"] is None for v in structural)
+
+    @pytest.mark.parametrize("structural_enabled", [False, True])
     def test_description_type_has_one_owner(self, tmp_path, structural_enabled):
         repo = copy_fixture("kiro/valid", tmp_path)
         (repo / ".skillsaw.yaml").write_text(
