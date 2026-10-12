@@ -3,7 +3,7 @@ const { location, within } = require('./report');
 
 // Match only files already reported by the CLI to open editor documents.
 // This does not discover artifacts or change the CLI's containment decisions.
-async function matchDocuments(root, findings, documents, signal) {
+async function matchDocuments(root, findings, documents, signal, scope) {
   const identities = new Map();
   function identity(file) {
     if (!identities.has(file))
@@ -16,7 +16,7 @@ async function matchDocuments(root, findings, documents, signal) {
   const open = new Map();
   for (const doc of documents) {
     signal.throwIfAborted();
-    if (doc.uri.scheme !== 'file' || !within(root, doc.uri.fsPath)) continue;
+    if (doc.uri.scheme !== 'file' || !within(scope, doc.uri.fsPath)) continue;
     const key = await identity(doc.uri.fsPath);
     const aliases = open.get(key) ?? [];
     aliases.push(doc);

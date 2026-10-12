@@ -48,8 +48,8 @@ async function overlappingFolders(one, doc, canonical) {
   );
   await replace(doc, 'name: release-notes', 'name: Release_Notes');
   await vscode.commands.executeCommand('skillsaw.lint');
-  const levels = () =>
-    diagnostics(canonical.uri)
+  const levels = (uri = canonical.uri) =>
+    diagnostics(uri)
       .filter((item) => item.code === 'agentskill-name')
       .map((item) => item.severity)
       .sort()
@@ -57,6 +57,21 @@ async function overlappingFolders(one, doc, canonical) {
   const error = String(vscode.DiagnosticSeverity.Error);
   const warning = String(vscode.DiagnosticSeverity.Warning);
   await until(() => levels() === `${error},${warning}`, 'both roots report the shared URI');
+  await until(
+    () => levels(doc.uri) === `${error},${warning}`,
+    'nested-root findings reach the alias under the parent root',
+  );
+  await replace(doc, 'name: Release_Notes', 'name: release-notes', false);
+  await until(
+    () => levels() === '' && levels(doc.uri) === '',
+    'dirty parent alias clears findings from both overlapping roots',
+  );
+  await doc.save();
+  await replace(doc, 'name: release-notes', 'name: Release_Notes');
+  await until(
+    () => levels() === `${error},${warning}` && levels(doc.uri) === `${error},${warning}`,
+    'saving the parent alias refreshes both overlapping roots',
+  );
 
   const config = await vscode.workspace.openTextDocument(
     vscode.Uri.joinPath(one.uri, '.skillsaw.yaml'),

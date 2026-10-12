@@ -61,7 +61,10 @@ also covers new artifacts and arbitrary configured content paths without
 maintaining an editor-specific list of supported filenames. VS Code file
 creation, rename and deletion operations trigger the same refresh. Each folder
 has its own settings and diagnostics in a multi-root workspace; overlapping
-folders are linted independently and can produce duplicate findings.
+folders are linted independently and can produce duplicate findings. Overlapping
+folders share an editor refresh scope: events anywhere under their outermost
+workspace folder invalidate or refresh each member, so an alias under the parent
+can update findings from a nested root. Unrelated roots remain independent.
 
 ## Settings
 
@@ -109,10 +112,12 @@ repository with the existing skillsaw GitHub Action.
 
 ## Supported limits
 
-- Diagnostics describe saved files. Editing a buffer cancels the folder's
-  pending work and clears its diagnostics; dirty documents are omitted from
-  subsequent reports until saved. Symlink aliases within the workspace map to
-  their open documents; a dirty alias suppresses findings for that file.
+- Diagnostics describe saved files. Editing a buffer cancels the affected folders'
+  pending work and clears their diagnostics; dirty documents are omitted from
+  subsequent reports until saved. Symlink aliases within a workspace folder or
+  overlapping group map to their open documents; a dirty alias suppresses findings
+  for that file across the group. Aliases between disjoint workspace roots or
+  outside the workspace are not tracked by this pilot.
   With `runOnSave` enabled, opening or closing a document schedules a disk refresh.
 - The CLI reports a line, not a column range. Findings without a line appear
   at the start of the file. Workspace-wide findings and redacted outside-repo
@@ -152,7 +157,8 @@ failures, trust gates, debounce, stale results and folder lifecycle. Set
 `SKILLSAW_CLI` to an absolute executable path to test another CLI installation.
 `test:host` downloads pinned VS Code 1.96.4 and uses disposable multi-root
 workspaces with the actual VS Code API and CLI. It checks overlapping roots
-with different configurations, independent refreshes, removal and re-addition.
+with different configurations, parent-root aliases, dirty-buffer invalidation,
+removal and re-addition.
 It disables workspace trust only in that test instance; the unit tests exercise
 the Restricted Mode gates.
 With a display, run `npm run test:host` directly.

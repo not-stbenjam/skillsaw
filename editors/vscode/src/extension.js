@@ -70,6 +70,7 @@ function activate(context) {
         state.report.violations,
         vscode.workspace.textDocuments,
         controller.signal,
+        state.scope,
       );
       // Opening another alias replaces this mapping; any disk/config change,
       // folder removal or disposal cancels it and drops the cached report.
@@ -124,7 +125,7 @@ function activate(context) {
   }
   function affected(uris, callback) {
     for (const state of folders.values()) {
-      if (uris.some((uri) => uri.scheme === 'file' && within(state.folder.uri.fsPath, uri.fsPath)))
+      if (uris.some((uri) => uri.scheme === 'file' && within(state.scope, uri.fsPath)))
         callback(state);
     }
   }
@@ -150,9 +151,21 @@ function activate(context) {
           diagnostics: vscode.languages.createDiagnosticCollection('skillsaw'),
           report: null,
           mapping: null,
+          scope: null,
           error: null,
         };
         folders.set(key, state);
+      }
+    }
+    // A parent-root alias can refer to a nested root's finding. Share the
+    // outermost open root for document matching and synchronous invalidation;
+    // CLI requests still use each folder's own working directory and settings.
+    for (const state of folders.values()) {
+      let scope = state.folder.uri.fsPath;
+      for (const candidate of folders.values())
+        if (within(candidate.folder.uri.fsPath, scope)) scope = candidate.folder.uri.fsPath;
+      if (state.scope !== scope) {
+        state.scope = scope;
         request(state);
       }
     }
