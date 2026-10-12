@@ -22,7 +22,7 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     assert options is not None
     resolve = context.resolve_path
     node = CodexInstructionsNode(
-        path=context.root_path, root_path=context.root_path, cwd=context.root_path
+        path=context.root_path, root_path=context.root_path, requested_cwd=options.cwd
     )
     try:
         directories = project_directories(context.root_path, options.cwd, resolve=resolve)

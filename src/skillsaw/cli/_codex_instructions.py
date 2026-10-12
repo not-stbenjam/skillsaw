@@ -21,7 +21,8 @@ def print_codex_instructions(context: RepositoryContext, fmt: str) -> int:
         lines = [
             "Codex project instructions (loader 0.162.1)",
             f"Root: {report['root']}",
-            f"Cwd: {report['cwd']}",
+            f"Requested cwd: {report['requested_cwd']}",
+            f"Cwd: {report['cwd'] if report['cwd'] is not None else '(unresolved)'}",
             f"project_doc_max_bytes: {report['project_doc_max_bytes']:,} ({report['limit_source']})",
             "Precedence: " + " > ".join(report["candidate_filenames"]),
             f"Fallback source: {report['fallback_source']}",

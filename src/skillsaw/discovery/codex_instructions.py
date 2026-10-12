@@ -23,7 +23,9 @@ class InstructionCandidate:
 def project_directories(root: Path, cwd: str, *, resolve: Resolver) -> Tuple[Path, ...]:
     directory = contained_resolve(root / cwd, root, resolve)
     if directory is None or not directory.is_dir():
-        raise ValueError("Codex cwd must be an existing directory inside the requested root")
+        raise ValueError(
+            f"Codex cwd {cwd!r} must be an existing directory inside the requested root"
+        )
     directories = [directory]
     while directories[-1] != root:
         directories.append(directories[-1].parent)

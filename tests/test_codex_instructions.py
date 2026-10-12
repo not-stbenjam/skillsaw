@@ -480,9 +480,23 @@ def test_read_failure_marks_rest_of_chain_unknown(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("cwd", ["../outside", "missing", "AGENTS.md"])
 def test_cwd_must_be_directory_in_requested_root(tmp_path, cwd):
-    _, report = project(tmp_path, {"AGENTS.md": "root"}, cwd=cwd)
+    context, report = project(tmp_path, {"AGENTS.md": "root"}, cwd=cwd)
     assert not report["complete"]
-    assert "cwd" in report["issues"][0]
+    assert report["requested_cwd"] == cwd
+    assert report["cwd"] is None
+    assert repr(cwd) in report["issues"][0]
+    assert f"{cwd} (unresolved)" in context.lint_tree.find(CodexInstructionsNode)[0].tree_label()
+
+
+def test_valid_cwd_preserves_input_and_resolves_symlink(tmp_path):
+    root = tmp_path / "repo"
+    (root / "service").mkdir(parents=True)
+    (root / "alias").symlink_to("service", target_is_directory=True)
+    context, report = project(tmp_path, {"service/AGENTS.md": "Package guidance"}, cwd="./alias")
+    assert report["complete"]
+    assert report["requested_cwd"] == "./alias"
+    assert report["cwd"] == str(root / "service")
+    assert "[cwd: service]" in context.lint_tree.find(CodexInstructionsNode)[0].tree_label()
 
 
 def test_config_roundtrip_nulls_and_validation(tmp_path):
@@ -523,22 +537,40 @@ def test_default_lint_and_other_ecosystems_unaffected(tmp_path):
     assert report["selected"] == []
 
 
-@pytest.mark.parametrize("scope", ["included", "excluded", "external", "escape", "missing"])
-@pytest.mark.parametrize("filename", ["config.toml", "hooks.json"])
-def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, scope, filename):
+@pytest.mark.parametrize(
+    "scope", ["included", "excluded", "excluded-target", "external", "escape", "missing"]
+)
+@pytest.mark.parametrize(
+    "filename,block_type,repo_type",
+    [
+        (".codex/config.toml", CodexConfigBlock, RepositoryType.CODEX_PROJECT),
+        (".codex/hooks.json", CodexHooksBlock, RepositoryType.CODEX_PROJECT),
+        ("AGENTS.override.md", CodexInstructionBlock, RepositoryType.CODEX_PROJECT),
+        ("AGENTS.md", AgentsMdBlock, RepositoryType.AGENTS_MD),
+        ("TEAM.md", CodexInstructionBlock, RepositoryType.CODEX_PROJECT),
+    ],
+)
+def test_projected_file_detection_obeys_authoring_scope(
+    tmp_path, monkeypatch, scope, filename, block_type, repo_type
+):
     root = tmp_path / "repo"
-    path = root / "vendor/pkg/.codex" / filename
+    path = root / "vendor/pkg" / filename
     path.parent.mkdir(parents=True)
     target = path
-    if scope == "external":
-        target = root / "apm_modules/vendor" / filename
+    if scope in {"external", "excluded-target"}:
+        target = root / ("apm_modules/vendor" if scope == "external" else ".private") / "source.txt"
         target.parent.mkdir(parents=True)
-        (root / "apm.yml").write_text("name: instructions\nversion: 1.0.0\ntargets: []\n")
+        if scope == "external":
+            (root / "apm.yml").write_text("name: instructions\nversion: 1.0.0\ntargets: []\n")
         path.symlink_to(target)
     elif scope == "escape":
-        target = tmp_path / filename
+        target = tmp_path / path.name
         path.symlink_to(target)
-    target.write_text("project_doc_max_bytes = 65536\n" if filename == "config.toml" else "{}")
+    target.write_text(
+        "project_doc_max_bytes = 65536\n"
+        if path.name == "config.toml"
+        else "{}" if path.name == "hooks.json" else "# Package guidance\n\nRun package tests.\n"
+    )
     original = Path.open
 
     def scoped_open(file, *args, **kwargs):
@@ -550,19 +582,37 @@ def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, 
     context = RepositoryContext(
         root,
         codex_instructions=CodexInstructionOptions(
-            cwd="missing" if scope == "missing" else "vendor/pkg"
+            cwd="missing" if scope == "missing" else "vendor/pkg",
+            project_doc_fallback_filenames=("TEAM.md",),
         ),
-        exclude_patterns=["vendor"] if scope == "excluded" else [],
+        exclude_patterns={"excluded": ["vendor"], "excluded-target": [".private"]}.get(scope, []),
         lint_external_content=False,
     )
-    block_type = CodexConfigBlock if filename == "config.toml" else CodexHooksBlock
-    assert (RepositoryType.CODEX_PROJECT in context.repo_types) is (scope == "included")
+    assert (repo_type in context.repo_types) is (scope == "included")
     assert bool(context.lint_tree.find(block_type)) is (scope == "included")
     if scope == "included":
         context.exclude_patterns = ["vendor"]
         context.apply_excludes()
-        assert RepositoryType.CODEX_PROJECT not in context.repo_types
+        assert repo_type not in context.repo_types
         assert not context.lint_tree.find(block_type)
+
+
+def test_instruction_projection_refreshes_types_and_auto_rule_activation(tmp_path):
+    path = tmp_path / "vendor/pkg/AGENTS.override.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("# Package guidance\n\nRun package tests.\n")
+    context = RepositoryContext(tmp_path)
+    config = LinterConfig.default()
+    config.rules["codex-project-instructions"] = {"enabled": "auto"}
+    config.codex_instructions = CodexInstructionOptions(cwd="vendor/pkg")
+    enabled = Linter(context, config, no_plugins=True)
+    assert any(rule.rule_id == "codex-project-instructions" for rule in enabled.rules)
+    assert RepositoryType.CODEX_PROJECT in context.repo_types
+    config.codex_instructions = None
+    disabled = Linter(context, config, no_plugins=True)
+    assert not any(rule.rule_id == "codex-project-instructions" for rule in disabled.rules)
+    assert RepositoryType.CODEX_PROJECT not in context.repo_types
+    assert not context.lint_tree.find(CodexInstructionBlock)
 
 
 @pytest.mark.parametrize("filename", ["config.toml", "hooks.json"])

@@ -7,7 +7,8 @@ from typing import List, Optional, Set, TYPE_CHECKING, Tuple
 
 from .discovery import claude as claude_discovery
 from .discovery import detect as detect_discovery
-from .discovery.codex_instructions import project_configs, project_directories
+from .discovery.codex_instructions import project_configs, project_directories, select_instructions
+from .formats.codex_instructions import candidate_filenames
 from .formats.openclaw import MANIFEST
 from .repository_types import RepositoryType, TOOL_REPO_TYPES
 from .utils import read_json
@@ -230,21 +231,29 @@ class RepositoryScanMixin:
             self._repository_scan().skills_lock_files,
             resolve=self.resolve_path,
         )
-        if self.codex_instructions is not None and "codex-project" not in values:
+        if self.codex_instructions is not None:
             try:
                 directories = project_directories(
                     self.root_path, self.codex_instructions.cwd, resolve=self.resolve_path
                 )
             except (ValueError, OSError):
                 return values
-            if any(
-                candidate.issue is None
-                and (self.lint_external_content or not self.is_externally_sourced(candidate.path))
-                for candidate in project_configs(
-                    directories, resolve=self.resolve_path, is_excluded=self.is_path_excluded
-                )
-            ):
-                values.add("codex-project")
+            names, _ = candidate_filenames(
+                self.codex_instructions.project_doc_fallback_filenames or ()
+            )
+            # Explicit cwd projections can reach directories the normal walk prunes.
+            candidates = project_configs(
+                directories, resolve=self.resolve_path, is_excluded=self.is_path_excluded
+            ) + select_instructions(
+                directories, names, resolve=self.resolve_path, is_excluded=self.is_path_excluded
+            )
+            for candidate in candidates:
+                if candidate.issue is None and (
+                    self.lint_external_content or not self.is_externally_sourced(candidate.path)
+                ):
+                    values.add(
+                        "agents-md" if candidate.path.name == "AGENTS.md" else "codex-project"
+                    )
         return values
 
     #: Alias for the one definition in discovery. Two copies of "which

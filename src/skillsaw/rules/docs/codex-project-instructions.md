@@ -36,6 +36,10 @@ uses, and the running total. `Truncated or omitted` lists files that lose
 content. It also shows where the settings came from and what skillsaw assumed.
 Add `--format json` for machine-readable output.
 
+The report keeps the working directory you requested (`requested_cwd`) separate
+from its resolved absolute path (`cwd`). If the requested directory is missing,
+outside the root, or is a file, JSON `cwd` is `null` and the report is incomplete.
+
 An `Incomplete` result means skillsaw could not inspect part of the chain.
 Check the reported paths, permissions, and exclusions before relying on the
 byte count. skillsaw does not skip an inaccessible override and assume Codex
@@ -165,6 +169,11 @@ fallbacks when this analysis is requested. A plugin's `README.md` receives
 instruction content checks when selected as a fallback. Known configuration
 files keep their configuration checks even when named as fallbacks. Other hosts'
 files count toward the Codex budget only if explicitly configured as fallbacks.
+
+An explicit working directory can reach instructions inside directories such as
+`vendor/` that the ordinary repository scan skips. Those selected files also
+count as repository-type evidence, so rules configured with `enabled: auto`
+can run. Explicit exclusions and the external-content policy still apply.
 
 Selected `.codex/` layers also receive the existing hook checks for both
 `hooks.json` and inline hooks in `config.toml`. Hook discovery does not change

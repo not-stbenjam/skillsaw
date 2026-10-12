@@ -11158,6 +11158,63 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("cwd", ["vendor/pkg", "node_modules/pkg"])
+    @pytest.mark.parametrize("filename", ["AGENTS.override.md", "AGENTS.md", "TEAM.md"])
+    @pytest.mark.parametrize("forced_type", [None, "agentskills"])
+    def test_projected_instructions_activate_auto_rule(self, tmp_path, cwd, filename, forced_type):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        path = repo / cwd / filename
+        path.parent.mkdir(parents=True)
+        (repo / "AGENTS.override.md").rename(path)
+        (repo / ".skillsaw.yaml").write_text(
+            'version: "99.0.0"\nplugins: false\n'
+            f"codex-instructions:\n  cwd: {cwd}\n"
+            "  project_doc_max_bytes: 128\n  project_doc_fallback_filenames: [TEAM.md]\n"
+            "rules:\n  codex-project-instructions:\n    enabled: auto\n"
+        )
+        flags = ["--type", forced_type] if forced_type else []
+        result = run_lint(repo, "--strict", *flags)
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = [f for f in violations(result) if f["rule_id"] == "codex-project-instructions"]
+        assert len(findings) == 1
+        assert f"{cwd}/{filename}" in findings[0]["message"]
+        expected_type = "agents-md" if filename == "AGENTS.md" else "codex-project"
+        assert expected_type in result["out"]["stats"]["repo_types"]
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        report = json.loads(inspection.stdout)
+        assert inspection.returncode == 0
+        assert report["complete"]
+        assert report["requested_cwd"] == cwd
+        assert report["cwd"] == str(repo / cwd)
+        assert report["affected_paths"] == [f"{cwd}/{filename}"]
+
+    @pytest.mark.parametrize("source", ["config", "cli"])
+    @pytest.mark.parametrize("cwd", ["missing", "../outside", "AGENTS.md"])
+    def test_invalid_cwd_reports_requested_value(self, tmp_path, source, cwd):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        (repo.parent / "outside").mkdir()
+        if source == "config":
+            (repo / ".skillsaw.yaml").write_text(
+                f"plugins: false\ncodex-instructions:\n  cwd: {cwd}\n"
+            )
+        flags = ["--cwd", cwd] if source == "cli" else []
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json", *flags])
+        assert inspection.returncode == 1
+        report = json.loads(inspection.stdout)
+        assert report["requested_cwd"] == cwd
+        assert report["cwd"] is None
+        assert not report["complete"]
+        assert report["charged_bytes"] is None
+        assert report["selected"] == []
+        text = run_cli(["tree", repo, "--codex-instructions", *flags])
+        assert text.returncode == 1
+        assert f"Requested cwd: {cwd}\n" in text.stdout
+        assert "Cwd: (unresolved)\n" in text.stdout
+        if source == "config":
+            result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+            assert result["rc"] == 1
+            assert repr(cwd) in violations(result)[0]["message"]
+
     @pytest.mark.parametrize("selected", [False, True])
     @pytest.mark.parametrize("rule", ["security-hidden-instructions", "context-budget"])
     def test_plugin_readme_fallback_receives_instruction_checks(self, tmp_path, selected, rule):
