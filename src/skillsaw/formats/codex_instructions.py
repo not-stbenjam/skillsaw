@@ -19,6 +19,21 @@ STANDARD_FILENAMES = ("AGENTS.override.md", "AGENTS.md")
 RUST_WHITESPACE = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
 
+def contains_out_of_range_integer(value: object) -> bool:
+    """Find integers Python's TOML parser accepts but Codex's rejects."""
+    pending = [iter((value,))]
+    while pending:
+        for item in pending[-1]:
+            if type(item) is int and not TOML_INTEGER_MIN <= item <= TOML_INTEGER_MAX:
+                return True
+            if isinstance(item, (dict, list)):
+                pending.append(iter(item.values() if isinstance(item, dict) else item))
+                break
+        else:
+            pending.pop()
+    return False
+
+
 @dataclass(frozen=True)
 class CodexInstructionOptions:
     """Explicit analysis inputs, not a claim about the user's Codex config."""

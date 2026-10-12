@@ -11158,6 +11158,33 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("key", ["project_doc_max_bytes", "project_doc_fallback_filenames"])
+    @pytest.mark.parametrize(
+        "raw", ["[9223372036854775808]", "{ nested = [-9223372036854775809] }"]
+    )
+    def test_overrides_cannot_hide_unparseable_nested_integers(self, tmp_path, key, raw):
+        repo = copy_fixture("codex-instructions/other-host", tmp_path)
+        (repo / ".codex").mkdir()
+        (repo / ".codex/config.toml").write_text(f"{key} = {raw}\n")
+        (repo / "child/.codex").mkdir(parents=True)
+        (repo / "child/.codex/config.toml").write_text(
+            'project_doc_max_bytes = 65536\nproject_doc_fallback_filenames = ["TEAM.md"]\n'
+        )
+        (repo / ".skillsaw.yaml").write_text("plugins: false\ncodex-instructions:\n  cwd: child\n")
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 1, inspection.stdout + inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert not report["complete"]
+        assert report["charged_bytes"] is None
+        assert report["issues"] == [
+            ".codex/config.toml: integer outside Codex's signed 64-bit TOML integer range in " + key
+        ]
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        assert len(violations(result)) == 1
+        assert "analysis is incomplete" in violations(result)[0]["message"]
+        assert key in violations(result)[0]["message"]
+
     @pytest.mark.parametrize("format", ["text", "dot"])
     def test_ordinary_tree_identifies_codex_selection(self, tmp_path, format):
         repo = copy_fixture("codex-instructions", tmp_path)

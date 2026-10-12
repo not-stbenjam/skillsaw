@@ -16,8 +16,8 @@ from .formats.codex import CODEX_HOOKS_FILENAME
 from .formats.codex_instructions import (
     DEFAULT_MAX_BYTES,
     TOML_INTEGER_MAX,
-    TOML_INTEGER_MIN,
     candidate_filenames,
+    contains_out_of_range_integer,
 )
 from .paths import relative_to_str
 
@@ -49,6 +49,7 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     fallbacks = ()
     merged = {}
     origins = {}
+    settings = ("project_doc_max_bytes", "project_doc_fallback_filenames")
     for candidate in project_configs(
         directories, resolve=resolve, is_excluded=context.is_path_excluded
     ):
@@ -79,15 +80,16 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
             node.issues.append(f"{label}: {config.parse_error}")
             continue
         data = config.raw_data or {}
-        raw_limit = data.get("project_doc_max_bytes")
-        if type(raw_limit) is int and not TOML_INTEGER_MIN <= raw_limit <= TOML_INTEGER_MAX:
+        invalid_keys = [key for key in settings if contains_out_of_range_integer(data.get(key))]
+        if invalid_keys:
             # Python's TOML parser accepts integers Codex cannot parse. A
             # later override cannot repair an unparseable project layer.
             node.issues.append(
-                f"{label}: project_doc_max_bytes is outside Codex's signed 64-bit TOML integer range"
+                f"{label}: integer outside Codex's signed 64-bit TOML integer range in "
+                + ", ".join(invalid_keys)
             )
             continue
-        for key in ("project_doc_max_bytes", "project_doc_fallback_filenames"):
+        for key in settings:
             if key in data:
                 merged[key] = data[key]
                 origins[key] = label

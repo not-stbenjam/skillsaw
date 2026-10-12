@@ -577,21 +577,85 @@ def test_bad_local_config_is_incomplete(tmp_path, text):
 @pytest.mark.parametrize("limit", [-(2**63) - 1, 2**63])
 @pytest.mark.parametrize("explicit", [False, True])
 def test_unparseable_byte_limit_cannot_be_shadowed(tmp_path, limit, explicit):
+    files = {
+        ".codex/config.toml": f"project_doc_max_bytes = {limit}\n",
+        "child/AGENTS.md": "Run the package tests before committing.\n",
+    }
+    if not explicit:
+        files["child/.codex/config.toml"] = "project_doc_max_bytes = 65536\n"
     _, report = project(
         tmp_path,
-        {
-            ".codex/config.toml": f"project_doc_max_bytes = {limit}\n",
-            "child/.codex/config.toml": "project_doc_max_bytes = 65536\n",
-            "child/AGENTS.md": "Run the package tests before committing.\n",
-        },
+        files,
         cwd="child",
         project_doc_max_bytes=65536 if explicit else None,
     )
     assert not report["complete"]
     assert report["charged_bytes"] is None
     assert report["issues"] == [
-        ".codex/config.toml: project_doc_max_bytes is outside Codex's signed 64-bit TOML integer range"
+        ".codex/config.toml: integer outside Codex's signed 64-bit TOML integer range in "
+        "project_doc_max_bytes"
     ]
+
+
+@pytest.mark.parametrize("limit", [-(2**63), -1])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_parseable_negative_byte_limit_can_be_shadowed(tmp_path, limit, explicit):
+    instructions = "Run the package tests before committing.\n"
+    files = {
+        ".codex/config.toml": f"project_doc_max_bytes = {limit}\n",
+        "child/AGENTS.md": instructions,
+    }
+    if not explicit:
+        files["child/.codex/config.toml"] = "project_doc_max_bytes = 65536\n"
+    _, report = project(
+        tmp_path,
+        files,
+        cwd="child",
+        project_doc_max_bytes=65536 if explicit else None,
+    )
+    assert report["complete"]
+    assert report["project_doc_max_bytes"] == 65536
+    assert report["charged_bytes"] == len(instructions.encode("utf-8"))
+    assert report["issues"] == []
+
+
+@pytest.mark.parametrize("key", ["project_doc_max_bytes", "project_doc_fallback_filenames"])
+@pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize(
+    "raw,valid",
+    [
+        ("[9223372036854775808]", False),
+        ("{ nested = [-9223372036854775809] }", False),
+        ("[9223372036854775807]", True),
+        ("{ nested = [-9223372036854775808] }", True),
+    ],
+)
+def test_nested_integer_bounds_apply_before_setting_overrides(tmp_path, key, explicit, raw, valid):
+    instructions = "Run the package tests before committing.\n"
+    files = {
+        ".codex/config.toml": f"{key} = {raw}\n",
+        "child/AGENTS.md": instructions,
+    }
+    options = {}
+    if explicit:
+        options[key] = 65536 if key == "project_doc_max_bytes" else ("TEAM.md",)
+    else:
+        value = "65536" if key == "project_doc_max_bytes" else '["TEAM.md"]'
+        files["child/.codex/config.toml"] = f"{key} = {value}\n"
+    _, report = project(tmp_path, files, cwd="child", **options)
+    assert report["complete"] is valid
+    if valid:
+        assert report["charged_bytes"] == len(instructions.encode("utf-8"))
+        assert report["issues"] == []
+        if key == "project_doc_max_bytes":
+            assert report["project_doc_max_bytes"] == 65536
+        else:
+            assert report["candidate_filenames"] == ["AGENTS.override.md", "AGENTS.md", "TEAM.md"]
+    else:
+        assert report["charged_bytes"] is None
+        assert report["issues"] == [
+            ".codex/config.toml: integer outside Codex's signed 64-bit TOML integer range in " + key
+        ]
 
 
 @pytest.mark.parametrize("symlink", [False, True])
