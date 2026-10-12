@@ -15,6 +15,7 @@ from skillsaw.blocks import (
     CommandBlock,
     ContentBlock,
     ExtraBlock,
+    InstructionBlock,
     PluginRuleBlock,
     ReadmeBlock,
 )
@@ -137,6 +138,41 @@ def test_selected_fallback_replaces_generic_extra_role(tmp_path, path_source, al
     report = tree.find(CodexInstructionsNode)[0].report(tree)
     assert report["complete"]
     assert report["charged_bytes"] == path.stat().st_size
+
+
+@pytest.mark.parametrize("filename", ["AGENTS.override.md", "TEAM.md"])
+@pytest.mark.parametrize("projected", [False, True])
+@pytest.mark.parametrize("alias", [False, True])
+def test_codex_instruction_keeps_configured_opencode_role(tmp_path, filename, projected, alias):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/codex-instructions/other-host", root)
+    path = root / filename
+    (root / "AGENTS.override.md").rename(path)
+    configured_path = path
+    if alias:
+        configured_path = root / "guidance.md"
+        configured_path.symlink_to(path.name)
+    (root / "opencode.json").write_text(json.dumps({"instructions": [configured_path.name]}))
+    options = (
+        CodexInstructionOptions(project_doc_fallback_filenames=(filename,)) if projected else None
+    )
+    context = RepositoryContext(root, codex_instructions=options)
+    tree = context.lint_tree
+    blocks = [block for block in tree.find(ContentBlock) if block.resolved_path == path]
+    assert len(blocks) == 1
+    block = blocks[0]
+    assert type(block) is InstructionBlock
+    assert block.path == configured_path
+    assert block.category == "instruction"
+    validation = block.find(CodexInstructionFileNode)
+    assert len(validation) == int(projected or filename == "AGENTS.override.md")
+    if validation:
+        assert validation[0].parent is block
+    if projected:
+        report = tree.find(CodexInstructionsNode)[0].report(tree)
+        assert report["complete"]
+        assert [entry["path"] for entry in report["selected"]] == [filename]
+        assert report["charged_bytes"] == path.stat().st_size
 
 
 @pytest.mark.parametrize("custom_role", [False, True])

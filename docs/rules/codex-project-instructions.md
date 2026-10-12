@@ -202,9 +202,9 @@ fallbacks when this analysis is requested. A selected fallback matched by
 `content-paths` receives the instruction role and its per-file token budget.
 The `instruction-file-valid` rule checks override and fallback prose for empty
 content and read failures; Codex's lossy decoding and byte accounting still
-apply independently. An override loaded as a plugin agent,
-command, or rule keeps that role and its existing checks. Its full file bytes
-still count if Codex selects it. The content checks also apply when a plugin's
+apply independently. An override loaded as a plugin agent, command, rule,
+or configured OpenCode instruction keeps that role and its existing checks.
+Its full file bytes still count if Codex selects it. The content checks also apply when a plugin's
 `README.md` shares a file with an override through a symlink, or is selected
 as a fallback. Known configuration files keep their configuration checks even
 when named as fallbacks. Other hosts'

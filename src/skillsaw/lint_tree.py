@@ -1241,9 +1241,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
         a connection, and the local checkout contains no stable content to
         inspect for them.
 
-        This runs after every ordinary content attachment. A configured glob
-        may select a skill, command, editor rule, or OpenCode agent, and its
-        structural owner must claim it before path-only content deduplication.
+        A configured glob may also select a skill, command, editor rule, or
+        OpenCode agent. Those structural owners attach first and keep their
+        roles through path-only content deduplication.
         """
         searched: Set[Tuple[Path, str]] = set()
         searches: List[Tuple[Path, str]] = []
@@ -2148,20 +2148,6 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # Those semantic owners keep the single body and its parser role.
     attach_pi_prompts(state)
 
-    # An override can also be a plugin agent, command, rule, or skill reference.
-    # Let those existing roles attach first; path deduplication then retains
-    # their parser and ownership without repeating their discovery here.
-    if codex_overrides:
-        from .codex_instructions_tree import attach_instruction_content
-
-        attach_instruction_content(
-            state,
-            codex_overrides,
-            suppressed=frozenset(
-                path for path in codex_overrides if _is_apm_compiled_github(path.parent)
-            ),
-        )
-
     # --- Extra content paths from config ---
     # User-configured content paths plus globs contributed by detected
     # plugin repo types; the ``seen`` set dedupes any overlap.
@@ -2193,6 +2179,19 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # original semantic owner wins when a path is also a skill, command,
     # agent, editor rule, README, or plugin-contributed content block.
     _add_opencode_instructions()
+
+    # Overrides can also be plugin prose or configured OpenCode instructions.
+    # Let those existing roles attach first so they keep their parser and budget.
+    if codex_overrides:
+        from .codex_instructions_tree import attach_instruction_content
+
+        attach_instruction_content(
+            state,
+            codex_overrides,
+            suppressed=frozenset(
+                path for path in codex_overrides if _is_apm_compiled_github(path.parent)
+            ),
+        )
 
     if context.codex_instructions is not None:
         from .codex_instructions_tree import attach_codex_instructions

@@ -11158,6 +11158,34 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("projected", [False, True])
+    @pytest.mark.parametrize("config_dir", [".", ".opencode"])
+    def test_opencode_selected_override_keeps_instruction_budget(
+        self, tmp_path, projected, config_dir
+    ):
+        repo = copy_fixture("opencode/native-v1", tmp_path)
+        path = repo / "AGENTS.override.md"
+        guidance = (repo / "docs/conventions.md").read_text()
+        path.write_text(guidance * (20000 // len(guidance)))
+        (repo / "opencode.json").unlink()
+        (repo / config_dir / "opencode.json").write_text(json.dumps({"instructions": [path.name]}))
+        (repo / ".skillsaw.yaml").write_text(
+            'version: "99.0.0"\nplugins: false\n'
+            + ("codex-instructions: {}\n" if projected else "")
+        )
+        result = run_lint(repo, "--rule", "context-budget", "--strict")
+        assert result["rc"] == 1, result["stdout"] + result["stderr"]
+        findings = by_rule(result)["context-budget"]
+        assert len(findings) == 1
+        assert findings[0]["file_path"] == path.name
+        assert "instruction warn limit of 4,000" in findings[0]["message"]
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 0, inspection.stdout + inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert report["complete"]
+        assert [entry["path"] for entry in report["selected"]] == [path.name]
+        assert report["charged_bytes"] == path.stat().st_size
+
     @pytest.mark.parametrize("excluded", [False, True])
     def test_normal_config_detection_matches_ancestor_exclusion(self, tmp_path, excluded):
         repo = copy_fixture("codex-instructions-hooks", tmp_path)
