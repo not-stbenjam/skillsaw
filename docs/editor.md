@@ -83,7 +83,9 @@ one pending request. Newer saves replace queued work, cancel an older run for
 that folder and prevent its results from being published. Output is capped at
 8 MiB across stdout and stderr. Use command-only linting or a larger timeout
 for a large repository. Command-only results remain visible when you open or
-close clean tabs.
+close clean tabs. Opening a symlink alias remaps the last report to its document
+without running the CLI again. Edits, file operations and configuration changes
+invalidate that report; use the explicit command to produce fresh results.
 
 ## Fix workflow
 
@@ -124,9 +126,11 @@ repository with the existing skillsaw GitHub Action.
   Saves outside a workspace folder (such as an inherited parent config) also
   need that command. This pilot does not maintain a filesystem watcher.
 - Virtual workspaces, browser-only VS Code and untitled files are unsupported.
-  Remote extension hosts need their own CLI installation; linting uses that
-  host's filesystem. The automated extension-host smoke test runs on Linux;
-  installed-CLI and interpreter cancellation tests also run on Windows.
+  Install the extension and CLI on the workspace's remote host when using
+  Remote SSH, Dev Containers or WSL; linting uses that host's filesystem.
+  The automated extension-host smoke test runs locally on Linux; it does not
+  exercise those remote connections. Installed-CLI and interpreter cancellation
+  tests also run on Windows.
 - Cancellation terminates the CLI process, with a forced kill after a short
   grace period. Custom rules are trusted code: processes they detach are not
   managed by the extension.

@@ -192,6 +192,13 @@ async function run() {
     () => diagnostics(doc2.uri).length > 0,
     'explicit command runs with runOnSave disabled',
   );
+  const manualAlias = await vscode.workspace.openTextDocument(
+    vscode.Uri.joinPath(two.uri, '.agents/skills/release-notes/SKILL.md'),
+  );
+  await until(
+    () => diagnostics(manualAlias.uri).length > 0 && diagnostics(doc2.uri).length > 0,
+    'command-only diagnostics map to an alias opened after lint completed',
+  );
   await vscode.window.showTextDocument(doc2);
   // Closing a tab may retain its document. A language change deterministically
   // emits the real host's close/open events without changing file contents.

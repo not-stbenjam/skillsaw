@@ -311,6 +311,86 @@ test('clean tab closes preserve pending and published command-only diagnostics',
   h.complete(1);
 });
 
+test('cached manual reports stay invalidated after file, settings and folder changes', async (t) => {
+  const h = harness(t, true, ['one']);
+  h.settings.set(h.uri('one').toString(), { runOnSave: false });
+  h.events.onDidChangeConfiguration({ affectsConfiguration: () => true });
+  const doc = { uri: h.uri('one/skills/release-notes/SKILL.md'), isDirty: false };
+  h.workspace.textDocuments = [doc];
+  const changes = [
+    () => h.events.onDidSaveTextDocument(doc),
+    () => h.events.onDidDeleteFiles({ files: [doc.uri] }),
+    () => h.events.onDidChangeConfiguration({ affectsConfiguration: () => true }),
+    () => {
+      h.workspace.workspaceFolders = [];
+      h.events.onDidChangeWorkspaceFolders();
+    },
+  ];
+  for (const change of changes) {
+    const index = h.runs.length;
+    h.commands['skillsaw.lint']();
+    await until(() => h.runs.length === index + 1);
+    h.complete(index, [finding]);
+    await until(() => h.collections[0].entries.length === 1);
+    h.events.onDidOpenTextDocument(doc);
+    change();
+    await delay(50);
+    assert.equal(h.collections[0].entries.length, 0, 'cancel the mapping in progress');
+    h.events.onDidOpenTextDocument(doc);
+    await delay(50);
+    assert.equal(h.collections[0].entries.length, 0, 'discard the invalidated cached report');
+    assert.equal(h.runs.length, index + 1, 'only the explicit command runs lint');
+  }
+  assert(h.collections[0].disposed);
+});
+
+test(
+  'command-only findings follow newly opened aliases without another CLI run',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw manual aliases '));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    await fs.mkdir(path.join(root, 'skills/release-notes'), { recursive: true });
+    await fs.writeFile(path.join(root, finding.file_path), 'name: Release_Notes\n');
+    await fs.mkdir(path.join(root, '.agents'));
+    await fs.symlink('../skills', path.join(root, '.agents/skills'));
+    const h = harness(t, true, [root]);
+    h.settings.set(h.uri(root).toString(), { runOnSave: false });
+    h.events.onDidChangeConfiguration({ affectsConfiguration: () => true });
+    const canonical = { uri: h.uri(path.join(root, finding.file_path)), isDirty: false };
+    const alias = {
+      uri: h.uri(path.join(root, '.agents/skills/release-notes/SKILL.md')),
+      isDirty: false,
+    };
+    const has = (doc) =>
+      h.collections[0].entries.some(([uri]) => uri.toString() === doc.uri.toString());
+    h.commands['skillsaw.lint']();
+    await until(() => h.runs.length === 1);
+    h.complete(0, [finding]);
+    await until(() => has(canonical));
+
+    h.workspace.textDocuments = [alias];
+    h.events.onDidOpenTextDocument(alias);
+    await until(() => has(alias));
+    h.workspace.textDocuments = [alias, canonical];
+    h.events.onDidOpenTextDocument(canonical);
+    await until(() => has(alias) && has(canonical));
+    assert.equal(h.runs.length, 1, 'opening aliases only remaps the cached manual report');
+
+    // A lookup already in flight must not republish after a subsequent edit.
+    h.events.onDidOpenTextDocument(alias);
+    alias.isDirty = true;
+    h.events.onDidChangeTextDocument({ document: alias, contentChanges: [{}] });
+    await delay(150);
+    assert.equal(h.collections[0].entries.length, 0);
+    alias.isDirty = false;
+    h.events.onDidOpenTextDocument(alias);
+    await delay(150);
+    assert.equal(h.collections[0].entries.length, 0, 'invalidated reports cannot be remapped');
+    assert.equal(h.runs.length, 1);
+  },
+);
+
 test(
   'symlink aliases receive findings and a dirty alias suppresses all open copies',
   { skip: process.platform === 'win32' },

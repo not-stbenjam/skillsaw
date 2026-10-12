@@ -30,29 +30,59 @@ function activate(context) {
         );
         throw error;
       }
-      // Resolve aliases before the scheduler's generation check, so edits or
-      // folder removal during filesystem lookups still discard this result.
-      const targets = await matchDocuments(
-        options.cwd,
-        report.violations,
-        vscode.workspace.textDocuments,
-        options.signal,
-      );
-      return { ...result, report, targets };
+      return { ...result, report };
     },
-    (key, { code, report, targets }) => {
+    (key, { code, report }) => {
       const state = folders.get(key);
       if (!state) return;
+      state.report = report;
+      void remap(state);
+      state.error = null;
+      output.appendLine(
+        `[${state.folder.name}] exit ${code}; ${report.violations.length} findings (skillsaw ${report.version}).`,
+      );
+    },
+    failed,
+  );
+
+  function failed(key, error) {
+    const state = folders.get(key);
+    if (!state) return;
+    invalidate(state);
+    output.appendLine(`[${state.folder.name}] ${error.message}`);
+    if (state.error !== error.message) {
+      state.error = error.message;
+      void vscode.window
+        .showErrorMessage(`skillsaw (${state.folder.name}): ${error.message}`, 'Show Output')
+        .then((choice) => {
+          if (choice === 'Show Output') output.show();
+        });
+    }
+  }
+  async function remap(state) {
+    if (!state.report) return;
+    state.mapping?.abort();
+    const controller = new AbortController();
+    state.mapping = controller;
+    try {
+      const targets = await matchDocuments(
+        state.folder.uri.fsPath,
+        state.report.violations,
+        vscode.workspace.textDocuments,
+        controller.signal,
+      );
+      // Opening another alias replaces this mapping; any disk/config change,
+      // folder removal or disposal cancels it and drops the cached report.
+      if (controller.signal.aborted) return;
       const grouped = new Map();
       for (const target of targets) {
         if (target.documents.some((doc) => doc.isDirty)) continue;
-        const finding = target.finding;
         const diagnostic = new vscode.Diagnostic(
           new vscode.Range(target.line, 0, target.line, 0),
           target.message,
-          severity[finding.severity],
+          severity[target.finding.severity],
         );
-        diagnostic.code = finding.rule_id;
+        diagnostic.code = target.finding.rule_id;
         diagnostic.source = 'skillsaw';
         const uris = target.documents.length
           ? target.documents.map((doc) => doc.uri)
@@ -65,29 +95,16 @@ function activate(context) {
       }
       state.diagnostics.clear();
       state.diagnostics.set([...grouped.values()]);
-      state.error = null;
-      output.appendLine(
-        `[${state.folder.name}] exit ${code}; ${report.violations.length} findings (skillsaw ${report.version}).`,
-      );
-    },
-    (key, error) => {
-      const state = folders.get(key);
-      if (!state) return;
-      state.diagnostics.clear();
-      output.appendLine(`[${state.folder.name}] ${error.message}`);
-      if (state.error !== error.message) {
-        state.error = error.message;
-        void vscode.window
-          .showErrorMessage(`skillsaw (${state.folder.name}): ${error.message}`, 'Show Output')
-          .then((choice) => {
-            if (choice === 'Show Output') output.show();
-          });
-      }
-    },
-  );
-
+    } catch (error) {
+      if (!controller.signal.aborted) failed(state.folder.uri.toString(), error);
+    } finally {
+      if (state.mapping === controller) state.mapping = null;
+    }
+  }
   function invalidate(state) {
     scheduler.invalidate(state.folder.uri.toString());
+    state.mapping?.abort();
+    state.report = null;
     state.diagnostics.clear();
   }
   function request(state, explicit = false) {
@@ -112,6 +129,8 @@ function activate(context) {
     }
   }
   function syncFolders() {
+    // VS Code transforms remote host files to file: URIs before this workspace
+    // extension receives them, and transforms diagnostic URIs back for the UI.
     const current = new Map(
       (vscode.workspace.workspaceFolders ?? [])
         .filter((folder) => folder.uri.scheme === 'file')
@@ -129,6 +148,8 @@ function activate(context) {
         const state = {
           folder,
           diagnostics: vscode.languages.createDiagnosticCollection('skillsaw'),
+          report: null,
+          mapping: null,
           error: null,
         };
         folders.set(key, state);
@@ -141,7 +162,10 @@ function activate(context) {
     scheduler,
     {
       dispose() {
-        for (const state of folders.values()) state.diagnostics.dispose();
+        for (const state of folders.values()) {
+          invalidate(state);
+          state.diagnostics.dispose();
+        }
         folders.clear();
       },
     },
@@ -162,6 +186,7 @@ function activate(context) {
     vscode.workspace.onDidOpenTextDocument((doc) =>
       affected([doc.uri], (state) => {
         if (config(state.folder).get('runOnSave', true)) request(state);
+        else void remap(state);
       }),
     ),
     vscode.workspace.onDidSaveTextDocument((doc) => affected([doc.uri], request)),

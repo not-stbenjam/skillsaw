@@ -7,15 +7,16 @@ async function main() {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw-vscode-'));
   try {
     const fixture = path.resolve(__dirname, '../../../examples/editor-onboarding');
-    for (const name of ['publisher one', 'publisher two'])
-      await fs.cp(fixture, path.join(temp, name), { recursive: true });
-    const first = path.join(temp, 'publisher one');
-    await fs.mkdir(path.join(first, '.agents'));
-    await fs.symlink(
-      path.join(first, 'skills'),
-      path.join(first, '.agents/skills'),
-      process.platform === 'win32' ? 'junction' : 'dir',
-    );
+    for (const name of ['publisher one', 'publisher two']) {
+      const folder = path.join(temp, name);
+      await fs.cp(fixture, folder, { recursive: true });
+      await fs.mkdir(path.join(folder, '.agents'));
+      await fs.symlink(
+        path.join(folder, 'skills'),
+        path.join(folder, '.agents/skills'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    }
     const workspace = path.join(temp, 'publisher.code-workspace');
     const executable =
       process.env.SKILLSAW_CLI ||
