@@ -626,8 +626,12 @@ def test_parseable_negative_byte_limit_can_be_shadowed(tmp_path, limit, explicit
     [
         ("[9223372036854775808]", False),
         ("{ nested = [-9223372036854775809] }", False),
+        ("[[], 9223372036854775808]", False),
+        ("{ empty = [], later = [-9223372036854775809] }", False),
         ("[9223372036854775807]", True),
         ("{ nested = [-9223372036854775808] }", True),
+        ("[[], 9223372036854775807]", True),
+        ("{ empty = [], later = [-9223372036854775808] }", True),
     ],
 )
 def test_nested_integer_bounds_apply_before_setting_overrides(tmp_path, key, explicit, raw, valid):

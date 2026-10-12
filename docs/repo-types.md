@@ -793,7 +793,7 @@ the value `Repo type:` prints, the JSON report lists under `repo_types`, and
 | **[Pi](#pi-packages-and-projects)** | `pi` | `.pi/`: Native skills, prompts, themes and extensions, `SYSTEM.md`, `APPEND_SYSTEM.md`, resource declarations in `settings.json` |
 | **Muse Code** | `muse` | `.muse/hooks.json` — see [Muse Code](#muse-code) |
 | **Grok Build** | `grok-project` | `.grok/rules/*.md`, `.grok/commands/*.md`, `.grok/agents/*.md`, `.grok/skills/*/SKILL.md`, `.grok/hooks/*.json`, `.grok/config.toml` — see [Grok Build](#grok-build) |
-| **OpenAI Codex** | `codex-project` | `.codex/hooks.json`, `.codex/config.toml` — see [OpenAI Codex project configuration](#openai-codex-project-configuration) |
+| **OpenAI Codex** | `codex-project` | `AGENTS.override.md`, `.codex/hooks.json`, `.codex/config.toml` — see [OpenAI Codex project configuration](#openai-codex-project-configuration) |
 | **Committed project memory** | — | `<repo>/.agents/memory/MEMORY.md` (index) and every `**/*.md` beneath that directory |
 
 `.agents/memory/` is the one row with no type of its own: the convention

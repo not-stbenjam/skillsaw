@@ -176,6 +176,12 @@ instructions for an untrusted project. skillsaw does not inspect that trust
 decision or observe a running Codex session. JSON `complete: true` means the
 calculation succeeded under the report's assumptions.
 
+Full Codex configuration validation is outside this check. One known parsing
+difference is an overflowing float literal such as `1e400`: Codex rejects it,
+while skillsaw can report a complete result if a later setting replaces it.
+`complete: true` therefore does not guarantee that Codex will accept the
+configuration.
+
 You choose the root. skillsaw does not search parent directories for root
 markers. Without a root marker, Codex normally uses only the working directory;
 pass that directory as skillsaw's root to check this case. A nested Git repository
