@@ -27,6 +27,59 @@ async function replace(doc, before, after, save = true) {
   if (save) assert.equal(await doc.save(), true);
 }
 
+async function overlappingFolders(one, doc, canonical) {
+  const nested = vscode.Uri.joinPath(one.uri, 'skills/release-notes');
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(nested, '.skillsaw.yaml'),
+    Buffer.from('rules:\n  agentskill-name:\n    severity: warning\n'),
+  );
+  const addNested = () =>
+    vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders.length, 0, {
+      uri: nested,
+      name: 'nested skill',
+    });
+  assert(addNested());
+  await until(
+    () =>
+      vscode.workspace.workspaceFolders.some(
+        (folder) => folder.uri.toString() === nested.toString(),
+      ),
+    'nested workspace folder added',
+  );
+  await replace(doc, 'name: release-notes', 'name: Release_Notes');
+  await vscode.commands.executeCommand('skillsaw.lint');
+  const levels = () =>
+    diagnostics(canonical.uri)
+      .filter((item) => item.code === 'agentskill-name')
+      .map((item) => item.severity)
+      .sort()
+      .join(',');
+  const error = String(vscode.DiagnosticSeverity.Error);
+  const warning = String(vscode.DiagnosticSeverity.Warning);
+  await until(() => levels() === `${error},${warning}`, 'both roots report the shared URI');
+
+  const config = await vscode.workspace.openTextDocument(
+    vscode.Uri.joinPath(one.uri, '.skillsaw.yaml'),
+  );
+  await replace(
+    config,
+    'fail-on: warning',
+    'fail-on: warning\nrules:\n  agentskill-name:\n    enabled: false',
+  );
+  await until(() => levels() === warning, 'clean parent rerun preserves nested findings');
+  await replace(config, 'enabled: false', 'enabled: true');
+  await until(() => levels() === `${error},${warning}`, 'parent findings return independently');
+
+  const index = vscode.workspace.workspaceFolders.findIndex(
+    (folder) => folder.uri.toString() === nested.toString(),
+  );
+  assert(index > 0, 'keep the first root so the extension host does not restart');
+  assert(vscode.workspace.updateWorkspaceFolders(index, 1));
+  await until(() => levels() === error, 'removing the nested root preserves parent findings');
+  assert(addNested());
+  await until(() => levels() === `${error},${warning}`, 're-added root has independent findings');
+}
+
 async function run() {
   const extension = vscode.extensions.getExtension('stbenjam.skillsaw');
   assert(extension, 'pilot installed in the extension host');
@@ -166,8 +219,9 @@ async function run() {
   deletion.deleteFile(doc2.uri);
   assert.equal(await vscode.workspace.applyEdit(deletion), true);
   await until(() => diagnostics(doc2.uri).length === 0, 'deleted files clear diagnostics');
+  await overlappingFolders(one, doc1, canonical);
   console.log(
-    'skillsaw extension-host smoke passed: multi-root saves, aliases, dirty buffers, config, command, close, create, rename and delete.',
+    'skillsaw extension-host smoke passed: multi-root saves, overlapping roots, aliases, dirty buffers, config, command, close, create, rename and delete.',
   );
 }
 

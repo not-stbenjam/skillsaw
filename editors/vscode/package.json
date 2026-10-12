@@ -60,7 +60,7 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Lint the workspace on activation, document opens/closes, file saves and editor file operations. Disable for command-only linting."
+          "description": "Lint the workspace on activation, document opens/closes, file saves, clean document reloads and editor file operations. Disable for command-only linting."
         },
         "skillsaw.debounceMs": {
           "type": "integer",

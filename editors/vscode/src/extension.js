@@ -166,7 +166,10 @@ function activate(context) {
     ),
     vscode.workspace.onDidSaveTextDocument((doc) => affected([doc.uri], request)),
     vscode.workspace.onDidChangeTextDocument((event) => {
-      if (event.contentChanges.length) affected([event.document.uri], invalidate);
+      // A clean alias can reload after a save has already scheduled lint.
+      // Replace that cancelled run; dirty buffers still only invalidate.
+      if (event.contentChanges.length)
+        affected([event.document.uri], event.document.isDirty ? invalidate : request);
     }),
     vscode.workspace.onDidCloseTextDocument((doc) =>
       affected([doc.uri], (state) => {

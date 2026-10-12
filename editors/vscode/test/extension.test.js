@@ -169,6 +169,10 @@ const finding = {
 test('trust blocks activation, save, configuration and command paths until granted', async (t) => {
   const h = harness(t, false);
   h.events.onDidSaveTextDocument({ uri: h.uri('one/SKILL.md') });
+  h.events.onDidChangeTextDocument({
+    document: { uri: h.uri('one/SKILL.md'), isDirty: false },
+    contentChanges: [{}],
+  });
   h.events.onDidChangeConfiguration({ affectsConfiguration: () => true });
   h.commands['skillsaw.lint']();
   await delay(150);
@@ -209,7 +213,7 @@ test('edits, settings and removal invalidate in-flight results; folder add start
   const h = harness(t);
   await delay(150);
   h.events.onDidChangeTextDocument({
-    document: { uri: h.uri('one/SKILL.md') },
+    document: { uri: h.uri('one/SKILL.md'), isDirty: true },
     contentChanges: [{}],
   });
   assert.equal(h.runs[0].signal.aborted, true);
@@ -250,6 +254,33 @@ test('manual runs suppress diagnostics for dirty buffers and use per-folder exec
   h.complete(1, [finding]);
   await delay(0);
   assert.equal(h.collections[1].entries.length, 0);
+});
+
+test('a clean disk reload replaces a pending save without linting dirty buffers', async (t) => {
+  const h = harness(t, true, ['one']);
+  const doc = { uri: h.uri('one/skills/release-notes/SKILL.md'), isDirty: false };
+  await until(() => h.runs.length === 1);
+  h.complete(0, [finding]);
+  await until(() => h.collections[0].entries.length === 1);
+  h.events.onDidSaveTextDocument(doc);
+  await until(() => h.runs.length === 2);
+  h.events.onDidChangeTextDocument({ document: doc, contentChanges: [{}] });
+  assert(h.runs[1].signal.aborted, 'discard the report started before the reload');
+  h.complete(1, [finding]);
+  await until(() => h.runs.length === 3);
+  h.complete(2, [finding]);
+  await until(() => h.collections[0].entries.length === 1);
+
+  doc.isDirty = true;
+  h.events.onDidChangeTextDocument({ document: doc, contentChanges: [{}] });
+  assert.equal(h.collections[0].entries.length, 0);
+  await delay(150);
+  assert.equal(h.runs.length, 3, 'dirty-buffer changes must not start lint');
+  h.settings.set(h.uri('one').toString(), { runOnSave: false });
+  doc.isDirty = false;
+  h.events.onDidChangeTextDocument({ document: doc, contentChanges: [{}] });
+  await delay(150);
+  assert.equal(h.runs.length, 3, 'command-only mode must not lint disk reloads');
 });
 
 test('clean tab closes preserve pending and published command-only diagnostics', async (t) => {

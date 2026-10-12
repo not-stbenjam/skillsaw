@@ -74,7 +74,7 @@ arguments, `~`, environment variables and `${workspaceFolder}` are not expanded.
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `skillsaw.executable` | `skillsaw` | CLI on PATH, or its filesystem path |
-| `skillsaw.runOnSave` | `true` | Lint on startup, document opens/closes, saves and editor file operations; `false` leaves the explicit command available |
+| `skillsaw.runOnSave` | `true` | Lint on startup, document opens/closes, saves, clean document reloads and editor file operations; `false` leaves the explicit command available |
 | `skillsaw.debounceMs` | `600` | Save delay, between 100 and 10,000 ms |
 | `skillsaw.timeoutMs` | `30000` | Per-run timeout, between 1,000 and 300,000 ms |
 
@@ -117,8 +117,10 @@ repository with the existing skillsaw GitHub Action.
   paths appear on the workspace folder, labelled as having no available
   location. No outside-repo filename is guessed from the CLI's redaction.
 - After terminal fixes or other external edits, run **skillsaw: Lint Workspaces**
-  to refresh diagnostics. Document-change events clear old diagnostics without
-  starting a run.
+  to refresh diagnostics. Dirty-buffer changes clear old diagnostics without
+  starting a run. A clean open document reloading from disk also refreshes
+  diagnostics when `runOnSave` is enabled, including when another symlink alias
+  was saved.
   Saves outside a workspace folder (such as an inherited parent config) also
   need that command. This pilot does not maintain a filesystem watcher.
 - Virtual workspaces, browser-only VS Code and untitled files are unsupported.
@@ -145,8 +147,10 @@ npm run package
 failures, trust gates, debounce, stale results and folder lifecycle. Set
 `SKILLSAW_CLI` to an absolute executable path to test another CLI installation.
 `test:host` downloads pinned VS Code 1.96.4 and uses disposable multi-root
-workspaces with the actual VS Code API and CLI. It disables workspace trust
-only in that test instance; the unit tests exercise the Restricted Mode gates.
+workspaces with the actual VS Code API and CLI. It checks overlapping roots
+with different configurations, independent refreshes, removal and re-addition.
+It disables workspace trust only in that test instance; the unit tests exercise
+the Restricted Mode gates.
 With a display, run `npm run test:host` directly.
 
 The implementation follows the VS Code
