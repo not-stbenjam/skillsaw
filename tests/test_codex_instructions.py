@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from skillsaw.blocks import AgentsMdBlock, CodexConfigBlock, CodexInstructionBlock, ContentBlock
+from skillsaw.blocks import (
+    AgentsMdBlock,
+    CodexConfigBlock,
+    CodexHooksBlock,
+    CodexInstructionBlock,
+    ContentBlock,
+)
 from skillsaw.codex_instructions import CodexInstructionsNode
 from skillsaw.config import LinterConfig
 from skillsaw.context import RepositoryContext, RepositoryType
@@ -445,20 +451,21 @@ def test_default_lint_and_other_ecosystems_unaffected(tmp_path):
 
 
 @pytest.mark.parametrize("scope", ["included", "excluded", "external", "escape", "missing"])
-def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, scope):
+@pytest.mark.parametrize("filename", ["config.toml", "hooks.json"])
+def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, scope, filename):
     root = tmp_path / "repo"
-    path = root / "vendor/pkg/.codex/config.toml"
+    path = root / "vendor/pkg/.codex" / filename
     path.parent.mkdir(parents=True)
     target = path
     if scope == "external":
-        target = root / "apm_modules/vendor/config.toml"
+        target = root / "apm_modules/vendor" / filename
         target.parent.mkdir(parents=True)
         (root / "apm.yml").write_text("name: instructions\nversion: 1.0.0\ntargets: []\n")
         path.symlink_to(target)
     elif scope == "escape":
-        target = tmp_path / "outside.toml"
+        target = tmp_path / filename
         path.symlink_to(target)
-    target.write_text("project_doc_max_bytes = 65536\n")
+    target.write_text("project_doc_max_bytes = 65536\n" if filename == "config.toml" else "{}")
     original = Path.open
 
     def scoped_open(file, *args, **kwargs):
@@ -475,30 +482,84 @@ def test_selected_config_detection_obeys_authoring_scope(tmp_path, monkeypatch, 
         exclude_patterns=["vendor"] if scope == "excluded" else [],
         lint_external_content=False,
     )
+    block_type = CodexConfigBlock if filename == "config.toml" else CodexHooksBlock
     assert (RepositoryType.CODEX_PROJECT in context.repo_types) is (scope == "included")
-    assert bool(context.lint_tree.find(CodexConfigBlock)) is (scope == "included")
+    assert bool(context.lint_tree.find(block_type)) is (scope == "included")
     if scope == "included":
         context.exclude_patterns = ["vendor"]
         context.apply_excludes()
         assert RepositoryType.CODEX_PROJECT not in context.repo_types
-        assert not context.lint_tree.find(CodexConfigBlock)
+        assert not context.lint_tree.find(block_type)
 
 
-def test_linter_refreshes_selected_config_types_before_loading_rules(tmp_path):
-    path = tmp_path / "vendor/pkg/.codex/config.toml"
+@pytest.mark.parametrize("filename", ["config.toml", "hooks.json"])
+def test_linter_refreshes_selected_config_types_before_loading_rules(tmp_path, filename):
+    path = tmp_path / "vendor/pkg/.codex" / filename
     path.parent.mkdir(parents=True)
-    path.write_text("project_doc_max_bytes = 65536\n")
+    path.write_text("project_doc_max_bytes = 65536\n" if filename == "config.toml" else "{}")
     context = RepositoryContext(tmp_path)
     config = LinterConfig.default()
     config.codex_instructions = CodexInstructionOptions(cwd="vendor/pkg")
     enabled = Linter(context, config, no_plugins=True)
     assert any(rule.rule_id == "codex-hooks-valid" for rule in enabled.rules)
     assert RepositoryType.CODEX_PROJECT in context.repo_types
-    assert len(context.lint_tree.find(CodexConfigBlock)) == 1
+    block_type = CodexConfigBlock if filename == "config.toml" else CodexHooksBlock
+    assert len(context.lint_tree.find(block_type)) == 1
     disabled = Linter(context, no_plugins=True)
     assert not any(rule.rule_id == "codex-hooks-valid" for rule in disabled.rules)
     assert RepositoryType.CODEX_PROJECT not in context.repo_types
-    assert not context.lint_tree.find(CodexConfigBlock)
+    assert not context.lint_tree.find(block_type)
+
+
+def test_projected_json_hooks_follow_cwd_chain_and_deduplicate_symlinks(tmp_path):
+    context, report = project(
+        tmp_path,
+        {
+            "AGENTS.md": "root instructions",
+            "vendor/.codex/hooks.json": "{}",
+            "vendor/pkg/.codex/hooks.json": "{}",
+            "vendor/sibling/.codex/hooks.json": "{}",
+            "vendor/pkg/deeper/.codex/hooks.json": "{}",
+        },
+        cwd="vendor/pkg",
+    )
+    paths = [block.path for block in context.lint_tree.find(CodexHooksBlock)]
+    assert paths == [
+        context.root_path / "vendor/.codex/hooks.json",
+        context.root_path / "vendor/pkg/.codex/hooks.json",
+    ]
+    assert report["complete"]
+    assert [source["path"] for source in report["selected"]] == ["AGENTS.md"]
+    child = paths[1]
+    child.unlink()
+    child.symlink_to(paths[0])
+    context.rebuild_lint_tree()
+    assert len(context.lint_tree.find(CodexHooksBlock)) == 1
+
+
+def test_excluded_json_hooks_do_not_make_instruction_budget_incomplete(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    hooks = root / "vendor/pkg/.codex/hooks.json"
+    hooks.parent.mkdir(parents=True)
+    hooks.write_text("{}")
+    (root / "AGENTS.md").write_text("Local instructions")
+    original = Path.open
+
+    def scoped_open(path, *args, **kwargs):
+        assert path != hooks, "excluded hooks read"
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(cwd="vendor/pkg"),
+        exclude_patterns=["vendor/pkg/.codex/hooks.json"],
+    )
+    tree = context.lint_tree
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"]
+    assert report["charged_bytes"] == len("Local instructions")
+    assert not tree.find(CodexHooksBlock)
 
 
 def test_override_only_repository_gets_content_coverage(tmp_path):

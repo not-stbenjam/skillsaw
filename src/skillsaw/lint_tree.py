@@ -334,6 +334,10 @@ class _TreeBuildState:
         """Attach a project config with all of its structured roles."""
         return _add_codex_config(self, parent, path)
 
+    def add_codex_hooks(self, parent: LintTarget, path: Path) -> None:
+        """Attach project JSON hooks under the shared ownership and deduplication rules."""
+        _add_project_hooks(self, parent, path, CodexHooksBlock)
+
     def _claim_parser_role(self, p: Path, block_cls: type) -> Optional[Path]:
         """Claim one parser role over *p*, or ``None`` if it is not ours.
 
@@ -1112,7 +1116,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     # ``RepositoryType.CODEX_PROJECT`` detection reads: detection agrees with
     # attachment.
     for codex_dir in context.agent_tool_dirs(CODEX_DIR_NAME):
-        _add_project_hooks(state, root, codex_dir / CODEX_HOOKS_FILENAME, CodexHooksBlock)
+        state.add_codex_hooks(root, codex_dir / CODEX_HOOKS_FILENAME)
         state.add_codex_config(root, codex_dir / CODEX_CONFIG_FILENAME)
 
     for muse_dir in context.agent_tool_dirs(muse.TOOL_DIR_NAME):

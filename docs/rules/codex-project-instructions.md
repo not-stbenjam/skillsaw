@@ -180,6 +180,10 @@ fallbacks when this analysis is requested, and check known configuration files
 as configuration even when named as fallbacks. Other hosts' files count toward
 the Codex budget only if explicitly configured as fallbacks.
 
+Selected `.codex/` layers also receive the existing hook checks for both
+`hooks.json` and inline hooks in `config.toml`. Hook discovery does not change
+which instruction files count toward the byte limit.
+
 ## Sources
 
 The selection and byte rules were verified against the released

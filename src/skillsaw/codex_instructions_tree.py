@@ -8,6 +8,7 @@ from .blocks.codex import CodexConfigBlock
 from .blocks.content import AgentsMdBlock, CodexInstructionBlock
 from .codex_instructions import CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
+from .formats.codex import CODEX_HOOKS_FILENAME
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, candidate_filenames
 from .paths import relative_to_str
 
@@ -40,6 +41,12 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     for candidate in project_configs(
         directories, resolve=resolve, is_excluded=context.is_path_excluded
     ):
+        if candidate.path.name == CODEX_HOOKS_FILENAME:
+            if candidate.issue is None and (
+                context.lint_external_content or not context.is_externally_sourced(candidate.path)
+            ):
+                state.add_codex_hooks(state.root, candidate.path)
+            continue
         if candidate.issue:
             node.issues.append(candidate.issue)
             continue

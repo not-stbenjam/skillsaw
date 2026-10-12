@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
+from skillsaw.formats.codex import CODEX_CONFIG_FILENAME, CODEX_DIR_NAME, CODEX_HOOKS_FILENAME
 from skillsaw.paths import Resolver, contained_resolve, relative_to_str
 
 from .excludes import is_root_or_ancestor_excluded
@@ -76,15 +77,16 @@ def project_configs(
     resolve: Resolver,
     is_excluded: Callable[[Path], bool],
 ) -> Tuple[InstructionCandidate, ...]:
-    """Project configuration evidence shared by detection and tree attachment."""
+    """Config and hooks evidence shared by detection and tree attachment."""
     candidates = []
     for directory in directories:
-        candidate = probe_file(
-            directory / ".codex" / "config.toml",
-            directories[0],
-            resolve=resolve,
-            is_excluded=is_excluded,
-        )
-        if candidate is not None:
-            candidates.append(candidate)
+        for filename in (CODEX_HOOKS_FILENAME, CODEX_CONFIG_FILENAME):
+            candidate = probe_file(
+                directory / CODEX_DIR_NAME / filename,
+                directories[0],
+                resolve=resolve,
+                is_excluded=is_excluded,
+            )
+            if candidate is not None:
+                candidates.append(candidate)
     return tuple(candidates)
