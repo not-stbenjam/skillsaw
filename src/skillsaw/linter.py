@@ -53,6 +53,7 @@ from .rule import (
 )
 from .context import RepositoryContext
 from .config import LinterConfig
+from .generated import generator_copy_paths
 from .suppression import build_suppression_map_for_file, SuppressionMap
 from .utils import mkdir_parents_anchored, rename_path_anchored, write_text_preserving
 
@@ -1111,12 +1112,7 @@ class Linter:
         return smap.is_suppressed(violation.rule_id, file_line)
 
     def _generator_copies(self):
-        tree = self.context.lint_tree
-        copies = tree.__dict__.get("_generator_copy_paths")
-        if copies is None:
-            copies = {n.resolved_path: n.generated_copy for n in tree.walk() if n.generated_copy}
-            tree.__dict__["_generator_copy_paths"] = copies
-        return copies
+        return generator_copy_paths(self.context.lint_tree)
 
     def _generator_copy(self, violation):
         if violation.file_path is None:

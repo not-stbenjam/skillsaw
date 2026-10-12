@@ -138,6 +138,7 @@ class LintTarget:
         node: Optional["LintTarget"] = self
         while node is not None:
             node.__dict__.pop("_find_cache", None)
+            node.__dict__.pop("_generator_copy_paths", None)
             node = node.parent
 
     @property

@@ -15,5 +15,5 @@ def attach_claude_rule_files(state, directory, readable_matches):
             path,
             ClaudeRuleFileNode,
             reserve_extra_content=False,
-            include_broken_symlinks=True,
+            file_inventory=True,
         )

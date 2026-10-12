@@ -313,7 +313,7 @@ class _TreeBuildState:
         content_suppressed: bool = False,
         preserve_content_aliases: bool = False,
         reserve_extra_content: bool = True,
-        include_broken_symlinks: bool = False,
+        file_inventory: bool = False,
     ) -> Optional[LintTarget]:
         """Attach a document once for each parser role.
 
@@ -326,8 +326,9 @@ class _TreeBuildState:
         available without reattaching this native path as generic prose.
         An inventory-only role sets ``reserve_extra_content=False`` because
         it does not replace a configured prose view of the file.
-        ``include_broken_symlinks`` retains contained dangling file links for
-        inventory diagnostics, without admitting other non-file entries.
+        ``file_inventory`` preserves each lexical entry, including contained
+        dangling file links, so filename/read diagnostics survive aliases.
+        It does not admit other non-file entries.
         """
         if (
             self._claim_parser_role(
@@ -335,7 +336,7 @@ class _TreeBuildState:
                 block_cls,
                 preserve_content_aliases,
                 reserve_extra_content,
-                include_broken_symlinks,
+                file_inventory,
             )
             is None
         ):
@@ -365,7 +366,7 @@ class _TreeBuildState:
         block_cls: type,
         preserve_content_aliases: bool = False,
         reserve_extra_content: bool = True,
-        include_broken_symlinks: bool = False,
+        file_inventory: bool = False,
     ) -> Optional[Path]:
         """Claim one parser role over *p*, or ``None`` if it is not ours.
 
@@ -375,11 +376,12 @@ class _TreeBuildState:
         resolved = self.resolve_repo_path(p)
         if resolved is None:
             return None
-        role = (resolved, block_cls)
+        role_path = p if file_inventory else resolved
+        role = (role_path, block_cls)
         if self.context.is_path_excluded(p):
             return None
         if not safe_is_file(resolved) and not (
-            include_broken_symlinks and safe_is_symlink(p) and not safe_exists(resolved)
+            file_inventory and safe_is_symlink(p) and not safe_exists(resolved)
         ):
             return None
         if preserve_content_aliases:
@@ -397,14 +399,20 @@ class _TreeBuildState:
         # declare ``hooks``/``mcpServers`` at any in-plugin markdown file,
         # and poisoning ``seen`` would drop that file from every content
         # rule that attaches later.
-        self._record_role(resolved, block_cls, p, reserve_extra_content)
+        self._record_role(resolved, block_cls, p, reserve_extra_content, role_path=role_path)
         return resolved
 
     def _record_role(
-        self, resolved: Path, block_cls: type, path: Path, reserve_extra_content: bool = True
+        self,
+        resolved: Path,
+        block_cls: type,
+        path: Path,
+        reserve_extra_content: bool = True,
+        *,
+        role_path: Optional[Path] = None,
     ) -> None:
         """Index an attached role and the extra-prose view it replaces."""
-        self.seen_roles.add((resolved, block_cls))
+        self.seen_roles.add((role_path if role_path is not None else resolved, block_cls))
         if reserve_extra_content:
             self.extra_content_paths.add(path)
             if resolved not in self.content_alias_files:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+from skillsaw.generated import generator_copy_paths
+
 from .base import ContentBlock, FileContentBlock
 
 if TYPE_CHECKING:
@@ -20,7 +22,12 @@ def gather_editorial_content_blocks(context: RepositoryContext) -> List[ContentB
     """Keep distinct prose views for editorial aggregation across files."""
     from .generators import is_generator_source
 
-    blocks = [b for b in gather_all_content_blocks(context) if b.in_generated_copy is None]
+    copies = generator_copy_paths(context.lint_tree)
+    blocks = [
+        b
+        for b in gather_all_content_blocks(context)
+        if b.in_generated_copy is None and b.resolved_path not in copies
+    ]
     sources = [b for b in blocks if is_generator_source(b)]
     if not sources:
         return blocks

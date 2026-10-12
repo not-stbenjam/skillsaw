@@ -11160,6 +11160,47 @@ class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
     @pytest.mark.parametrize(
+        "value", [42, True, False, [], ["inputRoot", "inputRoots"], "inputRoot", None]
+    )
+    def test_non_object_rulesync_config_keeps_other_projects_checked(self, value, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        nested = copy_fixture("generators/rulesync", repo / "packages")
+        (repo / "rulesync.jsonc").write_text(json.dumps(value))
+        (nested / "rulesync.jsonc").write_text('{"features": false}')
+        (repo / ".skillsaw.yaml").write_text(
+            "rules:\n  rulesync-source-valid:\n    severity: warning\n"
+        )
+        result = run_lint(repo, "--rule", "rulesync-source-valid")
+        found = violations(result)
+        assert result["rc"] == 0
+        assert len(found) == 2
+        assert {v["rule_id"] for v in found} == {"rulesync-source-valid"}
+        assert {v["file_path"] for v in found} == {
+            "rulesync.jsonc",
+            str((nested / "rulesync.jsonc").relative_to(repo)),
+        }
+        assert all(v["severity"] == "warning" and v.get("line") is None for v in found)
+        assert next(v for v in found if v["file_path"] == "rulesync.jsonc")["message"] == (
+            "Rulesync configuration must be a JSONC object"
+        )
+
+    @pytest.mark.parametrize("filename", ["AGENTS.md", "CLAUDE.md"])
+    @pytest.mark.parametrize("marker", ["", ".", "./"])
+    def test_empty_ruler_boundary_keeps_the_output_and_other_files_checked(
+        self, filename, marker, tmp_path
+    ):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        output = repo / filename
+        output.write_text(
+            output.read_text().replace("Source: .ruler/AGENTS.md", "Source: " + marker)
+        )
+        result = run_lint(repo, "--rule", "content-weak-language")
+        found = violations(result)
+        assert {v["file_path"] for v in found} == {filename, ".ruler/AGENTS.md"}
+        assert all(v["rule_id"] == "content-weak-language" for v in found)
+        assert all("generator" not in v for v in found)
+
+    @pytest.mark.parametrize(
         "header",
         [
             "2020-01-01: release metadata\n",
@@ -11205,6 +11246,35 @@ class TestGeneratorWorkflows:
             assert found[0]["file_path"] == str(broken.relative_to(repo))
             assert "Failed to read file" in found[0]["message"]
 
+    @pytest.mark.parametrize("nested", [True, False])
+    @pytest.mark.parametrize("missing", [True, False])
+    def test_claude_inventory_keeps_each_symlink_entry(self, nested, missing, tmp_path):
+        from skillsaw.blocks.claude_rules import ClaudeRuleFileNode
+        from skillsaw.context import RepositoryContext
+
+        project = copy_fixture("generators/rulesync", tmp_path / "packages")
+        repo = tmp_path if nested else project
+        target = project / "shared.md"
+        if not missing:
+            target.write_text("---\npaths: false\n---\n\n# Shared release rules\n")
+        paths = [project / ".claude/rules" / name for name in ("a.md", "b.txt", "c.md")]
+        for path in paths:
+            path.symlink_to("../../shared.md")
+        inventory = RepositoryContext(repo).lint_tree.find(ClaudeRuleFileNode)
+        assert set(paths) <= {n.path for n in inventory}
+        assert len([n for n in inventory if n.path in paths]) == 3
+        result = run_lint(repo, "--rule", "claude-rules-valid")
+        found = violations(result)
+        assert result["rc"] == 1 and len(found) == 3
+        assert {v["file_path"] for v in found} == {str(p.relative_to(repo)) for p in paths}
+        for finding in found:
+            expected = (
+                "Non-markdown"
+                if finding["file_path"].endswith(".txt")
+                else "Failed to read file" if missing else "must be a list"
+            )
+            assert expected in finding["message"]
+
     @pytest.mark.parametrize(
         "name,header", [("AGENTS.md", ""), ("policy.md", "---\nroot: false\n\n---\n")]
     )
@@ -11231,17 +11301,19 @@ class TestGeneratorWorkflows:
         assert all(v.get("line") is None and "generator" not in v for v in found)
 
     @pytest.mark.parametrize(
-        "generator,ownership",
+        "generator,ownership,source_name",
         [
-            ("ruler", "recognized"),
-            ("ruler", "edited"),
-            ("rulesync", "recognized"),
-            ("rulesync", "edited"),
-            ("rulesync", "unowned"),
+            ("ruler", "recognized", "api.md"),
+            ("ruler", "edited", "api.md"),
+            *[
+                ("rulesync", ownership, name)
+                for ownership in ("recognized", "edited", "unowned")
+                for name in ("api.md", "AGENTS.md", "CLAUDE.md")
+            ],
         ],
     )
     def test_lint_and_badge_grades_count_distinct_authored_prose(
-        self, generator, ownership, tmp_path
+        self, generator, ownership, source_name, tmp_path
     ):
         from skillsaw.config import LinterConfig
 
@@ -11261,6 +11333,17 @@ class TestGeneratorWorkflows:
                 ".cursor/rules/release.mdc",
             ]
         )
+        if generator == "rulesync" and source_name != "api.md":
+            source = repo / ".rulesync/rules/backend/api.md"
+            source.rename(source.with_name(source_name))
+            output = ".claude/rules/backend/api.md"
+            renamed = str(Path(output).with_name(source_name))
+            (repo / output).rename(repo / renamed)
+            outputs[outputs.index(output)] = renamed
+            output = ".cursor/rules/backend/api.mdc"
+            renamed = str(Path(output).with_name(Path(source_name).with_suffix(".mdc").name))
+            (repo / output).rename(repo / renamed)
+            outputs[outputs.index(output)] = renamed
         if ownership == "edited":
             for output in outputs:
                 path = repo / output

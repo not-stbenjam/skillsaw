@@ -104,7 +104,8 @@ unchanged.
 The existing `claude-rules-valid` check reads these consumer files from the lint
 tree, including nested projects. Invalid `paths` metadata and unloaded file
 extensions remain visible independently of source validation and copy ownership.
-Contained broken file symlinks retain a read-error diagnostic; excluded paths
+Each contained symlink entry retains its filename and read diagnostics, even
+when several entries share one target or that target is missing. Excluded paths
 and symlinks escaping the repository remain outside the inventory.
 
 For **Ruler**, recognition is automatic for conventional project `AGENTS.md`
@@ -148,8 +149,10 @@ findings to guessed source lines. Matching copies are diagnostic-only for
 autofix: edit the source or generator settings, generate again, then re-lint.
 
 Lint grades and badges count distinct authored prose tokens. Recognized copies
-and identical native/source views do not inflate that total; their consumer
-checks still run. Edited or unrecognized output continues to count.
+are excluded across all parser views, including native instruction views of
+outputs named `AGENTS.md` or `CLAUDE.md`. Identical native/source views do not
+inflate that total; their consumer checks still run. Edited or unrecognized
+output continues to count.
 
 ## Author → generate → lint
 
