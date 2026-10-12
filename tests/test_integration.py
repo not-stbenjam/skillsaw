@@ -11159,6 +11159,95 @@ class TestGoose:
 class TestGeneratorWorkflows:
     """Pinned generator output is checked as its consumer's native format."""
 
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
+    @pytest.mark.parametrize("fmt", ["json", "sarif"])
+    @pytest.mark.parametrize(
+        "fixture,manifest,primary",
+        [
+            ("codex/portable-overlay", ".codex-plugin/plugin.json", "codex-plugin"),
+            ("cursor-plugins/undeclared-skills", ".cursor-plugin/plugin.json", "cursor-plugin"),
+            ("agent-plugins/clean", "plugin.json", "agent-plugin"),
+        ],
+    )
+    def test_generator_tools_preserve_package_report_type(
+        self, generator, fmt, fixture, manifest, primary, tmp_path
+    ):
+        repo = copy_fixture(fixture, tmp_path)
+        original = run_lint(repo, "--rule", "content-weak-language")
+        assert original["out"]["stats"]["repo_type"] == primary
+        shutil.copytree(
+            FIXTURES / "generators" / generator / f".{generator}", repo / f".{generator}"
+        )
+        result = run_lint(repo, "--rule", "content-weak-language", fmt=fmt)
+        report = json.loads(result["stdout"])
+        stats = report["stats"] if fmt == "json" else report["runs"][0]["properties"]["stats"]
+        assert stats["repo_type"] == primary
+        assert {primary, generator} <= set(stats["repo_types"])
+        assert (repo / manifest).is_file()
+
+    @pytest.mark.parametrize("key", ["1", "true", "false", "1e-7", ".nan", ".inf"])
+    def test_rulesync_normalized_keys_keep_security_lines(self, key, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/policy.md"
+        source.write_text(
+            f"---\ndescription: Inventory policy\n{key}: release\u200bpolicy\n---\n\n# Release\n"
+        )
+        result = run_lint(
+            repo, "--rule", "security-invisible-unicode", "--rule", "rulesync-source-valid"
+        )
+        assert [(v["rule_id"], v["file_path"], v["line"]) for v in violations(result)] == [
+            ("security-invisible-unicode", ".rulesync/rules/policy.md", 3)
+        ]
+
+    @pytest.mark.parametrize(
+        "key,canonical",
+        [("1e-7", "1e-7"), ("9007199254740993", "9007199254740992"), (".inf", "Infinity")],
+    )
+    def test_rulesync_duplicate_numeric_keys_fail_in_cli(self, key, canonical, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/policy.md"
+        source.write_text(f'---\n{key}: first\n"{canonical}": second\n---\n\n# Release\n')
+        result = run_lint(repo, "--rule", "rulesync-source-valid")
+        assert result["rc"] == 1
+        assert [(v["file_path"], v["line"]) for v in violations(result)] == [
+            (".rulesync/rules/policy.md", 3)
+        ]
+
+    @pytest.mark.parametrize(
+        "marker",
+        [".ruler/AGENTS.md", ".ruler/backend/api.md", ".ruler/missing.md", "../../outside.md"],
+    )
+    def test_ruler_literal_source_comments_preserve_output_ownership(self, marker, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        source, *outputs = [".ruler/AGENTS.md", "AGENTS.md", "CLAUDE.md"]
+        for name in (source, *outputs):
+            path = repo / name
+            path.write_text(
+                path.read_text().replace(
+                    "# Inventory service\n",
+                    f"# Inventory service\n\n<!-- Source: {marker} -->\n\nRead references/checklist.txt.\n",
+                )
+            )
+            (path.parent / "references").mkdir(exist_ok=True)
+            (path.parent / "references/checklist.txt").write_text(
+                "Verify the stock reservation release.\n"
+            )
+        config = repo / ".skillsaw.yaml"
+        config.write_text(
+            config.read_text()
+            + '  content-unlinked-internal-reference:\n    patterns: ["**/*.txt"]\n'
+        )
+        editorial = run_lint(repo, "--rule", "content-weak-language")
+        assert [v["file_path"] for v in violations(editorial)] == [source]
+        references = run_lint(repo, "--rule", "content-unlinked-internal-reference")
+        emitted = [v for v in violations(references) if v["file_path"] in outputs]
+        assert len(emitted) == 2
+        assert all(v["generator"] == "ruler" and not v["fixable"] for v in emitted)
+        before = {name: (repo / name).read_bytes() for name in outputs}
+        _run_fix(repo, "--suggest", "--rule", "content-unlinked-internal-reference")
+        assert "[references/checklist.txt](references/checklist.txt)" in (repo / source).read_text()
+        assert all((repo / name).read_bytes() == before[name] for name in outputs)
+
     @pytest.mark.parametrize(
         "generator,config_path,comment,pattern,config_type,rule",
         [

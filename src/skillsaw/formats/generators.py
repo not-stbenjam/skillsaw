@@ -7,7 +7,9 @@ src/features/rules/rulesync-rule.ts. See docs/generators.md for evidence.
 
 from __future__ import annotations
 
+import math
 import re
+from typing import Any, NamedTuple
 
 import yaml
 
@@ -129,16 +131,41 @@ def schema_problems(data, schema):
 
 
 def _rulesync_scalar_key(value):
-    """Preserve boolean and numeric keys using the loader's string spellings."""
+    """Use JavaScript property-key spelling, including binary64 number rounding."""
     if value is True or value is False:
         return str(value).lower()
     if value is None:
         return "null"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return str(int(value)) if value.is_integer() else str(value)
-    return value
+    if not isinstance(value, (int, float)):
+        return value
+    try:
+        number = float(value)
+    except OverflowError:
+        number = math.inf if value > 0 else -math.inf
+    if math.isnan(number):
+        return "NaN"
+    if math.isinf(number):
+        return "Infinity" if number > 0 else "-Infinity"
+    if number == 0:
+        return "0"
+    sign = "-" if number < 0 else ""
+    mantissa, _, exponent = repr(abs(number)).partition("e")
+    mantissa = mantissa.removesuffix(".0")
+    if not exponent:
+        return sign + mantissa
+    power = int(exponent)
+    # Number.toString uses fixed notation in [1e-6, 1e21), retaining the
+    # shortest decimal digits rather than the exact integer of the float.
+    if -6 <= power < 21:
+        whole, _, fraction = mantissa.partition(".")
+        digits = whole + fraction
+        point = len(whole) + power
+        if point <= 0:
+            return sign + "0." + "0" * -point + digits
+        if point >= len(digits):
+            return sign + digits + "0" * (point - len(digits))
+        return sign + digits[:point] + "." + digits[point:]
+    return f"{sign}{mantissa}e{power:+d}"
 
 
 class _RulesyncLoader(_SAFE_LOADER):
@@ -212,6 +239,15 @@ _RulesyncLoader.add_implicit_resolver(
 )
 
 
+class RulesyncFrontmatter(NamedTuple):
+    data: dict[str, Any] | None
+    error: str | None
+    error_line: int | None
+    body: str
+    line_offset: int
+    key_lines: dict[str, int]
+
+
 def parse_rulesync_frontmatter(content):
     """Parse conventional YAML frontmatter, retaining honest body line offsets.
 
@@ -221,19 +257,34 @@ def parse_rulesync_frontmatter(content):
     """
     match = FRONTMATTER_RE_EMPTY_OK.match(content.lstrip("\ufeff"))
     if match is None:
-        return None, None, None, content, 0
+        return RulesyncFrontmatter(None, None, None, content, 0, {})
     normalized = content.lstrip("\ufeff")
     body = normalized[match.end() :]
     offset = normalized[: match.end()].count("\n")
+    loader = _RulesyncLoader(match.group(1))
+    key_lines = {}
     try:
-        data = yaml.load(match.group(1), Loader=_RulesyncLoader)
+        node = loader.get_single_node()
+        # Save explicit key positions before SafeLoader flattens merge keys.
+        # The same constructors and normalization serve data and line lookup.
+        if isinstance(node, yaml.MappingNode):
+            key_lines = {
+                _rulesync_scalar_key(loader.construct_object(key)): key.start_mark.line + 2
+                for key, _value in node.value
+                if isinstance(key, yaml.ScalarNode) and key.tag != "tag:yaml.org,2002:merge"
+            }
+        data = loader.construct_document(node) if node is not None else None
     except (yaml.YAMLError, ValueError, RecursionError) as error:
         mark = getattr(error, "problem_mark", None)
-        return None, "Invalid YAML frontmatter", mark.line + 2 if mark else None, body, offset
+        return RulesyncFrontmatter(
+            None, "Invalid YAML frontmatter", mark.line + 2 if mark else None, body, offset, {}
+        )
+    finally:
+        loader.dispose()
     if data is None:
         data = {}
     if not isinstance(data, dict):
-        return None, "Frontmatter must be a mapping", 2, body, offset
+        return RulesyncFrontmatter(None, "Frontmatter must be a mapping", 2, body, offset, {})
     # Only remove nulls in the fields we interpret, without traversing arbitrary
     # YAML alias graphs. Those graphs remain the generator's validation job.
     data = {key: value for key, value in data.items() if value is not None}
@@ -249,4 +300,4 @@ def parse_rulesync_frontmatter(content):
             for key in keys:
                 if isinstance(mapping.get(key), list):
                     mapping[key] = [item for item in mapping[key] if item is not None]
-    return data, None, None, body, offset
+    return RulesyncFrontmatter(data, None, None, body, offset, key_lines)

@@ -79,8 +79,6 @@ class RepositoryContext(
         RepositoryType.MARKETPLACE,
         RepositoryType.SINGLE_PLUGIN,
         RepositoryType.APM,
-        RepositoryType.RULER,
-        RepositoryType.RULESYNC,
         RepositoryType.DOT_CLAUDE,
         # Below the Claude equivalents, so a repository that is both keeps
         # its Claude primary type — but above the generic fallbacks: an
@@ -103,6 +101,8 @@ class RepositoryContext(
         # Tool configuration sorts below everything that describes how the
         # repository packages its content, so a marketplace that also ships
         # a `.cursor/` keeps `marketplace` as its primary type.
+        RepositoryType.RULER,
+        RepositoryType.RULESYNC,
         RepositoryType.PI,
         RepositoryType.CODEX_PROJECT,
         RepositoryType.MUSE,

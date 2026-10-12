@@ -50,6 +50,7 @@ class RulesyncRuleBlock(FrontmatteredBlock):
     """The body and description are authored instructions, targets/globs are data."""
 
     category: str = "instruction"
+    _rulesync_key_lines: dict = field(default_factory=dict, init=False, repr=False)
 
     def _build_children(self):
         super()._build_children()
@@ -77,7 +78,17 @@ class RulesyncRuleBlock(FrontmatteredBlock):
         return self._fm_parsed[0]
 
     def _parse_frontmatter_content(self, content):
-        return parse_rulesync_frontmatter(content)
+        parsed = parse_rulesync_frontmatter(content)
+        self._rulesync_key_lines = parsed.key_lines
+        return parsed[:5]
+
+    def key_line(self, key):
+        self._ensure_parsed()
+        return self._rulesync_key_lines.get(key)
+
+    def line_map(self):
+        self._ensure_parsed()
+        return dict(self._rulesync_key_lines)
 
 
 @dataclass(eq=False)

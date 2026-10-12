@@ -45,7 +45,8 @@ def test_sources_have_native_roles(name, kind, block_cls, config_cls, count, tmp
         name, tmp_path, content_paths=["**/*.md", "**/*.toml", "**/*.jsonc"]
     )
     assert kind in context.repo_types
-    assert context.repo_type == kind
+    # The mixed Rulesync fixture also has Claude's native .claude layout.
+    assert context.repo_type == (RepositoryType.DOT_CLAUDE if name == "rulesync" else kind)
     sources = context.lint_tree.find(block_cls)
     assert len(sources) == count
     assert all(s.category == "instruction" for s in sources)
@@ -76,6 +77,7 @@ def test_sources_without_generated_artifacts(tmp_path):
     (repo / "CLAUDE.md").unlink()
     context = RepositoryContext(repo)
     assert context.repo_types == {RepositoryType.RULESYNC}
+    assert context.repo_type == RepositoryType.RULESYNC
     assert len(context.lint_tree.find(RulesyncRuleBlock)) == 3
 
 
@@ -170,6 +172,32 @@ def test_rulesync_frontmatter_contract(header, valid, tmp_path):
         assert all(v.file_path == path and v.line is not None for v in violations)
 
 
+@pytest.mark.parametrize(
+    "key,canonical",
+    [
+        ("1e-7", "1e-7"),
+        ("1e-6", "0.000001"),
+        ("1e21", "1e+21"),
+        ("1.0e20", "100000000000000000000"),
+        ("1000000000000000128", "1000000000000000100"),
+        ("9007199254740993", "9007199254740992"),
+        ("-0.0", "0"),
+        (".nan", "NaN"),
+        (".inf", "Infinity"),
+        ("-.inf", "-Infinity"),
+        ("1e400", "Infinity"),
+    ],
+)
+def test_rulesync_numeric_property_keys_match_released_parser(key, canonical):
+    # Pinned gray-matter/js-yaml uses JavaScript Number and property-key spelling.
+    parsed = parse_rulesync_frontmatter(f"---\n{key}: first\n---\n# Release\n")
+    assert parsed[0] == {canonical: "first"}
+    duplicate = parse_rulesync_frontmatter(
+        f"---\n{key}: first\n{json.dumps(canonical)}: second\n---\n# Release\n"
+    )
+    assert duplicate[1:3] == ("Invalid YAML frontmatter", 3)
+
+
 def test_rulesync_jsonc_config_and_severity(tmp_path):
     repo, _ = context_for("rulesync", tmp_path)
     config = repo / "rulesync.jsonc"
@@ -197,6 +225,14 @@ def test_ruler_copy_evidence_and_missing_or_changed_sources(tmp_path):
     assert set(copies(context)) == {"AGENTS.md", "CLAUDE.md"}
     (repo / ".ruler/backend/api.md").unlink()
     assert copies(RepositoryContext(repo)) == {}
+
+
+@pytest.mark.parametrize("suffix", ["\n", "\n\n", "\n<!-- Source: .ruler/AGENTS.md -->\n"])
+def test_ruler_copy_rejects_unmatched_trailing_content(suffix, tmp_path):
+    repo, _ = context_for("ruler", tmp_path)
+    output = repo / "AGENTS.md"
+    output.write_text(output.read_text() + suffix)
+    assert "AGENTS.md" not in copies(RepositoryContext(repo))
 
 
 @pytest.mark.parametrize(

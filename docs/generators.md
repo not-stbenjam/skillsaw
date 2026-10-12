@@ -26,6 +26,8 @@ role of `content-paths`. This describes authored rules, not which files an agent
 will load in a particular session. Ordinary exclusions apply to discovery.
 Symlink files must resolve inside the source tree; directory symlinks are not
 followed. Home configuration and remote sources are never loaded.
+Generator tool types do not replace a plugin or marketplace's primary repository
+type in reports; all detected types remain listed.
 
 If a source is also selected by a native consumer, both parser roles remain in
 the tree. Native whole-file and decoded-field checks still run, and relative
@@ -77,6 +79,7 @@ For **Ruler**, recognition is automatic for conventional project `AGENTS.md`
 and `CLAUDE.md` outputs. It requires Ruler's source comments, the `AGENTS.md`
 generation stamp where applicable, discovered local sources, and an exact
 match to the concatenation. A marker alone does not confer ownership.
+Literal source comments inside authored rules remain part of the copied body.
 
 **Rulesync** writes modular rules without an ownership stamp. To assert that
 Rulesync owns its configured modular outputs, add this to `.skillsaw.yaml`:
