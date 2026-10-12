@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { setTimeout: delay } = require('node:timers/promises');
 const { runCli, LINT_ARGS } = require('../src/runner');
 
 async function fake(t, body) {
@@ -58,11 +59,96 @@ test(
       /exceeded 100 ms/,
     );
     await assert.rejects(runCli(await fake(t, 'process.kill(process.pid,"SIGTERM");')), /SIGTERM/);
+  },
+);
+
+async function ready(options, name = 'ready') {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      return Number(await fs.readFile(path.join(options.cwd, name), 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    await delay(10);
+  }
+  assert.fail('fake CLI did not become ready');
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+    return false;
+  }
+}
+
+test(
+  'cancellation forcibly terminates a ready CLI ignoring SIGTERM',
+  {
+    skip: process.platform === 'win32',
+  },
+  async (t) => {
     const controller = new AbortController();
-    const options = await fake(t, 'process.on("SIGTERM",()=>{}); setInterval(()=>{},1000);');
-    const pending = runCli({ ...options, signal: controller.signal });
-    setTimeout(() => controller.abort(), 150);
-    await assert.rejects(pending, /cancelled/);
+    const options = await fake(
+      t,
+      `
+    process.on('SIGTERM', () => {});
+    require('node:fs').writeFileSync('ready', String(process.pid));
+    setInterval(() => {}, 1000);
+  `,
+    );
+    const pending = runCli({ ...options, timeoutMs: 10000, signal: controller.signal });
+    const rejected = assert.rejects(pending, /cancelled/);
+    const pid = await ready(options);
+    t.after(() => {
+      if (alive(pid)) process.kill(pid, 'SIGKILL');
+    });
+    assert(alive(pid));
+    const start = Date.now();
+    controller.abort();
+    await rejected;
+    assert(Date.now() - start < 2000, 'forced cancellation is bounded');
+    assert.equal(alive(pid), false);
     await assert.rejects(runCli({ ...options, signal: controller.signal }), /cancelled/);
+  },
+);
+
+test(
+  'cancellation settles even when an exited CLI leaves inherited pipes open',
+  {
+    skip: process.platform === 'win32',
+  },
+  async (t) => {
+    const controller = new AbortController();
+    const options = await fake(
+      t,
+      `
+    require('node:fs').writeFileSync('parent', String(process.pid));
+    const child = require('node:child_process').spawn(process.execPath, ['-e',
+      "require('node:fs').writeFileSync('ready', String(process.pid)); setInterval(() => {}, 1000);"
+    ], { stdio: 'inherit' });
+    child.unref();
+  `,
+    );
+    const pending = runCli({ ...options, timeoutMs: 10000, signal: controller.signal });
+    const rejected = assert.rejects(pending, /cancelled/);
+    const pid = await ready(options);
+    t.after(() => {
+      if (alive(pid)) process.kill(pid, 'SIGKILL');
+    });
+    const parent = await ready(options, 'parent');
+    const deadline = Date.now() + 5000;
+    while (alive(parent)) {
+      assert(Date.now() < deadline, 'fake CLI should exit while descendant holds pipes');
+      await delay(10);
+    }
+    const start = Date.now();
+    controller.abort();
+    await rejected;
+    assert(Date.now() - start < 2000, 'inherited pipes cannot retain the scheduler slot');
+    assert(alive(pid), 'detached descendants remain the trusted custom rule responsibility');
   },
 );

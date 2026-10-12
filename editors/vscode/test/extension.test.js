@@ -2,9 +2,19 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
 const path = require('node:path');
+const fs = require('node:fs/promises');
+const os = require('node:os');
 const { setTimeout: delay } = require('node:timers/promises');
 
-function harness(t, trusted = true) {
+async function until(predicate) {
+  const deadline = Date.now() + 3000;
+  while (!predicate()) {
+    assert(Date.now() < deadline, 'expected extension event');
+    await delay(10);
+  }
+}
+
+function harness(t, trusted = true, roots = ['one', 'two']) {
   const events = {},
     commands = {},
     runs = [],
@@ -26,7 +36,7 @@ function harness(t, trusted = true) {
   };
   const workspace = {
     isTrusted: trusted,
-    workspaceFolders: [folder('one'), folder('two')],
+    workspaceFolders: roots.map(folder),
     textDocuments: [],
     getConfiguration: (_, resource) => ({
       get: (key, fallback) =>
@@ -34,6 +44,7 @@ function harness(t, trusted = true) {
     }),
   };
   for (const name of [
+    'onDidOpenTextDocument',
     'onDidSaveTextDocument',
     'onDidChangeTextDocument',
     'onDidCloseTextDocument',
@@ -173,9 +184,9 @@ test('collections replace old results independently and errors clear stale findi
   const h = harness(t);
   await delay(150);
   h.complete(0, [finding]);
-  await delay(0);
+  await until(() => h.runs.length === 2);
   h.complete(1, [finding]);
-  await delay(0);
+  await until(() => h.collections[1].entries.length === 1);
   assert.equal(h.collections[0].entries[0][1][0].code, 'agentskill-name');
   h.events.onDidSaveTextDocument({ uri: h.uri('one/arbitrary.extension') });
   assert.equal(h.collections[0].entries.length, 0);
@@ -203,7 +214,7 @@ test('edits, settings and removal invalidate in-flight results; folder add start
   });
   assert.equal(h.runs[0].signal.aborted, true);
   h.complete(0, [finding]);
-  await delay(0);
+  await until(() => h.runs.length === 2);
   assert.equal(h.collections[0].entries.length, 0);
   h.settings.set(h.uri('two').toString(), { executable: 'changed-skillsaw', runOnSave: false });
   h.events.onDidChangeConfiguration({
@@ -231,7 +242,7 @@ test('manual runs suppress diagnostics for dirty buffers and use per-folder exec
   await delay(10);
   assert.equal(h.runs[0].executable, '/custom/skillsaw');
   h.complete(0, [finding]);
-  await delay(0);
+  await until(() => h.runs.length === 2);
   assert.equal(h.collections[0].entries.length, 0);
   h.workspace.workspaceFolders = [h.workspace.workspaceFolders[0]];
   h.events.onDidChangeWorkspaceFolders();
@@ -240,3 +251,39 @@ test('manual runs suppress diagnostics for dirty buffers and use per-folder exec
   await delay(0);
   assert.equal(h.collections[1].entries.length, 0);
 });
+
+test(
+  'symlink aliases receive findings and a dirty alias suppresses all open copies',
+  { skip: process.platform === 'win32' },
+  async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw documents '));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    await fs.mkdir(path.join(root, 'skills/release-notes'), { recursive: true });
+    await fs.writeFile(path.join(root, finding.file_path), 'name: Release_Notes\n');
+    await fs.mkdir(path.join(root, '.agents'));
+    await fs.symlink('../skills', path.join(root, '.agents/skills'));
+    const h = harness(t, true, [root]);
+    const canonical = { uri: h.uri(path.join(root, finding.file_path)), isDirty: false };
+    const alias = {
+      uri: h.uri(path.join(root, '.agents/skills/release-notes/SKILL.md')),
+      isDirty: false,
+    };
+    h.workspace.textDocuments = [canonical, alias];
+    h.events.onDidOpenTextDocument(alias);
+    await until(() => h.runs.length === 1);
+    h.complete(0, [finding]);
+    await until(() => h.collections[0].entries.length === 2);
+    assert.deepEqual(
+      h.collections[0].entries.map(([uri]) => uri.toString()).sort(),
+      [canonical.uri.toString(), alias.uri.toString()].sort(),
+    );
+    alias.isDirty = true;
+    h.events.onDidChangeTextDocument({ document: alias, contentChanges: [{}] });
+    assert.equal(h.collections[0].entries.length, 0);
+    h.commands['skillsaw.lint']();
+    await until(() => h.runs.length === 2);
+    h.complete(1, [finding]);
+    await until(() => h.logs.filter((line) => line.includes('findings (skillsaw')).length === 2);
+    assert.equal(h.collections[0].entries.length, 0);
+  },
+);

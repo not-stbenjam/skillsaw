@@ -7,7 +7,8 @@ server. This is a locally packaged pilot, not a Marketplace release.
 ## Install
 
 Use VS Code 1.96 or newer with a folder on the extension host's filesystem.
-To build the VSIX, install Node.js 22+, Python 3.9+ and Make, then run:
+To build the VSIX on Linux or macOS, install Node.js 22+, Python 3.10+ and
+Make, then run:
 
 ```sh
 git clone https://github.com/stbenjam/skillsaw.git
@@ -71,7 +72,7 @@ arguments, `~`, environment variables and `${workspaceFolder}` are not expanded.
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `skillsaw.executable` | `skillsaw` | CLI on PATH, or its filesystem path |
-| `skillsaw.runOnSave` | `true` | Lint on startup, saves and editor file operations; `false` leaves the explicit command available |
+| `skillsaw.runOnSave` | `true` | Lint on startup, document opens/closes, saves and editor file operations; `false` leaves the explicit command available |
 | `skillsaw.debounceMs` | `600` | Save delay, between 100 and 10,000 ms |
 | `skillsaw.timeoutMs` | `30000` | Per-run timeout, between 1,000 and 300,000 ms |
 
@@ -105,13 +106,16 @@ repository with the existing skillsaw GitHub Action.
 
 - Diagnostics describe saved files. Editing a buffer cancels the folder's
   pending work and clears its diagnostics; dirty documents are omitted from
-  subsequent reports until saved. Closing a document schedules a disk refresh.
+  subsequent reports until saved. Symlink aliases within the workspace map to
+  their open documents; a dirty alias suppresses findings for that file.
+  Opening or closing a document schedules a disk refresh.
 - The CLI reports a line, not a column range. Findings without a line appear
   at the start of the file. Workspace-wide findings and redacted outside-repo
   paths appear on the workspace folder, labelled as having no available
   location. No outside-repo filename is guessed from the CLI's redaction.
-- Changes made by another program, including terminal fixes and generators,
-  need the explicit command unless VS Code observes them as document changes.
+- After terminal fixes or other external edits, run **skillsaw: Lint Workspaces**
+  to refresh diagnostics. Document-change events clear old diagnostics without
+  starting a run.
   Saves outside a workspace folder (such as an inherited parent config) also
   need that command. This pilot does not maintain a filesystem watcher.
 - Virtual workspaces, browser-only VS Code and untitled files are unsupported.

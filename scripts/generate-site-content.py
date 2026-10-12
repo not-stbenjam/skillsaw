@@ -186,7 +186,12 @@ RULE_GROUPS = [
     (
         "Cursor",
         "cursor",
-        ["cursor-rules-valid", "cursor-hooks-valid", "cursor-plugin-json-valid", "cursor-marketplace-json-valid"],
+        [
+            "cursor-rules-valid",
+            "cursor-hooks-valid",
+            "cursor-plugin-json-valid",
+            "cursor-marketplace-json-valid",
+        ],
         "Validates native `.cursor-plugin` manifests, marketplaces and component "
         "paths. It also validates Cursor configuration under every `.cursor/` "
         "directory in the repository, the root one and any in a monorepo "
@@ -360,7 +365,12 @@ RULE_GROUPS = [
     (
         "OpenClaw",
         "openclaw",
-        ["openclaw-metadata", "openclaw-manifest-valid", "openclaw-package-valid", "openclaw-resources"],
+        [
+            "openclaw-metadata",
+            "openclaw-manifest-valid",
+            "openclaw-package-valid",
+            "openclaw-resources",
+        ],
         "Native plugin manifests, package entrypoints, resource paths, and skill metadata. "
         "The metadata rule applies only when `metadata.openclaw` is present in SKILL.md.",
     ),
@@ -431,7 +441,6 @@ RULE_GROUPS = [
         "and paths that remain portable across machines. Lockfiles are discovered "
         "recursively for monorepos and the rule auto-enables when one is present.",
     ),
-
 ]
 
 CONTENT_RULE_IDS = [

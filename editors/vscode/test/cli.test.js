@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { runCli } = require('../src/runner');
 const { parseReport } = require('../src/report');
 
@@ -14,6 +16,33 @@ const executable =
     process.platform === 'win32' ? 'Scripts/skillsaw.exe' : 'bin/skillsaw',
   );
 const fixture = path.resolve(__dirname, '../../../examples/editor-onboarding');
+
+test('installed CLI: baselines suppress known findings while new violations still fail', async (t) => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw baseline '));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true }));
+  await fs.cp(fixture, cwd, { recursive: true });
+  const skill = path.join(cwd, 'skills/release-notes/SKILL.md');
+  const source = await fs.readFile(skill, 'utf8');
+  await fs.writeFile(skill, source.replace('name: release-notes', 'name: Release_Notes'));
+  await promisify(execFile)(executable, ['baseline', '.'], { cwd, timeout: 10000 });
+  const lint = () =>
+    runCli({ executable, cwd, timeoutMs: 10000, signal: new AbortController().signal });
+  let result = await lint();
+  assert.equal(result.code, 0);
+  let report = parseReport(result.stdout);
+  assert.deepEqual(report.violations, []);
+  assert(report.summary.baseline_suppressed > 0);
+  await fs.appendFile(
+    path.join(cwd, 'handbook/publishing.md'),
+    '\nRead the [missing checklist](absent.md).\n',
+  );
+  result = await lint();
+  assert.equal(result.code, 1);
+  report = parseReport(result.stdout);
+  assert(report.violations.some((item) => item.rule_id === 'content-broken-internal-reference'));
+  assert(report.violations.every((item) => item.rule_id !== 'agentskill-name'));
+  assert(report.summary.baseline_suppressed > 0);
+});
 
 test('installed CLI: root config, severities, exclusions, extra content, fail level and config failure', async (t) => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw CLI ; '));

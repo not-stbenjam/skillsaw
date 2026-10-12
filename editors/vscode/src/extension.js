@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const { runCli } = require('./runner');
-const { parseReport, location, within } = require('./report');
+const { parseReport, within } = require('./report');
+const { matchDocuments } = require('./documents');
 const { Scheduler } = require('./scheduler');
 
 function activate(context) {
@@ -20,28 +21,32 @@ function activate(context) {
         throw new Error('Trust the workspace before running skillsaw.');
       const result = await runCli(options);
       if (result.stderr) output.appendLine(`[${options.cwd}] ${result.stderr}`);
+      let report;
       try {
-        return { ...result, report: parseReport(result.stdout) };
+        report = parseReport(result.stdout);
       } catch (error) {
         output.appendLine(
           `[${options.cwd}] stdout (first 4000 characters): ${result.stdout.slice(0, 4000)}`,
         );
         throw error;
       }
+      // Resolve aliases before the scheduler's generation check, so edits or
+      // folder removal during filesystem lookups still discard this result.
+      const targets = await matchDocuments(
+        options.cwd,
+        report.violations,
+        vscode.workspace.textDocuments,
+        options.signal,
+      );
+      return { ...result, report, targets };
     },
-    (key, { code, report }) => {
+    (key, { code, report, targets }) => {
       const state = folders.get(key);
       if (!state) return;
-      const dirty = new Set(
-        vscode.workspace.textDocuments
-          .filter((doc) => doc.isDirty)
-          .map((doc) => doc.uri.toString()),
-      );
       const grouped = new Map();
-      for (const finding of report.violations) {
-        const target = location(state.folder.uri.fsPath, finding);
-        const uri = vscode.Uri.file(target.file);
-        if (dirty.has(uri.toString())) continue;
+      for (const target of targets) {
+        if (target.documents.some((doc) => doc.isDirty)) continue;
+        const finding = target.finding;
         const diagnostic = new vscode.Diagnostic(
           new vscode.Range(target.line, 0, target.line, 0),
           target.message,
@@ -49,9 +54,14 @@ function activate(context) {
         );
         diagnostic.code = finding.rule_id;
         diagnostic.source = 'skillsaw';
-        const item = grouped.get(uri.toString()) ?? [uri, []];
-        item[1].push(diagnostic);
-        grouped.set(uri.toString(), item);
+        const uris = target.documents.length
+          ? target.documents.map((doc) => doc.uri)
+          : [vscode.Uri.file(target.file)];
+        for (const uri of uris) {
+          const item = grouped.get(uri.toString()) ?? [uri, []];
+          item[1].push(diagnostic);
+          grouped.set(uri.toString(), item);
+        }
       }
       state.diagnostics.clear();
       state.diagnostics.set([...grouped.values()]);
@@ -149,6 +159,11 @@ function activate(context) {
       }
       for (const state of folders.values()) request(state, true);
     }),
+    vscode.workspace.onDidOpenTextDocument((doc) =>
+      affected([doc.uri], (state) => {
+        if (config(state.folder).get('runOnSave', true)) request(state);
+      }),
+    ),
     vscode.workspace.onDidSaveTextDocument((doc) => affected([doc.uri], request)),
     vscode.workspace.onDidChangeTextDocument((event) => {
       if (event.contentChanges.length) affected([event.document.uri], invalidate);
