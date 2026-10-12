@@ -11158,6 +11158,57 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("fallback", [False, True])
+    def test_codex_prose_does_not_create_claude_import_pair(self, tmp_path, fallback):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        if fallback:
+            (repo / "other-host/AGENTS.override.md").rename(repo / "other-host/TEAM.md")
+            (repo / ".skillsaw.yaml").write_text(
+                "codex-instructions:\n  cwd: other-host\n"
+                "  project_doc_fallback_filenames: [TEAM.md]\n"
+            )
+        result = run_lint(repo, "--rule", "claude-md-agents-import", "--fail-on", "info")
+        assert result["rc"] == 0
+        assert violations(result) == []
+
+    @pytest.mark.parametrize("cause", ["bad-config", "excluded-override", "excluded-directory"])
+    def test_incomplete_evidence_fails_inspection_and_lint(self, tmp_path, cause):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        if cause == "excluded-override":
+            (repo / "AGENTS.override.md").write_text("Override instructions")
+            with (repo / ".skillsaw.yaml").open("a") as config:
+                config.write("\nexclude: [AGENTS.override.md]\n")
+        else:
+            (repo / ".codex").mkdir()
+            (repo / ".codex/config.toml").write_text(
+                "project_doc_max_bytes = ["
+                if cause == "bad-config"
+                else "project_doc_max_bytes = 1"
+            )
+            if cause == "excluded-directory":
+                with (repo / ".skillsaw.yaml").open("a") as config:
+                    config.write("\nexclude: [.codex]\n")
+        inspection = run_cli(["tree", str(repo), "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 1, inspection.stderr
+        report = json.loads(inspection.stdout)
+        assert not report["complete"]
+        assert report["charged_bytes"] is None
+        assert report["selected_file_bytes"] is None
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 1
+        assert len(violations(result)) == 1
+        assert "analysis is incomplete" in violations(result)[0]["message"]
+
+    @pytest.mark.parametrize("keys", ["1: true", "1: true, typo: true"])
+    def test_invalid_option_keys_use_normal_config_diagnostic(self, tmp_path, keys):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        (repo / ".skillsaw.yaml").write_text("codex-instructions: {" + keys + "}\n")
+        inspection = run_cli(["tree", str(repo), "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 1
+        output = inspection.stdout + inspection.stderr
+        assert "Unknown codex-instructions option(s)" in output
+        assert "Traceback" not in output
+
     def test_combined_budget_and_inspection(self, tmp_path):
         repo = copy_fixture("codex-instructions", tmp_path)
         result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")

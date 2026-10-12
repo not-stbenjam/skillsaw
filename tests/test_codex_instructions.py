@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from skillsaw.blocks import AgentsMdBlock, ContentBlock
+from skillsaw.blocks import AgentsMdBlock, CodexConfigBlock, CodexInstructionBlock, ContentBlock
 from skillsaw.codex_instructions import CodexInstructionsNode
 from skillsaw.config import LinterConfig
 from skillsaw.context import RepositoryContext, RepositoryType
@@ -182,6 +182,94 @@ def test_exclusion_does_not_fall_through_to_standard(tmp_path):
     assert [e["path"] for e in report["selected"]] == ["AGENTS.override.md"]
 
 
+@pytest.mark.parametrize("symlink", [False, True])
+def test_excluded_config_directory_is_never_read(tmp_path, monkeypatch, symlink):
+    root = tmp_path / "repo"
+    (root / ".codex").mkdir(parents=True)
+    excluded = root / ("private" if symlink else ".codex")
+    excluded.mkdir(exist_ok=True)
+    (excluded / "config.toml").write_text("project_doc_max_bytes = 1")
+    if symlink:
+        (root / ".codex/config.toml").symlink_to("../private/config.toml")
+    (root / "AGENTS.md").write_text("Repository instructions")
+    original = Path.open
+
+    def scoped_open(path, *args, **kwargs):
+        assert not path.resolve().is_relative_to(excluded), f"excluded read: {path}"
+        return original(path, *args, **kwargs)
+
+    context = RepositoryContext(
+        root, exclude_patterns=[excluded.name], codex_instructions=CodexInstructionOptions()
+    )
+    monkeypatch.setattr(Path, "open", scoped_open)
+    tree = context.lint_tree
+    assert not tree.find(CodexConfigBlock)
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert not report["complete"]
+    assert report["project_doc_max_bytes"] == 32768
+    assert report["charged_bytes"] is None
+    assert "excluded" in report["issues"][0]
+
+
+@pytest.mark.parametrize("lint_external", [False, True])
+def test_external_project_config_obeys_authoring_policy(tmp_path, monkeypatch, lint_external):
+    root = tmp_path / "repo"
+    (root / ".codex").mkdir(parents=True)
+    (root / "apm_modules/vendor").mkdir(parents=True)
+    (root / "apm.yml").write_text("name: instructions\nversion: 1.0.0\ntargets: []\n")
+    (root / "apm_modules/vendor/config.toml").write_text("project_doc_max_bytes = 1\n")
+    (root / ".codex/config.toml").symlink_to("../apm_modules/vendor/config.toml")
+    (root / "AGENTS.md").write_text("Local instructions")
+    original = Path.open
+
+    def scoped_open(path, *args, **kwargs):
+        if not lint_external:
+            assert path.resolve() != root / "apm_modules/vendor/config.toml", path
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    context = RepositoryContext(
+        root,
+        lint_external_content=lint_external,
+        codex_instructions=CodexInstructionOptions(),
+    )
+    tree = context.lint_tree
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"] is lint_external
+    assert bool(tree.find(CodexConfigBlock)) is lint_external
+    assert report["project_doc_max_bytes"] == (1 if lint_external else 32768)
+    if not lint_external:
+        assert report["charged_bytes"] is None
+        assert "configuration is outside" in report["issues"][0]
+
+
+def test_report_requires_retained_config_evidence(tmp_path):
+    context, report = project(
+        tmp_path,
+        {".codex/config.toml": "project_doc_max_bytes = 1", "AGENTS.md": "local"},
+    )
+    assert report["complete"]
+    tree = context.lint_tree
+    block = tree.find(CodexConfigBlock)[0]
+    block.parent.children.remove(block)
+    tree.invalidate_find_cache()
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert not report["complete"]
+    assert "configuration is not in the retained lint tree" in report["issues"][0]
+
+
+def test_project_config_with_inline_roles_remains_retained(tmp_path):
+    _, report = project(
+        tmp_path,
+        {
+            ".codex/config.toml": 'project_doc_max_bytes = 100\n[mcp_servers.docs]\nurl = "https://example.com/mcp"\n',
+            "AGENTS.md": "Instructions",
+        },
+    )
+    assert report["complete"]
+    assert report["config_sources"] == [".codex/config.toml"]
+
+
 def test_symlink_escape_never_reads_external_instructions_or_config(tmp_path, monkeypatch):
     context, _ = project(tmp_path, {"AGENTS.md": "standard"})
     external = tmp_path / "external"
@@ -257,6 +345,8 @@ def test_config_roundtrip_nulls_and_validation(tmp_path):
         {"project_doc_max_bytes": -1},
         {"project_doc_fallback_filenames": [1]},
         {"typo": 1},
+        {1: True},
+        {1: True, "typo": True},
     ]:
         with pytest.raises(ValueError):
             CodexInstructionOptions.from_mapping(invalid)
@@ -277,7 +367,8 @@ def test_default_lint_and_other_ecosystems_unaffected(tmp_path):
 def test_override_only_repository_gets_content_coverage(tmp_path):
     context, _ = project(tmp_path, {"a/AGENTS.override.md": "Override instructions"})
     assert RepositoryType.CODEX_PROJECT in context.repo_types
-    assert len(context.lint_tree.find(AgentsMdBlock)) == 1
+    assert len(context.lint_tree.find(CodexInstructionBlock)) == 1
+    assert not context.lint_tree.find(AgentsMdBlock)
 
 
 def test_severity_override(tmp_path):
@@ -296,7 +387,16 @@ def test_global_config_not_read(tmp_path, monkeypatch):
     secret_home = tmp_path / "home"
     secret_home.mkdir()
     (secret_home / "config.toml").write_text("project_doc_max_bytes = 1")
+    (secret_home / "AGENTS.md").write_text("Global standard instructions")
+    (secret_home / "AGENTS.override.md").write_text("Global override instructions")
     monkeypatch.setenv("CODEX_HOME", str(secret_home))
+    original = Path.open
+
+    def local_open(path, *args, **kwargs):
+        assert not path.resolve().is_relative_to(secret_home), f"global read: {path}"
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", local_open)
     _, report = project(tmp_path, {"AGENTS.md": "root"})
     assert report["project_doc_max_bytes"] == 32768
     assert "assumed" in report["limit_source"]

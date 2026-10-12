@@ -9,6 +9,8 @@ from typing import Callable, Optional, Tuple
 
 from skillsaw.paths import Resolver, contained_resolve, relative_to_str
 
+from .excludes import is_root_or_ancestor_excluded
+
 
 @dataclass(frozen=True)
 class InstructionCandidate:
@@ -32,11 +34,13 @@ def probe_file(
 ) -> Optional[InstructionCandidate]:
     """None means absent/non-file; uncertainty stops precedence, never falls through."""
     label = relative_to_str(path, root) or str(path)
-    if is_excluded(path):
+    if is_root_or_ancestor_excluded(path, root, is_excluded):
         return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
     resolved = contained_resolve(path, root, resolve)
     if resolved is None:
         return InstructionCandidate(path, f"{label}: unresolved or outside the requested root")
+    if resolved != path and is_root_or_ancestor_excluded(resolved, root, is_excluded):
+        return InstructionCandidate(path, f"{label}: excluded from the requested authoring scope")
     try:
         mode = path.stat().st_mode
     except FileNotFoundError:

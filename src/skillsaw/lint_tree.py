@@ -37,6 +37,7 @@ from .blocks import (
     CodexHooksBlock,
     CodexInlineHooksBlock,
     CodexInlineMcpBlock,
+    CodexInstructionBlock,
     CommandBlock,
     ContextFileBlock,
     CopilotAgentBlock,
@@ -96,6 +97,7 @@ from .formats.codex import (
 from .formats.codex_manifest import codex_manifest_view
 from .discovery import AGENT_MEMORY_DIR, AGENT_MEMORY_INDEX
 from .discovery.excludes import is_root_or_ancestor_excluded
+from .discovery.codex_instructions import probe_file
 from .discovery.opencode import contained_instruction_globs
 from .lint_target import OpenClawPluginNode, OpenClawPluginConfigNode, OpenClawPackageConfigNode
 from .blocks.json_config import OpenClawInlineMcpBlock
@@ -496,6 +498,16 @@ def _add_codex_config(state: _TreeBuildState, root: LintTarget, path: Path) -> N
     report the failure on — a config Codex cannot read stops it starting in
     the project at all.
     """
+    candidate = probe_file(
+        path,
+        state.context.root_path,
+        resolve=state.context.resolve_path,
+        is_excluded=state.context.is_path_excluded,
+    )
+    if candidate is None or candidate.issue:
+        return
+    if not state.context.lint_external_content and state.context.is_externally_sourced(path):
+        return
     config = state.add_parser_block(root, path, CodexConfigBlock)
     if config is None:
         return
@@ -622,6 +634,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
     _INSTRUCTION_FILE_BLOCK_TYPES = {
         "AGENTS.md": AgentsMdBlock,
+        "AGENTS.override.md": CodexInstructionBlock,
         "CLAUDE.md": ClaudeMdBlock,
         "GEMINI.md": GeminiMdBlock,
         "QWEN.md": QwenMdBlock,
@@ -629,7 +642,7 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
 
     def _instruction_block_type(path: Path) -> type:
         """Return the semantic block for one discovered instruction file."""
-        if path.name.lower() == "agents.md" or path.name == "AGENTS.override.md":
+        if path.name.lower() == "agents.md":
             return AgentsMdBlock
         return _INSTRUCTION_FILE_BLOCK_TYPES.get(path.name, InstructionBlock)
 

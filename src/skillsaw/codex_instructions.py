@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import List, Tuple
 
+from .blocks.codex import CodexConfigBlock
 from .discovery.codex_instructions import InstructionCandidate
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, instruction_bytes
 from .lint_target import LintTarget
@@ -14,7 +15,7 @@ from .paths import relative_to_str
 
 @dataclass(eq=False)
 class CodexInstructionsNode(LintTarget):
-    """A selection view referencing prose nodes, never another copy of their text."""
+    """A selection view referencing retained tree nodes without copying their content."""
 
     root_path: Path = Path(".")
     sources: Tuple[InstructionCandidate, ...] = ()
@@ -22,7 +23,7 @@ class CodexInstructionsNode(LintTarget):
     limit_source: str = "Codex default (assumed)"
     filenames: Tuple[str, ...] = ()
     fallback_source: str = "Codex default (assumed)"
-    config_sources: List[str] = field(default_factory=list)
+    config_sources: List[InstructionCandidate] = field(default_factory=list)
     issues: List[str] = field(default_factory=list)
     ignored_fallbacks: Tuple[str, ...] = ()
 
@@ -30,13 +31,20 @@ class CodexInstructionsNode(LintTarget):
         return f"Codex instruction selection [cwd: {relative_to_str(self.path, self.root_path)}]"
 
     def report(self, tree: LintTarget) -> dict:
-        """Read only retained prose nodes; preserve lexical source order and duplicates.
+        """Read selected files represented by retained tree nodes, in lexical source order.
 
         Codex charges an in-scope symlink once per directory occurrence even
         though the lint tree checks its content once per physical file.
         """
         blocks = {block.resolved_path: block for block in tree.walk() if block is not self}
+        config_paths = {block.resolved_path for block in tree.find(CodexConfigBlock)}
         issues = list(self.issues)
+        config_sources = []
+        for source in self.config_sources:
+            label = relative_to_str(source.path, self.root_path) or str(source.path)
+            config_sources.append(label)
+            if source.resolved_path not in config_paths:
+                issues.append(f"{label}: configuration is not in the retained lint tree")
         entries = []
         remaining = self.max_bytes
         charged = text_bytes = included = total = 0
@@ -87,7 +95,7 @@ class CodexInstructionsNode(LintTarget):
             "limit_source": self.limit_source,
             "candidate_filenames": list(self.filenames),
             "fallback_source": self.fallback_source,
-            "config_sources": self.config_sources,
+            "config_sources": config_sources,
             "ignored_fallback_filenames": list(self.ignored_fallbacks),
             "selected": entries,
             "complete": budget_known,

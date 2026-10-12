@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .blocks.codex import CodexConfigBlock
-from .blocks.content import AgentsMdBlock
+from .blocks.content import AgentsMdBlock, CodexInstructionBlock
 from .codex_instructions import CodexInstructionsNode
 from .discovery.codex_instructions import probe_file, project_directories, select_instructions
 from .formats.codex_instructions import DEFAULT_MAX_BYTES, candidate_filenames
@@ -47,6 +47,9 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
             continue
         path = candidate.path
         label = relative_to_str(path, context.root_path) or str(path)
+        if not context.lint_external_content and context.is_externally_sourced(path):
+            node.issues.append(f"{label}: configuration is outside the retained authoring scope")
+            continue
         config = configs.get(resolve(path))
         if config is None:
             config = state.add_parser_block(state.root, path, CodexConfigBlock)
@@ -55,7 +58,7 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
         if config is None:
             node.issues.append(f"{label}: configuration is not in the lint tree")
             continue
-        node.config_sources.append(label)
+        node.config_sources.append(candidate)
         if config.parse_error:
             node.issues.append(f"{label}: {config.parse_error}")
             continue
@@ -98,6 +101,7 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
         ):
             # Keep existing skill/command/config roles. Novel fallback files
             # are ambient prose with the same token budget as AGENTS.md.
-            state.add_block(state.root, source.path, AgentsMdBlock)
+            block_type = AgentsMdBlock if source.path.name == "AGENTS.md" else CodexInstructionBlock
+            state.add_block(state.root, source.path, block_type)
     state.root.children.append(node)
     state.root.invalidate_find_cache()

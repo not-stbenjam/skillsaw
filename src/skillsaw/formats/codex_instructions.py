@@ -30,7 +30,9 @@ class CodexInstructionOptions:
             raise ValueError("'codex-instructions' must be a mapping")
         unknown = value.keys() - cls.__dataclass_fields__.keys()
         if unknown:
-            raise ValueError(f"Unknown codex-instructions option(s): {', '.join(sorted(unknown))}")
+            raise ValueError(
+                f"Unknown codex-instructions option(s): {', '.join(sorted(map(str, unknown)))}"
+            )
         cwd = value.get("cwd")
         if cwd is None:
             cwd = "."

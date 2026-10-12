@@ -22,8 +22,8 @@ global Codex settings or trust decision.
 
 Two 18 KiB files at the root and in a child directory are individually below
 the generic `context-budget` warning threshold. With Codex's default 32 KiB
-project cap, the child contributes only 14 KiB. The new rule reports that
-combined loss without changing `context-budget`'s per-file token estimates.
+project cap, the child contributes only 14 KiB. This rule reports cumulative
+byte loss; `context-budget` estimates tokens per file.
 
 ## Usage
 
@@ -118,7 +118,7 @@ uncertainty instead of asserting an exact truncation result. There is no autofix
 
 Global, managed, profile, and CLI Codex settings and global/user instructions
 are **never read**. Pass effective values explicitly when they differ from the
-assumed defaults. This increment assumes one trusted local environment: the
+assumed defaults. The analysis assumes one trusted local environment: the
 released loader skips project instructions entirely for an untrusted project.
 Multi-environment budget sharing, automatic root-marker discovery, remote
 executor path conventions, and runtime trust/profile resolution are deferred.
@@ -126,7 +126,8 @@ Without a root marker Codex normally considers only cwd; supply cwd itself as
 skillsaw's root to model that case. A nested Git repository may similarly need
 a different explicit root.
 
-skillsaw honors its authoring scope. Excluded, unreadable, unresolved, or
+skillsaw honors its authoring scope, including excluded directories and
+`lint-external-content: false`. Excluded, unreadable, unresolved, or
 out-of-root instruction/config paths make the projection incomplete and never
 cause silent selection of a lower-precedence file. Existing structured parser
 roles remain configuration, even if explicitly named as a fallback; novel
