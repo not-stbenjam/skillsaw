@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 
 import yaml
-from jsonschema import Draft7Validator
 
 from skillsaw.utils import _SAFE_LOADER
 
@@ -116,6 +115,8 @@ RULESYNC_CONFIG = object_schema(
 
 def schema_problems(data, schema):
     """Concise field locations; never echo config values (which may be secrets)."""
+    from jsonschema import Draft7Validator
+
     return [
         (
             tuple(error.absolute_path),
