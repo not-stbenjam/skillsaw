@@ -93,11 +93,13 @@ function harness(t, trusted = true, roots = ['one', 'two']) {
       createDiagnosticCollection() {
         const collection = {
           entries: [],
+          updates: 0,
           clear() {
             this.entries = [];
           },
           set(entries) {
             this.entries = entries;
+            this.updates++;
           },
           dispose() {
             this.clear();
@@ -334,8 +336,11 @@ test('cached manual reports stay invalidated after file, settings and folder cha
     await until(() => h.collections[0].entries.length === 1);
     h.events.onDidOpenTextDocument(doc);
     change();
+    h.workspace.textDocuments = [];
+    h.events.onDidCloseTextDocument(doc);
     await delay(50);
     assert.equal(h.collections[0].entries.length, 0, 'cancel the mapping in progress');
+    h.workspace.textDocuments = [doc];
     h.events.onDidOpenTextDocument(doc);
     await delay(50);
     assert.equal(h.collections[0].entries.length, 0, 'discard the invalidated cached report');
@@ -392,7 +397,7 @@ test(
 );
 
 test(
-  'symlink aliases receive findings and a dirty alias suppresses all open copies',
+  'symlink aliases receive findings and closing the dirty copy restores the others',
   { skip: process.platform === 'win32' },
   async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'skillsaw documents '));
@@ -416,13 +421,34 @@ test(
       h.collections[0].entries.map(([uri]) => uri.toString()).sort(),
       [canonical.uri.toString(), alias.uri.toString()].sort(),
     );
+    h.settings.set(h.uri(root).toString(), { runOnSave: false });
+    h.events.onDidChangeConfiguration({ affectsConfiguration: () => true });
     alias.isDirty = true;
     h.events.onDidChangeTextDocument({ document: alias, contentChanges: [{}] });
     assert.equal(h.collections[0].entries.length, 0);
     h.commands['skillsaw.lint']();
     await until(() => h.runs.length === 2);
     h.complete(1, [finding]);
-    await until(() => h.logs.filter((line) => line.includes('findings (skillsaw')).length === 2);
+    await until(() => h.collections[0].updates === 2);
     assert.equal(h.collections[0].entries.length, 0);
+    h.workspace.textDocuments = [alias];
+    h.events.onDidCloseTextDocument(canonical);
+    await until(() => h.collections[0].updates === 3);
+    assert.equal(
+      h.collections[0].entries.length,
+      0,
+      'a remaining dirty alias still suppresses findings',
+    );
+    h.workspace.textDocuments = [canonical, alias];
+    h.events.onDidOpenTextDocument(canonical);
+    await until(() => h.collections[0].updates === 4);
+    assert.equal(h.collections[0].entries.length, 0);
+    // The host removes a closed document before firing onDidCloseTextDocument.
+    // The disk report remains valid when that removal has no content change.
+    h.workspace.textDocuments = [canonical];
+    h.events.onDidCloseTextDocument(alias);
+    await until(() => h.collections[0].entries.length === 1);
+    assert.equal(h.collections[0].entries[0][0].toString(), canonical.uri.toString());
+    assert.equal(h.runs.length, 2, 'closing the dirty alias only remaps the cached report');
   },
 );

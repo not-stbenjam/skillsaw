@@ -199,6 +199,7 @@ function activate(context) {
     vscode.workspace.onDidCloseTextDocument((doc) =>
       affected([doc.uri], (state) => {
         if (config(state.folder).get('runOnSave', true)) request(state);
+        else void remap(state);
       }),
     ),
     vscode.workspace.onDidCreateFiles((event) => affected(event.files, request)),

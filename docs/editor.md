@@ -83,9 +83,11 @@ one pending request. Newer saves replace queued work, cancel an older run for
 that folder and prevent its results from being published. Output is capped at
 8 MiB across stdout and stderr. Use command-only linting or a larger timeout
 for a large repository. Command-only results remain visible when you open or
-close clean tabs. Opening a symlink alias remaps the last report to its document
-without running the CLI again. Edits, file operations and configuration changes
-invalidate that report; use the explicit command to produce fresh results.
+close clean tabs. Opening or closing a document remaps the last report to the
+remaining open aliases without running the CLI again. Removing a dirty alias
+can lift its suppression of findings when that disk report is still valid.
+Edits, file operations and configuration changes invalidate the report; use
+the explicit command to produce fresh results.
 
 ## Fix workflow
 
