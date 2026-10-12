@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .blocks.codex import CodexConfigBlock
-from .blocks.content import AgentsMdBlock, CodexInstructionBlock
+from .blocks.content import AgentsMdBlock, CodexInstructionBlock, ReadmeBlock
 from .codex_instructions import CodexInstructionsNode
 from .discovery.codex_instructions import project_configs, project_directories, select_instructions
 from .formats.codex import CODEX_HOOKS_FILENAME
@@ -100,13 +100,34 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     node.sources = select_instructions(
         directories, node.filenames, resolve=resolve, is_excluded=context.is_path_excluded
     )
+    claimed = set()
+    readmes = {}
+    for parent in state.root.walk():
+        for block in parent.children:
+            resolved = resolve(block.path)
+            if isinstance(block, ReadmeBlock):
+                readmes[resolved] = (parent, block)
+            else:
+                claimed.add(resolved)
     for source in node.sources:
-        if source.issue is None and not any(
-            path == source.resolved_path for path, _ in state.seen_roles
-        ):
-            # Keep existing skill/command/config roles. Novel fallback files
-            # are ambient prose with the same token budget as AGENTS.md.
-            block_type = AgentsMdBlock if source.path.name == "AGENTS.md" else CodexInstructionBlock
+        if source.issue is not None or source.resolved_path in claimed:
+            continue
+        # Keep existing skill/command/config roles. A selected README also
+        # needs prose checks: its display role does not expose any content.
+        block_type = AgentsMdBlock if source.path.name == "AGENTS.md" else CodexInstructionBlock
+        if source.resolved_path in readmes:
+            parent, readme = readmes[source.resolved_path]
+            block = state.add_parser_block(
+                parent,
+                source.path,
+                block_type,
+                owner=readme.plugin_owner,
+                content_suppressed=readme.content_suppressed,
+            )
+            if block is not None:
+                block.externally_sourced = readme.externally_sourced
+        else:
             state.add_block(state.root, source.path, block_type)
+        claimed.add(source.resolved_path)
     state.root.children.append(node)
     state.root.invalidate_find_cache()

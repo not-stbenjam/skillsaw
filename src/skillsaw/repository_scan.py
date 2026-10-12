@@ -228,6 +228,7 @@ class RepositoryScanMixin:
             self._repository_scan().tool_dirs,
             self._repository_scan().legacy_editor_files,
             self._repository_scan().skills_lock_files,
+            resolve=self.resolve_path,
         )
         if self.codex_instructions is not None and "codex-project" not in values:
             try:

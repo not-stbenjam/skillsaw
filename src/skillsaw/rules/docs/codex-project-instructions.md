@@ -161,9 +161,10 @@ make the result incomplete. Excluding the working directory still produces a
 finding at the supplied root. Global and user instruction files are never read.
 
 Standard content checks recognize `AGENTS.override.md`. They discover custom
-fallbacks when this analysis is requested, and check known configuration files
-as configuration even when named as fallbacks. Other hosts' files count toward
-the Codex budget only if explicitly configured as fallbacks.
+fallbacks when this analysis is requested. A plugin's `README.md` receives
+instruction content checks when selected as a fallback. Known configuration
+files keep their configuration checks even when named as fallbacks. Other hosts'
+files count toward the Codex budget only if explicitly configured as fallbacks.
 
 Selected `.codex/` layers also receive the existing hook checks for both
 `hooks.json` and inline hooks in `config.toml`. Hook discovery does not change

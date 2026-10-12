@@ -17,11 +17,12 @@ from skillsaw.discovery.antigravity import (
     customization_root_declares_a_file,
     customization_root_is_marked,
 )
+from skillsaw.discovery.codex_instructions import probe_file
 from skillsaw.discovery.excludes import is_root_or_ancestor_excluded
 from skillsaw.formats.promptfoo import is_promptfoo_config
 from skillsaw.formats import antigravity, codex, devin, grok, muse
 from skillsaw.formats.openclaw import MANIFEST as OPENCLAW_MANIFEST
-from skillsaw.paths import contained_resolve, safe_resolve
+from skillsaw.paths import Resolver, contained_resolve, safe_resolve
 from skillsaw.utils import read_yaml
 
 WALK_SKIP_DIRS = frozenset(
@@ -348,6 +349,8 @@ def tool_types(
     tool_dirs: Optional[Mapping[str, Iterable[Path]]] = None,
     legacy_editor_files: Optional[Mapping[str, Iterable[Path]]] = None,
     skills_lock_files: Optional[Iterable[Path]] = None,
+    *,
+    resolve: Resolver = safe_resolve,
 ) -> Set[str]:
     """Return ``RepositoryType`` values for the tools configured here.
 
@@ -507,7 +510,13 @@ def tool_types(
         (
             "codex-project",
             tool_marker("codex-project")
-            or any(path.name == "AGENTS.override.md" and not is_excluded(path) for path in files),
+            or any(
+                path.name == "AGENTS.override.md"
+                and (candidate := probe_file(path, root, resolve=resolve, is_excluded=is_excluded))
+                is not None
+                and candidate.issue is None
+                for path in files
+            ),
         ),
         ("antigravity", antigravity_marker()),
         ("gemini", marker("GEMINI.md")),

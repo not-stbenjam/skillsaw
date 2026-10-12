@@ -51,6 +51,8 @@ def _run_tree(args):
     _apply_plugin_extensions(context, config)
 
     tree = context.lint_tree
+    for message in context.plugin_extension_errors:
+        print(f"Warning: {message}", file=sys.stderr)
     if context.lint_tree_errors:
         for message in context.lint_tree_errors:
             print(f"Error: {message}", file=sys.stderr)
@@ -63,6 +65,4 @@ def _run_tree(args):
         print(tree.print_dot(root_path=context.root_path))
     else:
         print(tree.print_tree(root_path=context.root_path))
-    for message in context.plugin_extension_errors:
-        print(f"Warning: {message}", file=sys.stderr)
     sys.exit(0)

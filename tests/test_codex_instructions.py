@@ -1,6 +1,7 @@
 """Codex 0.162.1 selection and raw-byte loader regressions."""
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from skillsaw.blocks import (
     CodexHooksBlock,
     CodexInstructionBlock,
     ContentBlock,
+    ReadmeBlock,
 )
 from skillsaw.codex_instructions import CodexInstructionsNode
 from skillsaw.config import LinterConfig
@@ -66,6 +68,44 @@ def test_fallback_order_empty_standard_and_directory_candidates(tmp_path):
     )
     assert [e["path"] for e in report["selected"]] == ["AGENTS.md", "child/FIRST.md"]
     assert any(b.path.name == "FIRST.md" for b in context.lint_tree.find(ContentBlock))
+
+
+def test_selected_plugin_readme_keeps_display_owner_and_one_instruction_role(tmp_path):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    (root / "child").mkdir()
+    (root / "child/README.md").symlink_to("../README.md")
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions(
+            cwd="child", project_doc_fallback_filenames=("README.md",)
+        ),
+    )
+    tree = context.lint_tree
+    readme = tree.find(ReadmeBlock)[0]
+    instructions = tree.find(CodexInstructionBlock)
+    assert len(instructions) == 1
+    assert instructions[0].path == readme.path == root / "README.md"
+    assert instructions[0].parent is readme.parent
+    assert instructions[0].plugin_owner == readme.plugin_owner == root
+    assert instructions[0].category == "agents-md"
+    report = tree.find(CodexInstructionsNode)[0].report(tree)
+    assert report["complete"]
+    assert [entry["path"] for entry in report["selected"]] == ["README.md", "child/README.md"]
+    assert report["charged_bytes"] == 2 * (root / "README.md").stat().st_size
+
+
+def test_selected_configuration_fallback_does_not_gain_a_prose_role(tmp_path):
+    context, report = project(
+        tmp_path,
+        {".codex/config.toml": "project_doc_max_bytes = 65536\n"},
+        cwd=".codex",
+        project_doc_fallback_filenames=("config.toml",),
+    )
+    assert report["complete"]
+    assert [entry["path"] for entry in report["selected"]] == [".codex/config.toml"]
+    assert len(context.lint_tree.find(CodexConfigBlock)) == 1
+    assert not context.lint_tree.find(ContentBlock)
 
 
 def test_root_to_cwd_excludes_siblings_deeper_and_above_root(tmp_path):
@@ -237,6 +277,39 @@ def test_ordinary_override_discovery_never_reads_excluded_content(tmp_path, monk
     result = run_cli(["lint", root, "--rule", "context-budget", "--strict", "--format", "json"])
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["violations"] == []
+
+
+@pytest.mark.parametrize("scope", ["included", "excluded-ancestor", "excluded-target", "escape"])
+def test_override_detection_matches_attachment_scope(tmp_path, monkeypatch, scope):
+    root = tmp_path / "repo"
+    path = root / "service/AGENTS.override.md"
+    path.parent.mkdir(parents=True)
+    target = path
+    if scope == "excluded-target":
+        target = root / ".private/guide.md"
+        target.parent.mkdir()
+        path.symlink_to(target)
+    elif scope == "escape":
+        target = tmp_path / "guide.md"
+        path.symlink_to(target)
+    target.write_text("# Service instructions\n\nRun the service tests before deployment.\n")
+    exclusions = {"excluded-ancestor": ["service"], "excluded-target": [".private"]}
+    original = Path.open
+
+    def scoped_open(file, *args, **kwargs):
+        if scope != "included":
+            assert file.resolve() != target.resolve(), f"out-of-scope read: {file}"
+        return original(file, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    context = RepositoryContext(root, exclude_patterns=exclusions.get(scope, []))
+    assert (RepositoryType.CODEX_PROJECT in context.repo_types) is (scope == "included")
+    assert bool(context.lint_tree.find(CodexInstructionBlock)) is (scope == "included")
+    if scope == "included":
+        context.exclude_patterns = ["service"]
+        context.apply_excludes()
+        assert RepositoryType.CODEX_PROJECT not in context.repo_types
+        assert not context.lint_tree.find(CodexInstructionBlock)
 
 
 @pytest.mark.parametrize("lint_external", [False, True])
