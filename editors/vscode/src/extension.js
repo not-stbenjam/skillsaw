@@ -168,7 +168,11 @@ function activate(context) {
     vscode.workspace.onDidChangeTextDocument((event) => {
       if (event.contentChanges.length) affected([event.document.uri], invalidate);
     }),
-    vscode.workspace.onDidCloseTextDocument((doc) => affected([doc.uri], request)),
+    vscode.workspace.onDidCloseTextDocument((doc) =>
+      affected([doc.uri], (state) => {
+        if (config(state.folder).get('runOnSave', true)) request(state);
+      }),
+    ),
     vscode.workspace.onDidCreateFiles((event) => affected(event.files, request)),
     vscode.workspace.onDidDeleteFiles((event) => affected(event.files, request)),
     vscode.workspace.onDidRenameFiles((event) =>

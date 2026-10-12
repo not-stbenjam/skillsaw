@@ -82,7 +82,8 @@ Only one CLI process runs at a time across the window. Each folder has at most
 one pending request. Newer saves replace queued work, cancel an older run for
 that folder and prevent its results from being published. Output is capped at
 8 MiB across stdout and stderr. Use command-only linting or a larger timeout
-for a large repository.
+for a large repository. Command-only results remain visible when you open or
+close clean tabs.
 
 ## Fix workflow
 
@@ -110,7 +111,7 @@ repository with the existing skillsaw GitHub Action.
   pending work and clears its diagnostics; dirty documents are omitted from
   subsequent reports until saved. Symlink aliases within the workspace map to
   their open documents; a dirty alias suppresses findings for that file.
-  Opening or closing a document schedules a disk refresh.
+  With `runOnSave` enabled, opening or closing a document schedules a disk refresh.
 - The CLI reports a line, not a column range. Findings without a line appear
   at the start of the file. Workspace-wide findings and redacted outside-repo
   paths appear on the workspace folder, labelled as having no available

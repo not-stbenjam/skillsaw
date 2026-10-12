@@ -139,12 +139,35 @@ async function run() {
     () => diagnostics(doc2.uri).length > 0,
     'explicit command runs with runOnSave disabled',
   );
+  await vscode.window.showTextDocument(doc2);
+  // Closing a tab may retain its document. A language change deterministically
+  // emits the real host's close/open events without changing file contents.
+  let closed = false;
+  const closeListener = vscode.workspace.onDidCloseTextDocument((doc) => {
+    if (doc.uri.toString() === doc2.uri.toString()) closed = true;
+  });
+  try {
+    await vscode.languages.setTextDocumentLanguage(doc2, 'plaintext');
+    await until(() => closed, 'document close event in command-only mode');
+    assert(diagnostics(doc2.uri).length > 0, 'document close preserves manual diagnostics');
+  } finally {
+    closeListener.dispose();
+  }
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  await until(
+    () =>
+      !vscode.window.visibleTextEditors.some(
+        (editor) => editor.document.uri.toString() === doc2.uri.toString(),
+      ),
+    'clean editor tab closes',
+  );
+  assert(diagnostics(doc2.uri).length > 0, 'closing a clean tab preserves manual diagnostics');
   const deletion = new vscode.WorkspaceEdit();
   deletion.deleteFile(doc2.uri);
   assert.equal(await vscode.workspace.applyEdit(deletion), true);
   await until(() => diagnostics(doc2.uri).length === 0, 'deleted files clear diagnostics');
   console.log(
-    'skillsaw extension-host smoke passed: multi-root saves, aliases, dirty buffers, config, command, create, rename and delete.',
+    'skillsaw extension-host smoke passed: multi-root saves, aliases, dirty buffers, config, command, close, create, rename and delete.',
   );
 }
 

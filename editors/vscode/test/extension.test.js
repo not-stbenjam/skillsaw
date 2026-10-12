@@ -252,6 +252,34 @@ test('manual runs suppress diagnostics for dirty buffers and use per-folder exec
   assert.equal(h.collections[1].entries.length, 0);
 });
 
+test('clean tab closes preserve pending and published command-only diagnostics', async (t) => {
+  const h = harness(t, true, ['one']);
+  h.settings.set(h.uri('one').toString(), { runOnSave: false });
+  h.events.onDidChangeConfiguration({ affectsConfiguration: () => true });
+  const doc = { uri: h.uri('one/skills/release-notes/SKILL.md'), isDirty: false };
+  h.workspace.textDocuments = [doc];
+  h.commands['skillsaw.lint']();
+  await until(() => h.runs.length === 1);
+  h.workspace.textDocuments = [];
+  h.events.onDidCloseTextDocument(doc);
+  assert.equal(h.runs[0].signal.aborted, false, 'closing a clean tab must not cancel manual lint');
+  h.complete(0, [finding]);
+  await until(() => h.collections[0].entries.length === 1);
+  h.workspace.textDocuments = [doc];
+  h.events.onDidOpenTextDocument(doc);
+  h.workspace.textDocuments = [];
+  h.events.onDidCloseTextDocument(doc);
+  await delay(150);
+  assert.equal(h.collections[0].entries.length, 1, 'manual findings survive clean tab navigation');
+  assert.equal(h.runs.length, 1, 'command-only mode must not queue a replacement');
+
+  h.settings.set(h.uri('one').toString(), { runOnSave: true });
+  h.events.onDidCloseTextDocument(doc);
+  assert.equal(h.collections[0].entries.length, 0, 'automatic mode still refreshes on close');
+  await until(() => h.runs.length === 2);
+  h.complete(1);
+});
+
 test(
   'symlink aliases receive findings and a dirty alias suppresses all open copies',
   { skip: process.platform === 'win32' },

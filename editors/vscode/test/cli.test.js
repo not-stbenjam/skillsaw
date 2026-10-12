@@ -53,7 +53,7 @@ test('installed CLI: root config, severities, exclusions, extra content, fail le
   const clean = await lint();
   assert.equal(clean.code, 0);
   assert.deepEqual(parseReport(clean.stdout).violations, []);
-  const skill = 'skills/release-notes/SKILL.md';
+  const skill = path.join('skills', 'release-notes', 'SKILL.md');
   const source = await fs.readFile(path.join(cwd, skill), 'utf8');
   const broken = source.replace('name: release-notes', 'name: Release_Notes');
   await fs.writeFile(path.join(cwd, skill), broken);
@@ -71,7 +71,7 @@ test('installed CLI: root config, severities, exclusions, extra content, fail le
         item.severity === 'error',
     ),
   );
-  assert(findings.every((item) => !item.file_path?.startsWith('drafts/')));
+  assert(findings.every((item) => !item.file_path?.startsWith(`drafts${path.sep}`)));
   const config = path.join(cwd, '.skillsaw.yaml');
   let settings = await fs.readFile(config, 'utf8');
   settings += '\nrules:\n  agentskill-name:\n    severity: warning\n';
@@ -95,7 +95,7 @@ test('installed CLI: root config, severities, exclusions, extra content, fail le
   assert(
     findings.some(
       (item) =>
-        item.file_path === 'handbook/publishing.md' &&
+        item.file_path === path.join('handbook', 'publishing.md') &&
         item.rule_id === 'content-broken-internal-reference',
     ),
   );
