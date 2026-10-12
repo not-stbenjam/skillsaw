@@ -18,6 +18,7 @@ class CodexInstructionsNode(LintTarget):
     """A selection view referencing retained tree nodes without copying their content."""
 
     root_path: Path = Path(".")
+    cwd: Path = Path(".")
     sources: Tuple[InstructionCandidate, ...] = ()
     max_bytes: int = DEFAULT_MAX_BYTES
     limit_source: str = "Codex default (assumed)"
@@ -28,7 +29,7 @@ class CodexInstructionsNode(LintTarget):
     ignored_fallbacks: Tuple[str, ...] = ()
 
     def tree_label(self) -> str:
-        return f"Codex instruction selection [cwd: {relative_to_str(self.path, self.root_path)}]"
+        return f"Codex instruction selection [cwd: {relative_to_str(self.cwd, self.root_path)}]"
 
     def report(self, tree: LintTarget) -> dict:
         """Read selected files represented by retained tree nodes, in lexical source order.
@@ -90,7 +91,7 @@ class CodexInstructionsNode(LintTarget):
             "host": "codex",
             "loader_version": "0.162.1",
             "root": str(self.root_path),
-            "cwd": str(self.path),
+            "cwd": str(self.cwd),
             "project_doc_max_bytes": self.max_bytes,
             "limit_source": self.limit_source,
             "candidate_filenames": list(self.filenames),

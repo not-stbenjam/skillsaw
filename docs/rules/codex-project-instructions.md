@@ -104,7 +104,7 @@ prefix**; `truncated: true` still records a discarded suffix. JSON `complete`
 means the local projection was computable under its stated assumptions, not
 that skillsaw observed a running Codex session.
 
-## Findings and limits
+## How to fix
 
 One consolidated warning identifies truncated or omitted files for the chosen
 cwd. Reduce the selected ancestor chain or raise `project_doc_max_bytes` in the
@@ -115,6 +115,8 @@ Inspection exits zero for a complete model, including one that diagnoses lost
 content. Use the lint rule with `--strict` or `--fail-on warning` for CI failure.
 Inspection exits one for incomplete local evidence; the rule reports that
 uncertainty instead of asserting an exact truncation result. There is no autofix.
+
+## Limits
 
 Global, managed, profile, and CLI Codex settings and global/user instructions
 are **never read**. Pass effective values explicitly when they differ from the
@@ -135,6 +137,10 @@ fallback files become instruction prose. `AGENTS.override.md` is discovered
 for content checks without opting into this diagnostic. Arbitrary fallback
 discovery is limited to the requested projection. Other hosts' files contribute
 only when explicitly named as Codex fallbacks.
+
+The analysis and its finding are attached to the supplied root. A cwd excluded
+by these policies remains an incomplete analysis; excluding that directory
+does not silently suppress the requested CI check.
 
 ## Configuration
 

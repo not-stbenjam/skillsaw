@@ -20,14 +20,18 @@ def attach_codex_instructions(state: _TreeBuildState) -> None:
     options = context.codex_instructions
     assert options is not None
     resolve = context.resolve_path
-    node = CodexInstructionsNode(path=context.root_path, root_path=context.root_path)
+    node = CodexInstructionsNode(
+        path=context.root_path, root_path=context.root_path, cwd=context.root_path
+    )
     try:
         directories = project_directories(context.root_path, options.cwd, resolve=resolve)
     except (ValueError, OSError) as error:
         node.issues.append(str(error))
         state.root.children.append(node)
         return
-    node.path = directories[-1]
+    node.cwd = directories[-1]
+    if not context.lint_external_content and context.is_externally_sourced(node.cwd):
+        node.issues.append("Codex cwd is outside the retained authoring scope")
     configs = {resolve(block.path): block for block in state.root.find(CodexConfigBlock)}
     limit = DEFAULT_MAX_BYTES
     fallbacks = ()

@@ -11158,6 +11158,30 @@ class TestGoose:
 
 @pytest.mark.integration
 class TestCodexInstructionSelection:
+    @pytest.mark.parametrize("external", [False, True])
+    def test_out_of_scope_cwd_retains_incomplete_analysis(self, tmp_path, external):
+        repo = copy_fixture("codex-instructions", tmp_path)
+        if external:
+            cwd = "apm_modules/vendor"
+            (repo / cwd).mkdir(parents=True)
+            (repo / "apm.yml").write_text("name: package\nversion: 1.0.0\ntargets: []\n")
+            policy = "lint-external-content: false\n"
+        else:
+            cwd = "service"
+            policy = "exclude: [service]\n"
+        (repo / ".skillsaw.yaml").write_text("codex-instructions:\n  cwd: " + cwd + "\n" + policy)
+        inspection = run_cli(["tree", repo, "--codex-instructions", "--format", "json"])
+        assert inspection.returncode == 1
+        report = json.loads(inspection.stdout)
+        assert not report["complete"]
+        assert report["cwd"] == str(repo / cwd)
+        result = run_lint(repo, "--rule", "codex-project-instructions", "--strict")
+        assert result["rc"] == 1
+        findings = violations(result)
+        assert len(findings) == 1
+        assert "analysis is incomplete" in findings[0]["message"]
+        assert Path(findings[0]["file_path"]).name != Path(cwd).name
+
     @pytest.mark.parametrize("fallback", [False, True])
     def test_codex_prose_does_not_create_claude_import_pair(self, tmp_path, fallback):
         repo = copy_fixture("codex-instructions", tmp_path)

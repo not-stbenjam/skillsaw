@@ -917,6 +917,10 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
             continue
         if not devin_desktop and devin.is_desktop_agents_spelling(f.name):
             continue
+        if f.name == "AGENTS.override.md":
+            candidate = probe_file(f, context.root_path, resolve=resolve, is_excluded=_is_excluded)
+            if candidate is None or candidate.issue:
+                continue
         # APM writes .apm/instructions/ out to .github/instructions/. The
         # authored source attaches below; the copy attaches content-suppressed
         # so its content findings don't double the source's, while the

@@ -35,7 +35,7 @@ class CodexProjectInstructionsRule(Rule):
                 )
             elif report["affected_paths"]:
                 message = (
-                    f"Codex project instructions for cwd '{safe_display(relative_to_str(node.path, context.root_path))}' select "
+                    f"Codex project instructions for cwd '{safe_display(relative_to_str(node.cwd, context.root_path))}' select "
                     f"{report['selected_file_bytes']:,} file bytes; project_doc_max_bytes="
                     f"{node.max_bytes:,} ({safe_display(node.limit_source)}) truncates or omits: "
                     + ", ".join(safe_display(path) for path in report["affected_paths"][:3])

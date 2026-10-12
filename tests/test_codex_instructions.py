@@ -211,6 +211,28 @@ def test_excluded_config_directory_is_never_read(tmp_path, monkeypatch, symlink)
     assert "excluded" in report["issues"][0]
 
 
+@pytest.mark.parametrize("symlink", [False, True])
+def test_ordinary_override_discovery_never_reads_excluded_content(tmp_path, monkeypatch, symlink):
+    root = tmp_path / "repo"
+    excluded = root / (".codex" if symlink else "private")
+    excluded.mkdir(parents=True)
+    target = excluded / ("config.toml" if symlink else "AGENTS.override.md")
+    target.write_text("project_doc_max_bytes = 1\n" if symlink else "Private guidance.\n" * 4000)
+    if symlink:
+        (root / "AGENTS.override.md").symlink_to(".codex/config.toml")
+    (root / ".skillsaw.yaml").write_text("exclude: [" + excluded.name + "]\n")
+    original = Path.open
+
+    def scoped_open(path, *args, **kwargs):
+        assert not path.resolve().is_relative_to(excluded), f"excluded read: {path}"
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", scoped_open)
+    result = run_cli(["lint", root, "--rule", "context-budget", "--strict", "--format", "json"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["violations"] == []
+
+
 @pytest.mark.parametrize("lint_external", [False, True])
 def test_external_project_config_obeys_authoring_policy(tmp_path, monkeypatch, lint_external):
     root = tmp_path / "repo"
