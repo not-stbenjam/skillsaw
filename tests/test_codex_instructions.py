@@ -197,6 +197,55 @@ def test_override_readme_alias_retains_prose_and_display(
         assert report["charged_bytes"] == override.stat().st_size
 
 
+@pytest.mark.parametrize("inspect", [False, True])
+@pytest.mark.parametrize("override_is_alias", [False, True])
+@pytest.mark.parametrize(
+    "suppressed,external,lint_external",
+    [(True, False, True), (False, True, True), (True, True, True), (True, True, False)],
+)
+def test_override_readme_alias_inherits_contributor_metadata(
+    tmp_path, inspect, override_is_alias, suppressed, external, lint_external
+):
+    root = tmp_path / "repo"
+    shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
+    readme_path = root / "README.md"
+    override = root / "AGENTS.override.md"
+    if override_is_alias:
+        override.symlink_to("README.md")
+    else:
+        readme_path.rename(override)
+        readme_path.symlink_to("AGENTS.override.md")
+
+    def tag_readme(_context, tree):
+        readme = tree.find(ReadmeBlock)[0]
+        readme.content_suppressed = suppressed
+        readme.externally_sourced = external
+        return []
+
+    context = RepositoryContext(
+        root,
+        codex_instructions=CodexInstructionOptions() if inspect else None,
+        lint_external_content=lint_external,
+    )
+    context.plugin_tree_contributors = [("readme-metadata", tag_readme)]
+    tree = context.lint_tree
+    assert not context.lint_tree_errors
+    assert not context.plugin_extension_errors
+    instructions = tree.find(CodexInstructionBlock)
+    readmes = tree.find(ReadmeBlock)
+    if external and not lint_external:
+        assert instructions == []
+        assert readmes == []
+    else:
+        assert len(instructions) == len(readmes) == 1
+        instruction, readme = instructions[0], readmes[0]
+        assert instruction.content_suppressed is suppressed
+        assert instruction.externally_sourced is external
+        assert instruction.plugin_owner == readme.plugin_owner == root
+        assert instruction.parent is readme.parent
+        assert len([b for b in tree.find(ContentBlock) if b.path == override]) == 1
+
+
 def test_override_outside_plugin_glob_stays_instruction(tmp_path):
     root = tmp_path / "repo"
     shutil.copytree(Path(__file__).parent / "fixtures/single-plugin/clean", root)
