@@ -157,6 +157,7 @@ nav:
     - OpenCode: rules/opencode.md
     - Pi: rules/pi.md
     - Promptfoo: rules/promptfoo.md
+    - Ruler and Rulesync: rules/generators.md
     - Security: rules/security.md
     - Vercel: rules/vercel.md
   - Changelog: changelog.md

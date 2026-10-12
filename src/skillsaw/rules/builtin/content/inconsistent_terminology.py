@@ -147,7 +147,9 @@ class ContentInconsistentTerminologyRule(Rule):
         return "\n".join(lines)
 
     def check(self, context: RepositoryContext) -> List[RuleViolation]:
-        content_files = gather_all_content_blocks(context)
+        content_files = [
+            block for block in gather_all_content_blocks(context) if not block.in_generated_copy
+        ]
         if len(content_files) < self.MIN_FILES:
             return []
 

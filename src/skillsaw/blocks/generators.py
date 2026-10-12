@@ -1,14 +1,14 @@
 """Generator sources are instructions; their configuration is not prose."""
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Optional, Tuple
+from typing import ClassVar, Optional
 
 from skillsaw.formats.generators import parse_rulesync_frontmatter
 from skillsaw.lint_target import LintTarget
 from skillsaw.utils import read_toml
 
-from .base import FileContentBlock
-from .frontmatter import FrontmatteredBlock
+from .base import ContentBlock, FileContentBlock
+from .frontmatter import FrontmatterField, FrontmatteredBlock
 from .json_config import JsonConfigBlock
 
 
@@ -20,11 +20,47 @@ class RulerRuleBlock(FileContentBlock):
 
 
 @dataclass(eq=False)
+class RulesyncDescriptionBlock(FrontmatterField, ContentBlock):
+    """Decoded description prose, anchored to its YAML field and never rewritten."""
+
+    category: str = "generator-description"
+    diagnostic_only: ClassVar[bool] = True
+
+    def read_body(self, *, strip_code_blocks=True):
+        return self._stripped_body() if strip_code_blocks else self.value
+
+    def write_body(self, new_body):
+        raise NotImplementedError("Decoded frontmatter descriptions are diagnostic-only")
+
+    def file_line(self, body_line):
+        return self.field_line or 0
+
+
+@dataclass(eq=False)
 class RulesyncRuleBlock(FrontmatteredBlock):
     """The body and description are authored instructions, targets/globs are data."""
 
     category: str = "instruction"
-    content_lintable_fields: Tuple[str, ...] = ("description",)
+
+    def _build_children(self):
+        super()._build_children()
+        self.children = [
+            (
+                RulesyncDescriptionBlock(
+                    path=child.path,
+                    parent=self,
+                    name=child.name,
+                    value=child.value,
+                    field_line=child.field_line,
+                    _line_map=lambda _line, start=child.field_line: start or 0,
+                )
+                if isinstance(child, FrontmatterField)
+                and child.name == "description"
+                and isinstance(child.value, str)
+                else child
+            )
+            for child in self.children
+        ]
 
     @property
     def raw_data(self):

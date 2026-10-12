@@ -27,6 +27,8 @@ from skillsaw.utils import read_text
 def _ruler_copy(node, sources, root, resolve):
     if not isinstance(node, (AgentsMdBlock, ClaudeMdBlock)):
         return None
+    if node.resolved_path != node.path:
+        return None
     raw = read_text(node.path)
     if not raw or "<!-- Source: " not in raw:
         return None
@@ -90,6 +92,10 @@ def _rulesync_targets(project, nodes):
 
 
 def _rulesync_copy(source, target, output):
+    # A symlink is another view of authored or consumer-owned data. Copy
+    # attribution must never transfer to that file through a resolved index.
+    if output.resolved_path != output.path:
+        return False
     fm = source.raw_data
     if source.frontmatter_error or fm is None or schema_problems(fm, RULESYNC_RULE):
         return False

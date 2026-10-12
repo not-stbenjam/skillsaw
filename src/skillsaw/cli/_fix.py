@@ -76,6 +76,7 @@ def _run_fix(args):
     failed = []
     skipped = dict(input_skips)
     advisory_messages = []
+    protected_generated_paths = set()
     for fix_path in paths:
         context = RepositoryContext(
             fix_path,
@@ -106,6 +107,7 @@ def _run_fix(args):
                 dry_run=dry_run,
                 progress=rule_progress,
                 severity_threshold=severity_threshold,
+                protected_generated_paths=protected_generated_paths,
             )
         finally:
             rule_progress.clear()
@@ -131,7 +133,9 @@ def _run_fix(args):
                 no_plugins=args.no_plugins,
             )
             rename_applied, rename_suggested = linter.fix_and_apply(
-                confidence, severity_threshold=severity_threshold
+                confidence,
+                severity_threshold=severity_threshold,
+                protected_generated_paths=protected_generated_paths,
             )
             path_applied.extend(rename_applied)
             path_suggested.extend(rename_suggested)

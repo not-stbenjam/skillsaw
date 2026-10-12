@@ -79,6 +79,34 @@ def test_sources_without_generated_artifacts(tmp_path):
     assert len(context.lint_tree.find(RulesyncRuleBlock)) == 3
 
 
+@pytest.mark.parametrize("change", ["globs", "targets", "cursor", "claudecode", "merge"])
+def test_native_normalization_preserves_copies(change, tmp_path):
+    repo, _ = context_for("rulesync", tmp_path)
+    path = repo / ".rulesync/rules/backend/api.md"
+    content = path.read_text()
+    if change == "globs":
+        content = content.replace('globs: ["src/**/*.ts"]', 'globs: [null, "src/**/*.ts"]')
+    elif change == "targets":
+        content = content.replace(
+            "targets: [claudecode, cursor]", "targets: [null, claudecode, cursor]"
+        )
+    elif change == "cursor":
+        content = content.replace("cursor:\n", 'cursor:\n  globs: [null, "src/**/*.ts"]\n')
+    elif change == "claudecode":
+        content = content.replace(
+            "root: false\n", 'root: false\nclaudecode:\n  paths: [null, "src/**/*.ts"]\n'
+        )
+    else:
+        content = content.replace(
+            "root: false\n",
+            "defaults: &defaults\n  <<: {root: true}\n  root: false\n<<: *defaults\n",
+        )
+    path.write_text(content)
+    context = RepositoryContext(repo, rulesync_generated=True)
+    assert not RulesyncSourceValidRule().check(context)
+    assert {".cursor/rules/backend/api.mdc", ".claude/rules/backend/api.md"} <= set(copies(context))
+
+
 def test_nested_source_roots_and_reserved_subtrees(tmp_path):
     repo, _ = context_for("ruler", tmp_path)
     for name in ("skills/tool/SKILL.md", "agents/reviewer.md", ".internal/notes.md"):
@@ -120,7 +148,7 @@ def test_valid_released_fixture_and_opt_in(name, rule, kind, tmp_path):
         ("description: no\n", True),
         ("description:\nroot:\n", True),
         ("cursor:\n  alwaysApply:\n", True),
-        ("globs: [null]\n", False),
+        ("globs: [null]\n", True),
         ("globs: src/**\n", False),
         ("targets: [future-host]\n", True),  # The target registry stays with Rulesync.
         ("root: true\nroot: false\n", False),

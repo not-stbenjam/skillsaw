@@ -13,8 +13,6 @@ Validate common Rulesync 32.0.0 rule frontmatter and project configuration field
 | **Repo Types** | rulesync |
 | **Category** | [Ruler and Rulesync](generators.md) |
 
-# rulesync-source-valid
-
 Checks conventional `.rulesync/rules/**/*.md` frontmatter and common
 `rulesync.jsonc` field shapes against Rulesync 32.0.0. The check is opt-in and
 does not attempt to validate every target or compiler feature.

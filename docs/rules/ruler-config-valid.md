@@ -13,8 +13,6 @@ Validate .ruler/ruler.toml against the Ruler 0.3.44 configuration shape
 | **Repo Types** | ruler |
 | **Category** | [Ruler and Rulesync](generators.md) |
 
-# ruler-config-valid
-
 Validates `.ruler/ruler.toml` against the configuration shape in Ruler 0.3.44.
 The check is opt-in. Rule Markdown is plain instruction prose, so this check
 does not require frontmatter on `.ruler/**/*.md`.

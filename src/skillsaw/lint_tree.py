@@ -245,6 +245,7 @@ class _TreeBuildState:
     repo_root: Path
     seen: Set[Path] = field(default_factory=set)
     seen_roles: Set[Tuple[Path, type]] = field(default_factory=set)
+    generator_source_paths: Set[Path] = field(default_factory=set)
     # Two indexes over ``seen_roles``, written beside it: "is this file
     # already in the tree as hooks / as MCP" is asked once per plugin, and
     # scanning every role on each question is O(plugins x blocks) on a
@@ -278,6 +279,13 @@ class _TreeBuildState:
     ) -> None:
         """Add one safely resolved block unless its role is already present."""
         resolved = self.resolve_repo_path(p)
+        if resolved in self.generator_source_paths and not issubclass(
+            block_cls, (ContentBlock, FrontmatteredBlock)
+        ):
+            # A consumer config can alias authored Markdown. Its independent
+            # parser still owns structural/security checks for that location.
+            self.add_parser_block(parent, p, block_cls, owner, content_suppressed)
+            return
         if (
             resolved is None
             or resolved in self.seen
@@ -2128,6 +2136,9 @@ def build_lint_tree(context: "RepositoryContext") -> LintTarget:
     attach_pi_prompts(state)
 
     # --- Extra content paths from config ---
+    from .lint_tree_generators import attach_generator_configs
+
+    attach_generator_configs(state)
     # User-configured content paths plus globs contributed by detected
     # plugin repo types; the ``seen`` set dedupes any overlap.
     for glob_pattern in [*context.content_paths, *context.plugin_content_paths]:

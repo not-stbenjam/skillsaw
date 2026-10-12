@@ -245,6 +245,7 @@ class Linter:
         self._no_plugins = no_plugins
         self._plugin_load_violations: List[RuleViolation] = []
         self._vendor_managed_cache: Dict[Path, bool] = {}
+        self._generated_fix_paths: Set[Path] = set()
         self._external_source_path_cache: Dict[Path, bool] = {}
         self._stale_baseline_entries: List["BaselineEntry"] = []
         self._baseline_suppressed_count: int = 0
@@ -1109,15 +1110,23 @@ class Linter:
             return smap.is_explicitly_suppressed(violation.rule_id, file_line)
         return smap.is_suppressed(violation.rule_id, file_line)
 
-    def _generator_copy(self, violation):
-        if violation.file_path is None:
-            return None
+    def _generator_copies(self):
         tree = self.context.lint_tree
         copies = tree.__dict__.get("_generator_copy_paths")
         if copies is None:
             copies = {n.resolved_path: n.generated_copy for n in tree.walk() if n.generated_copy}
             tree.__dict__["_generator_copy_paths"] = copies
-        return copies.get(safe_resolve(violation.file_path) or violation.file_path)
+        return copies
+
+    def _generator_copy(self, violation):
+        if violation.file_path is None:
+            return None
+        return self._generator_copies().get(
+            safe_resolve(violation.file_path) or violation.file_path
+        )
+
+    def _protected_generated_path(self, path):
+        return path is not None and (safe_resolve(path) or path) in self._generated_fix_paths
 
     def _compiled_copy_paths(self) -> Set[Path]:
         """Resolved paths of every content-suppressed (compiled-copy) file.
@@ -1293,6 +1302,7 @@ class Linter:
                 )
             elif (
                 generated is not None
+                or self._protected_generated_path(v.file_path)
                 or self._is_on_external_source(v)
                 or self._is_vendor_managed(v.file_path)
                 or (v.block is not None and v.block.diagnostic_only)
@@ -1421,6 +1431,7 @@ class Linter:
             Tuple of (remaining violations, autofix results)
         """
         threshold = "info" if severity_threshold is None else severity_threshold
+        self._generated_fix_paths.update(self._generator_copies())
         allowed_severities = severities_at_or_above(threshold)
 
         # Config warnings go through the same filter pipeline run() uses
@@ -1463,6 +1474,7 @@ class Linter:
                     v
                     for v in visible
                     if self._generator_copy(v) is None
+                    and not self._protected_generated_path(v.file_path)
                     and (v.block is None or not v.block.diagnostic_only)
                     and not self._is_on_external_source(v)
                     and v.severity in allowed_severities
@@ -1473,6 +1485,8 @@ class Linter:
                             f
                             for f in rule.fix(self.context, fixable_input)
                             if not self._is_vendor_managed(f.file_path)
+                            and not self._protected_generated_path(f.file_path)
+                            and not self._protected_generated_path(f.rename_from)
                             and not self._is_external_source_path(f.file_path)
                             and (
                                 f.rename_from is None
@@ -1544,6 +1558,7 @@ class Linter:
         dry_run: bool = False,
         progress: Optional[Callable[[int, int, str], None]] = None,
         severity_threshold: Optional[str] = None,
+        protected_generated_paths: Optional[Set[Path]] = None,
     ) -> tuple[List[AutofixResult], List[AutofixResult]]:
         """Fixed-point iteration over autofix passes with snapshot isolation.
 
@@ -1564,6 +1579,8 @@ class Linter:
             confidence: Minimum confidence level to apply.
             max_passes: Safety cap on iterations.
             dry_run: Return the first independent set without writing it.
+            protected_generated_paths: Optional command-wide write-protection
+                set shared with follow-up linters after resource renames.
             progress: Optional callback passed to each rule check.
             severity_threshold: Generate fixes at this severity or above.
                 ``None`` preserves the historical library behavior of
@@ -1578,6 +1595,13 @@ class Linter:
         self.fix_failures: List[Tuple[AutofixResult, str]] = []
         #: Selected paths refused by policy, separate from failed writes.
         self.fix_skips: List[Tuple[Path, str]] = []
+        # Source edits make old outputs cease to be exact copies. They still
+        # must not become writable later in this same fix command. The CLI
+        # shares this set with its fresh linter after a skill rename.
+        self._generated_fix_paths = (
+            protected_generated_paths if protected_generated_paths is not None else set()
+        )
+        self._generated_fix_paths.update(self._generator_copies())
         from .rules.builtin.utils import invalidate_read_caches
 
         all_applied: List[AutofixResult] = []

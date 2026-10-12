@@ -16,6 +16,10 @@ with the rules for their consumers. Run the generator yourself or in CI;
   configuration. `rulesync.jsonc` beside `.rulesync/` is parsed as JSONC, including
   comments and trailing commas. Nested project directories are discovered.
 
+Description findings point to the YAML field's key line, including folded
+strings. Decoded descriptions are diagnostic-only because their Markdown spans
+do not map directly to the YAML file for safe autofix.
+
 Sources get the `instruction` budget role, rather than the generic `extra`
 role of `content-paths`. This describes authored rules, not which files an agent
 will load in a particular session. Ordinary exclusions apply to discovery.
@@ -41,8 +45,9 @@ runtime behavior.
 fields `root`, `localRoot`, `targets`, `description`, `globs`, `claudecode.paths`,
 `cursor`, and `agentsmd.subprojectPath`. It checks JSONC syntax, common configuration
 field shapes, and the `inputRoot`/`inputRoots` and object-form `targets`/`features`
-exclusions. It accepts null optional frontmatter fields as absent, as Rulesync
-does. Rulesync itself remains responsible for target/feature names, per-target
+exclusions. It removes null optional frontmatter fields and null entries in
+the supported arrays, as Rulesync does. Rulesync itself remains responsible for
+target/feature names, per-target
 configuration, other frontmatter extensions, and full compiler validation.
 These checks are opt-in because their scope and release pins are narrower than
 the generators' evolving interfaces.
@@ -75,7 +80,9 @@ copied body, and emitted frontmatter. The body comparison allows the generator's
 outer-whitespace normalization. The default is `false`: a matching filename or
 matching prose alone never makes an unstamped, user-managed file generated.
 Files outside those destinations remain fully checked. Edited or stale copies
-that fail verification receive all checks too.
+that fail verification receive all checks too. Symlinked outputs are never
+recognized as generated copies, so ownership cannot suppress another file's
+authored findings.
 
 Rulesync copy recognition supports array-form `targets` and `features`, the
 default input tree, and the project output root (`outputRoots: ["."]` or omitted).

@@ -138,14 +138,20 @@ class _RulesyncLoader(_SAFE_LOADER):
         for key, values in _SAFE_LOADER.yaml_implicit_resolvers.items()
     }
 
-    def construct_mapping(self, node, deep=False):
+    def flatten_mapping(self, node):
         # js-yaml rejects duplicate explicit keys; a YAML merge followed by an
         # explicit override is valid and is left to SafeLoader's merge logic.
+        # SafeLoader mutates anchored mappings during merge flattening. Check
+        # each original mapping once, before inherited keys are inserted.
+        checked = self.__dict__.setdefault("_duplicate_checked_nodes", set())
+        if node in checked:
+            return super().flatten_mapping(node)
+        checked.add(node)
         seen = set()
         for key, _value in node.value:
             if key.tag == "tag:yaml.org,2002:merge":
                 continue
-            value = self.construct_object(key, deep=deep)
+            value = self.construct_object(key)
             try:
                 duplicate = value in seen
                 seen.add(value)
@@ -158,7 +164,7 @@ class _RulesyncLoader(_SAFE_LOADER):
                     "duplicate mapping key",
                     key.start_mark,
                 )
-        return super().construct_mapping(node, deep=deep)
+        return super().flatten_mapping(node)
 
 
 _RulesyncLoader.add_implicit_resolver(
@@ -171,8 +177,8 @@ _RulesyncLoader.add_implicit_resolver(
 def parse_rulesync_frontmatter(content):
     """Parse conventional YAML frontmatter, retaining honest body line offsets.
 
-    Rulesync drops null object fields before schema validation. Null array
-    items remain invalid in the common string arrays. Noncanonical gray-matter
+    Rulesync drops null object fields and array entries before validation.
+    Noncanonical gray-matter
     fences and target-specific extensions are outside this validator's scope.
     """
     match = _RULE_FRONTMATTER_RE.match(content.lstrip("\ufeff"))
@@ -196,4 +202,13 @@ def parse_rulesync_frontmatter(content):
     for key in ("cursor", "claudecode", "agentsmd"):
         if isinstance(data.get(key), dict):
             data[key] = {k: v for k, v in data[key].items() if v is not None}
+    for mapping, keys in (
+        (data, ("targets", "globs")),
+        (data.get("cursor"), ("globs",)),
+        (data.get("claudecode"), ("paths",)),
+    ):
+        if isinstance(mapping, dict):
+            for key in keys:
+                if isinstance(mapping.get(key), list):
+                    mapping[key] = [item for item in mapping[key] if item is not None]
     return data, None, None, body, offset
