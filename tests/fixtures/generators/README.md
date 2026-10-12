@@ -5,6 +5,10 @@ the released npm packages below, on Node 22.23.1. They deliberately contain
 weak language, a Cursor manual rule, and Ruler's Codex MCP header spelling.
 Keep these findings: they are test data, not repository instructions to repair.
 
+`consumer-aliases/` contains additional native-parser regression inputs, including
+intentional Unicode and prohibited-reference sentinels. Tests alias these files
+to generator sources and verify that the native consumer keeps its findings.
+
 From this directory, reproduce the committed outputs with:
 
 ```sh

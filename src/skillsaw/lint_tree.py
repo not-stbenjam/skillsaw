@@ -245,7 +245,6 @@ class _TreeBuildState:
     repo_root: Path
     seen: Set[Path] = field(default_factory=set)
     seen_roles: Set[Tuple[Path, type]] = field(default_factory=set)
-    generator_source_paths: Set[Path] = field(default_factory=set)
     # Two indexes over ``seen_roles``, written beside it: "is this file
     # already in the tree as hooks / as MCP" is asked once per plugin, and
     # scanning every role on each question is O(plugins x blocks) on a
@@ -279,13 +278,6 @@ class _TreeBuildState:
     ) -> None:
         """Add one safely resolved block unless its role is already present."""
         resolved = self.resolve_repo_path(p)
-        if resolved in self.generator_source_paths and not issubclass(block_cls, ContentBlock):
-            # Native frontmatter and config retain their independent parser
-            # roles, including embedded hooks/MCP, without a second prose body.
-            block = self.add_parser_block(parent, p, block_cls, owner, content_suppressed)
-            if isinstance(block, FrontmatteredBlock):
-                block.body_owned_elsewhere = True
-            return
         if (
             resolved is None
             or resolved in self.seen
@@ -308,7 +300,7 @@ class _TreeBuildState:
         owner: Path | None = None,
         content_suppressed: bool = False,
     ) -> Optional[LintTarget]:
-        """Attach a structured document once for each parser role.
+        """Attach a document once for each parser role.
 
         A JSON document may legitimately contain both hooks and MCP servers.
         Path-only deduplication would hide whichever parser runs second, while

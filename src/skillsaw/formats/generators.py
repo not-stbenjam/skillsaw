@@ -181,8 +181,8 @@ _RulesyncLoader.add_implicit_resolver(
     list("tTfF"),
 )
 
-# gray-matter 4.0.3 uses js-yaml 3.14: unlike PyYAML, exponents need neither
-# a decimal point nor an explicit sign. Keep the other safe scalar resolvers.
+# The Rulesync parser accepts exponent scalars without a decimal point
+# or explicit sign; PyYAML needs this additional resolver.
 _RulesyncLoader.add_implicit_resolver(
     "tag:yaml.org,2002:float",
     re.compile(r"^(?:[-+]?(?:0|[1-9][0-9_]*)(?:\.[0-9_]*)?|\.[0-9_]+)[eE][-+]?[0-9]+$"),

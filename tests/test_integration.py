@@ -11194,17 +11194,106 @@ class TestGeneratorWorkflows:
         native = next(
             n for n in context.lint_tree.find(getattr(blocks, block_type)) if n.path == target
         )
-        assert native.body_owned_elsewhere
-        assert not native.content_blocks()
-        assert native.estimate_tokens() == 0
+        assert native.content_blocks()
+        assert native.estimate_tokens() > 0
         prose = [n for n in context.lint_tree.content_blocks() if n.resolved_path == source]
-        assert sum("Review transaction boundaries" in (n.read_body() or "") for n in prose) == 1
+        assert sum("Review transaction boundaries" in (n.read_body() or "") for n in prose) == 2
         findings = violations(run_lint(repo, "--rule", "content-weak-language"))
         assert [
             v["file_path"]
             for v in findings
             if v["file_path"] in {consumer, str(source.relative_to(repo))}
         ] == [str(source.relative_to(repo))]
+        config = repo / ".skillsaw.yaml"
+        config.write_text(
+            config.read_text()
+            + "\n  content-weak-language:\n    exclude: ["
+            + str(source.relative_to(repo))
+            + "]\n"
+        )
+        # Existing exclusion semantics resolve symlinks, so the excluded
+        # physical file is excluded through its native alias as well.
+        remaining = violations(run_lint(repo, "--rule", "content-weak-language"))
+        assert [
+            v["file_path"]
+            for v in remaining
+            if v["file_path"] in {consumer, str(source.relative_to(repo))}
+        ] == []
+
+    @pytest.mark.parametrize("consumer", ["AGENTS.md", "CLAUDE.md", "docs/policy.md"])
+    def test_source_alias_keeps_whole_file_checks(self, consumer, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        target = repo / consumer
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((FIXTURES / "generators/consumer-aliases/raw.md").read_text())
+        if consumer == "docs/policy.md":
+            (repo / "opencode.json").write_text(json.dumps({"instructions": [consumer]}))
+        config = repo / ".skillsaw.yaml"
+        config.write_text(
+            config.read_text() + "\n  content-banned-references:\n    banned:\n"
+            "      - pattern: forbidden-endpoint\n        message: Use the supported endpoint\n"
+        )
+        args = (
+            "--rule",
+            "security-invisible-unicode",
+            "--rule",
+            "content-banned-references",
+            "--rule",
+            "rulesync-source-valid",
+        )
+        before = run_lint(repo, *args)
+        source = repo / ".rulesync/rules/policy.md"
+        target.rename(source)
+        target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 1
+        assert violations(after) == violations(before)
+        assert {v["rule_id"] for v in violations(after)} == {
+            "security-invisible-unicode",
+            "content-banned-references",
+        }
+        assert all(v["file_path"] == consumer and v["line"] == 2 for v in violations(after))
+        assert all("generator" not in v for v in violations(after))
+
+    @pytest.mark.parametrize(
+        "consumer,fixture",
+        [(".coderabbit.yaml", "coderabbit.yaml"), ("promptfooconfig.yaml", "promptfoo.yaml")],
+    )
+    def test_source_alias_keeps_decoded_instruction_checks(self, consumer, fixture, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        target = repo / consumer
+        target.write_text((FIXTURES / "generators/consumer-aliases" / fixture).read_text())
+        config = repo / ".skillsaw.yaml"
+        config.write_text(
+            config.read_text() + "\n  content-banned-references:\n    banned:\n"
+            "      - pattern: forbidden-endpoint\n        message: Use the supported endpoint\n"
+        )
+        args = ("--rule", "security-invisible-unicode", "--rule", "content-banned-references")
+        before = run_lint(repo, *args)
+        source = repo / ".ruler/policy.md"
+        target.rename(source)
+        target.symlink_to(os.path.relpath(source, target.parent))
+        after = run_lint(repo, *args)
+        assert before["rc"] == after["rc"] == 1
+        assert violations(after) == violations(before)
+        assert {v["rule_id"] for v in violations(after)} == {
+            "security-invisible-unicode",
+            "content-banned-references",
+        }
+        assert all(v["file_path"] == consumer for v in violations(after))
+
+    def test_source_alias_keeps_claude_import_checks(self, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        target = repo / "CLAUDE.md"
+        target.write_text("# Inventory service\n\nRead @docs/missing-guide.md before editing.\n")
+        before = run_lint(repo, "--strict", "--rule", "instruction-imports-valid")
+        source = repo / ".ruler/policy.md"
+        target.rename(source)
+        target.symlink_to(".ruler/policy.md")
+        after = run_lint(repo, "--strict", "--rule", "instruction-imports-valid")
+        assert before["rc"] == after["rc"] == 1
+        assert violations(after) == violations(before)
+        assert any(v["rule_id"] == "instruction-imports-valid" for v in violations(after))
 
     @pytest.mark.parametrize(
         "generator,alias,payload",
@@ -11418,6 +11507,18 @@ class TestGeneratorWorkflows:
         (repo / "CLAUDE.md").unlink()
         without_outputs = run_lint(repo, "--rule", "content-inconsistent-terminology")
         assert violations(with_outputs) == violations(without_outputs)
+
+    def test_native_source_name_does_not_duplicate_terminology_votes(self, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            (repo / name).unlink()
+        source = repo / ".ruler/AGENTS.md"
+        source.write_text(source.read_text() + "\nKeep the folder organized.\n")
+        for name in ("backend/api.md", "release.md"):
+            path = repo / ".ruler" / name
+            path.write_text("# Inventory service\n\nKeep the directory organized.\n")
+        result = run_lint(repo, "--rule", "content-inconsistent-terminology")
+        assert [v["file_path"] for v in violations(result)] == [".ruler/AGENTS.md"]
 
     @pytest.mark.parametrize(
         "generator,source,outputs",

@@ -16,6 +16,26 @@ def gather_all_content_blocks(context: RepositoryContext) -> List[ContentBlock]:
     return context.lint_tree.content_blocks()
 
 
+def gather_editorial_content_blocks(context: RepositoryContext) -> List[ContentBlock]:
+    """Keep distinct prose views for editorial aggregation across files."""
+    from .generators import is_generator_source
+
+    blocks = [b for b in gather_all_content_blocks(context) if b.in_generated_copy is None]
+    sources = [b for b in blocks if is_generator_source(b)]
+    if not sources:
+        return blocks
+    source_views = {
+        (b.resolved_path, b.file_line(1), b.read_body(strip_code_blocks=False)) for b in sources
+    }
+    return [
+        b
+        for b in blocks
+        if is_generator_source(b)
+        or (b.resolved_path, b.file_line(1), b.read_body(strip_code_blocks=False))
+        not in source_views
+    ]
+
+
 gather_all_content_files = gather_all_content_blocks
 
 

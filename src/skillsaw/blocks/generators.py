@@ -12,6 +12,15 @@ from .frontmatter import FrontmatterField, FrontmatteredBlock
 from .json_config import JsonConfigBlock
 
 
+def is_generator_source(node):
+    """Whether a node is part of an authored generator parser view."""
+    while node is not None:
+        if isinstance(node, (RulerRuleBlock, RulesyncRuleBlock)):
+            return True
+        node = node.parent
+    return False
+
+
 @dataclass(eq=False)
 class RulerRuleBlock(FileContentBlock):
     """Ruler concatenates rule Markdown verbatim, including apparent frontmatter."""

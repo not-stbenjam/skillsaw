@@ -1128,6 +1128,34 @@ class Linter:
     def _protected_generated_path(self, path):
         return path is not None and (safe_resolve(path) or path) in self._generated_fix_paths
 
+    @staticmethod
+    def _dedupe_source_editorial(violations):
+        """Keep the source's identical editorial finding on a shared file.
+
+        Native parser views remain complete. Only matching findings at the
+        same physical line are duplicates; a different interpretation or a
+        security/policy finding survives. This confers no generated ownership.
+        """
+        from .blocks.generators import is_generator_source
+        from .generated import EDITORIAL_COPY_RULES
+
+        def key(v):
+            if v.rule_id not in EDITORIAL_COPY_RULES or v.block is None or v.file_line is None:
+                return None
+            return (
+                v.block.resolved_path,
+                v.file_line,
+                v.rule_id,
+                v.message,
+                v.severity,
+                v.fingerprint_discriminator,
+            )
+
+        sources = {key(v) for v in violations if is_generator_source(v.block)} - {None}
+        if not sources:
+            return violations
+        return [v for v in violations if is_generator_source(v.block) or key(v) not in sources]
+
     def _compiled_copy_paths(self) -> Set[Path]:
         """Resolved paths of every content-suppressed (compiled-copy) file.
 
@@ -1327,6 +1355,7 @@ class Linter:
                 len(violations),
             )
 
+        kept = self._dedupe_source_editorial(kept)
         if self._baseline is not None:
             from .baseline import filter_baselined_violations
 
