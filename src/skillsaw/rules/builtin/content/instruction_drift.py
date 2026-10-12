@@ -194,7 +194,7 @@ class ContentInstructionDriftRule(Rule):
         candidates = [
             cf
             for cf in gather_all_content_blocks(context)
-            if cf.category in _INSTRUCTION_CATEGORIES
+            if cf.category in _INSTRUCTION_CATEGORIES and cf.in_generated_copy is None
         ]
         if self._ignore_generated:
             candidates = [cf for cf in candidates if not self._is_generated(cf)]

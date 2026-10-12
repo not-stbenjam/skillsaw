@@ -32,6 +32,7 @@ from .repository_antigravity import RepositoryAntigravityMixin
 from .repository_mcp_registry import RepositoryMcpRegistryMixin
 from .repository_provenance import PluginProvenance, RepositoryProvenanceMixin
 from .repository_scan import RepositoryScanMixin
+from .repository_generators import RepositoryGeneratorsMixin
 
 # Re-exported here: ``skillsaw.context`` has always been the import site for
 # the repository vocabulary, and rules and plugins read it from there.
@@ -60,6 +61,7 @@ _UNSET = object()
 
 
 class RepositoryContext(
+    RepositoryGeneratorsMixin,
     RepositoryScanMixin,
     RepositoryMcpRegistryMixin,
     RepositoryExternalContentMixin,
@@ -77,6 +79,8 @@ class RepositoryContext(
         RepositoryType.MARKETPLACE,
         RepositoryType.SINGLE_PLUGIN,
         RepositoryType.APM,
+        RepositoryType.RULER,
+        RepositoryType.RULESYNC,
         RepositoryType.DOT_CLAUDE,
         # Below the Claude equivalents, so a repository that is both keeps
         # its Claude primary type — but above the generic fallbacks: an
@@ -144,6 +148,7 @@ class RepositoryContext(
         exclude_patterns: Optional[List[str]] = None,
         content_paths: Optional[List[str]] = None,
         lint_external_content: bool = True,
+        rulesync_generated: bool = False,
     ):
         """
         Initialize repository context
@@ -169,6 +174,7 @@ class RepositoryContext(
         self.content_paths: List[str] = list(content_paths) if content_paths else []
         self.goose_recipes_forced = repo_types is not None and RepositoryType.GOOSE in repo_types
         self.lint_external_content = lint_external_content
+        self.rulesync_generated = rulesync_generated
         self.exclude_patterns: List[str] = list(exclude_patterns) if exclude_patterns else []
         self._pattern_variants_cache: Dict[str, Tuple[str, ...]] = {}
         self._excluded_cache: Dict[Path, bool] = {}

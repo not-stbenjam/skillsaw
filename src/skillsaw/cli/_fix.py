@@ -82,6 +82,7 @@ def _run_fix(args):
             exclude_patterns=config.exclude_patterns,
             content_paths=config.content_paths,
             lint_external_content=config.lint_external_content,
+            rulesync_generated=config.rulesync_generated,
         )
         try:
             linter = Linter(
@@ -119,6 +120,7 @@ def _run_fix(args):
                 exclude_patterns=config.exclude_patterns,
                 content_paths=config.content_paths,
                 lint_external_content=config.lint_external_content,
+                rulesync_generated=config.rulesync_generated,
             )
             linter = Linter(
                 context,

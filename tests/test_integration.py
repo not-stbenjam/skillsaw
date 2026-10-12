@@ -11153,3 +11153,180 @@ class TestGoose:
         ]
         assert len(set(blocks)) == 2
         assert len({b.fingerprint_identity(1) for b in blocks}) == 2
+
+
+class TestGeneratorWorkflows:
+    """Pinned generator output is checked as its consumer's native format."""
+
+    @pytest.mark.parametrize(
+        "generator,source,outputs",
+        [
+            ("ruler", ".ruler/AGENTS.md", ["AGENTS.md", "CLAUDE.md"]),
+            (
+                "rulesync",
+                ".rulesync/rules/backend/api.md",
+                [
+                    ".claude/rules/backend/api.md",
+                    ".cursor/rules/backend/api.mdc",
+                ],
+            ),
+        ],
+    )
+    def test_fix_changes_sources_and_leaves_copies(self, generator, source, outputs, tmp_path):
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        for name in [source, *outputs]:
+            path = repo / name
+            path.write_text(path.read_text().replace("reservation logic", "reservation\u200blogic"))
+        before = {name: (repo / name).read_bytes() for name in outputs}
+        _run_fix(repo, "--rule", "content-unicode-control")
+        assert "\u200b" not in (repo / source).read_text()
+        assert all((repo / name).read_bytes() == content for name, content in before.items())
+
+    @pytest.mark.parametrize(
+        "generator,source,line",
+        [
+            ("ruler", ".ruler/AGENTS.md", 7),
+            ("rulesync", ".rulesync/rules/backend/api.md", 11),
+        ],
+    )
+    def test_editorial_findings_point_to_source_once(self, generator, source, line, tmp_path):
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        result = run_lint(repo, "--rule", "content-weak-language")
+        findings = result["out"]["violations"]
+        assert result["rc"] == 0
+        assert [(v["file_path"], v["line"]) for v in findings] == [(source, line)]
+        assert generator in result["out"]["stats"]["repo_types"]
+
+    def test_ruler_codex_output_uses_existing_header_rule(self, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        result = run_lint(repo, "--rule", "codex-mcp-headers", "--strict")
+        assert result["rc"] == 1
+        assert [(v["rule_id"], v["file_path"], v["line"]) for v in result["out"]["violations"]] == [
+            ("codex-mcp-headers", ".codex/config.toml", None),
+        ]
+
+    def test_structural_output_finding_keeps_attribution(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        result = run_lint(repo, "--rule", "cursor-rules-valid")
+        findings = result["out"]["violations"]
+        assert len(findings) == 1
+        assert findings[0]["file_path"] == ".cursor/rules/release.mdc"
+        assert findings[0]["generated_from"] == [".rulesync/rules/release.md"]
+        assert findings[0]["generator"] == "rulesync"
+        assert "never activates" in findings[0]["message"]
+
+    @pytest.mark.parametrize(
+        "generator,source,outputs",
+        [
+            ("ruler", ".ruler/AGENTS.md", ["AGENTS.md", "CLAUDE.md"]),
+            (
+                "rulesync",
+                ".rulesync/rules/backend/api.md",
+                [
+                    ".claude/rules/backend/api.md",
+                    ".cursor/rules/backend/api.mdc",
+                ],
+            ),
+        ],
+    )
+    def test_security_and_policy_survive_copy_ownership(self, generator, source, outputs, tmp_path):
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        # Change one literal in the source and its exact released copies, so
+        # they remain demonstrably equal while carrying a hidden character.
+        for name in [source, *outputs]:
+            path = repo / name
+            path.write_text(path.read_text().replace("reservation logic", "reservation\u200blogic"))
+        config = repo / ".skillsaw.yaml"
+        config.write_text(config.read_text() + """  content-banned-references:
+    banned:
+      - pattern: 'regression test'
+        message: 'Project policy fixture'
+""")
+        result = run_lint(
+            repo, "--rule", "security-invisible-unicode", "--rule", "content-banned-references"
+        )
+        findings = result["out"]["violations"]
+        for rule in ("security-invisible-unicode", "content-banned-references"):
+            assert {v["file_path"] for v in findings if v["rule_id"] == rule} == {source, *outputs}
+        for finding in findings:
+            if finding["file_path"] in outputs:
+                assert source in finding["generated_from"]
+                assert finding["fixable"] is False
+
+    def test_reference_resolution_runs_on_output(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = ".rulesync/rules/backend/api.md"
+        outputs = [".claude/rules/backend/api.md", ".cursor/rules/backend/api.mdc"]
+        # The link exists beside the authored source but not beside either
+        # output. Copy attribution cannot make a post-generation link valid.
+        (repo / ".rulesync/rules/backend/checklist.txt").write_text(
+            "Deploy the release candidate.\n"
+        )
+        for name in [source, *outputs]:
+            path = repo / name
+            path.write_text(
+                path.read_text().replace(
+                    "# HTTP API", "# HTTP API\n\nRead [the checklist](checklist.txt)."
+                )
+            )
+        result = run_lint(repo, "--rule", "content-broken-internal-reference")
+        findings = result["out"]["violations"]
+        assert {v["file_path"] for v in findings} == set(outputs)
+        assert all(v["generated_from"] == [source] for v in findings)
+
+    @pytest.mark.parametrize(
+        "generator,output",
+        [
+            ("ruler", "CLAUDE.md"),
+            ("rulesync", ".cursor/rules/backend/api.mdc"),
+        ],
+    )
+    def test_edited_outputs_and_unrelated_files_remain_checked(self, generator, output, tmp_path):
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+        changed = repo / output
+        changed.write_text(changed.read_text() + "\nKeep audit records for thirty days.\n")
+        unrelated = repo / ".cursor/rules/handmade.mdc"
+        unrelated.parent.mkdir(parents=True, exist_ok=True)
+        unrelated.write_text("---\nalwaysApply: true\n---\n\nConsider adding a regression test.\n")
+        result = run_lint(repo, "--rule", "content-weak-language")
+        findings = {v["file_path"]: v for v in result["out"]["violations"]}
+        assert output in findings and ".cursor/rules/handmade.mdc" in findings
+        assert "generated_from" not in findings[output]
+        assert "generated_from" not in findings[".cursor/rules/handmade.mdc"]
+
+    def test_rulesync_without_assertion_reports_outputs(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        (repo / ".skillsaw.yaml").write_text("version: '0.21.1'\n")
+        result = run_lint(repo, "--rule", "content-weak-language")
+        assert {v["file_path"] for v in result["out"]["violations"]} == {
+            ".rulesync/rules/backend/api.md",
+            ".cursor/rules/backend/api.mdc",
+            ".claude/rules/backend/api.md",
+        }
+
+    @pytest.mark.parametrize("generator", ["ruler", "rulesync"])
+    def test_lint_never_invokes_generator(self, generator, tmp_path, monkeypatch):
+        repo = copy_fixture(f"generators/{generator}", tmp_path)
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Lint attempted to launch an external process")
+
+        monkeypatch.setattr(subprocess, "Popen", forbidden)
+        result = run_lint(repo, "--rule", "content-weak-language")
+        assert result["rc"] == 0 and len(result["out"]["violations"]) == 1
+
+    def test_tree_explains_source_attribution(self, tmp_path):
+        repo = copy_fixture("generators/ruler", tmp_path)
+        result = run_cli(["tree", str(repo)])
+        assert result.returncode == 0
+        assert "generated by ruler from .ruler/AGENTS.md, .ruler/backend/api.md" in result.stdout
+
+    def test_source_config_errors_use_cli_severity(self, tmp_path):
+        repo = copy_fixture("generators/rulesync", tmp_path)
+        source = repo / ".rulesync/rules/bad.md"
+        source.write_text("---\nroot: yes\n---\n\n# Release\n\nRun the API tests.\n")
+        result = run_lint(repo, "--rule", "rulesync-source-valid")
+        assert result["rc"] == 1
+        assert [(v["file_path"], v["line"]) for v in result["out"]["violations"]] == [
+            (".rulesync/rules/bad.md", 2),
+        ]

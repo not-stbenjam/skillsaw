@@ -256,9 +256,11 @@ class Linter:
         # stale — but it
         # only narrows: it won't rediscover paths an earlier filter removed.
         if (
-            self.context.content_paths != self.config.content_paths
+            self.context.rulesync_generated != self.config.rulesync_generated
+            or self.context.content_paths != self.config.content_paths
             or self.context.exclude_patterns != self.config.exclude_patterns
         ):
+            self.context.rulesync_generated = self.config.rulesync_generated
             self.context.content_paths = self.config.content_paths
             self.context.exclude_patterns = self.config.exclude_patterns
             self.context.apply_excludes()
@@ -1107,6 +1109,16 @@ class Linter:
             return smap.is_explicitly_suppressed(violation.rule_id, file_line)
         return smap.is_suppressed(violation.rule_id, file_line)
 
+    def _generator_copy(self, violation):
+        if violation.file_path is None:
+            return None
+        tree = self.context.lint_tree
+        copies = tree.__dict__.get("_generator_copy_paths")
+        if copies is None:
+            copies = {n.resolved_path: n.generated_copy for n in tree.walk() if n.generated_copy}
+            tree.__dict__["_generator_copy_paths"] = copies
+        return copies.get(safe_resolve(violation.file_path) or violation.file_path)
+
     def _compiled_copy_paths(self) -> Set[Path]:
         """Resolved paths of every content-suppressed (compiled-copy) file.
 
@@ -1233,7 +1245,13 @@ class Linter:
                 symlink_status[file_path] = self._symlink_skip(file_path) is not None
             return symlink_status[file_path]
 
+        from .generated import EDITORIAL_COPY_RULES
+
         for v in violations:
+            generated = self._generator_copy(v)
+            if generated is not None:
+                v.generated_from = generated.sources
+                v.generator = generated.generator
             if self._is_excluded(v):
                 logger.info(
                     "Suppressed %-30s %s (global exclude)",
@@ -1259,6 +1277,8 @@ class Linter:
                     v.rule_id,
                     v.file_path or "(no file)",
                 )
+            elif generated is not None and v.rule_id in EDITORIAL_COPY_RULES:
+                logger.info("Suppressed %-30s %s (verified generator copy)", v.rule_id, v.file_path)
             elif _is_prose_duplicate_rule(v.rule_id) and self._is_on_compiled_copy(v):
                 # A compiled copy of a source read elsewhere: its prose-quality
                 # and budget findings would double the source's, so drop them.
@@ -1272,7 +1292,8 @@ class Linter:
                     v.file_path or "(no file)",
                 )
             elif (
-                self._is_on_external_source(v)
+                generated is not None
+                or self._is_on_external_source(v)
                 or self._is_vendor_managed(v.file_path)
                 or (v.block is not None and v.block.diagnostic_only)
                 or (not preserve_symlink_fixability and v.fixable and _is_symlink(v.file_path))
@@ -1441,7 +1462,8 @@ class Linter:
                 fixable_input = [
                     v
                     for v in visible
-                    if (v.block is None or not v.block.diagnostic_only)
+                    if self._generator_copy(v) is None
+                    and (v.block is None or not v.block.diagnostic_only)
                     and not self._is_on_external_source(v)
                     and v.severity in allowed_severities
                 ]
