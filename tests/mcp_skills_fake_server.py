@@ -67,6 +67,10 @@ class Options:
     reverse_listing: bool = False
     # resources/read of a key answers with the value's URI and contents.
     misattributed_reads: Dict[str, str] = field(default_factory=dict)
+    # Every resources/read waits this long before it answers.
+    stall_reads_seconds: float = 0.0
+    # skills/list pages carry their cursor as a number, not a string.
+    malformed_cursor: bool = False
 
 
 def _digest(data: bytes) -> str:
@@ -205,7 +209,8 @@ class Server:
                 "cacheScope": "private",
             }
             if start + PAGE_SIZE < len(self.catalog.entries):
-                result["nextCursor"] = str(start + PAGE_SIZE)
+                cursor = start + PAGE_SIZE
+                result["nextCursor"] = cursor if self.options.malformed_cursor else str(cursor)
             return result
         if method == "skills/get":
             for entry in self.catalog.entries:
@@ -226,6 +231,7 @@ class Server:
                 "cacheScope": "private",
             }
         if method == "resources/read":
+            time.sleep(self.options.stall_reads_seconds)
             uri = self.options.misattributed_reads.get(params.get("uri"), params.get("uri"))
             data = self.catalog.files.get(uri)
             if data is None:

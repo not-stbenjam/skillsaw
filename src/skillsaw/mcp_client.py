@@ -79,6 +79,10 @@ class McpAuthError(McpError):
     """The server wants credentials the request did not carry (HTTP 401)."""
 
 
+class McpTimeoutError(McpError):
+    """A request outlived its deadline: the server stopped answering."""
+
+
 class McpRpcError(McpError):
     """The server answered a request with a JSON-RPC error."""
 
@@ -125,7 +129,7 @@ def _response_for(message: Any, request_id: int) -> Optional[Mapping[str, Any]]:
 
 
 def _timed_out(timeout: float, method: str) -> McpError:
-    return McpError(f"timed out after {timeout:g}s waiting for {method}")
+    return McpTimeoutError(f"timed out after {timeout:g}s waiting for {method}")
 
 
 def _check_deadline(deadline: float, timeout: float, method: str) -> None:
@@ -320,7 +324,9 @@ class StdioTransport(Transport):
             # The writer stays blocked until the server reads or exits;
             # nothing more can be sent in order behind it.
             self._input_stalled = True
-            raise McpError(f"timed out after {timeout:g}s: the server stopped reading its input")
+            raise McpTimeoutError(
+                f"timed out after {timeout:g}s: the server stopped reading its input"
+            )
         if self._input_broken:
             raise McpError("server process closed its input")
 
@@ -742,7 +748,7 @@ class HttpTransport(Transport):
         except McpSizeError:
             raise
         except (McpError, OSError, http.client.HTTPException) as exc:
-            if watchdog.fired:
+            if watchdog.fired or watchdog.remaining() <= 0:
                 raise _timed_out(timeout, message["method"]) from exc
             raise
         finally:
@@ -1056,8 +1062,11 @@ class McpSession:
                 raise McpError("skills/list result has no 'skills' array")
             yield from skills
             next_cursor = result.get("nextCursor")
-            if not isinstance(next_cursor, str) or not next_cursor:
+            if next_cursor is None or next_cursor == "":
                 return
+            if not isinstance(next_cursor, str):
+                # Ending here would drop the rest of the listing in silence.
+                raise McpError("skills/list returned a nextCursor that is not a string")
             cursor = next_cursor
         raise McpError(f"skills/list did not finish within {max_pages} pages")
 
@@ -1114,7 +1123,11 @@ class McpSession:
                 if isinstance(item, Mapping):
                     children.append(item)
             next_cursor = result.get("nextCursor")
-            if not isinstance(next_cursor, str) or not next_cursor:
+            if next_cursor is None or next_cursor == "":
                 return children, True
+            if not isinstance(next_cursor, str):
+                raise McpError(
+                    "resources/directory/read returned a nextCursor that is not a string"
+                )
             cursor = next_cursor
         return children, False

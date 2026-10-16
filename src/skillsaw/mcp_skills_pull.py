@@ -23,6 +23,7 @@ import os
 import re
 import shlex
 import shutil
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -38,6 +39,7 @@ from .mcp_client import (
     McpBudgetError,
     McpError,
     McpSession,
+    McpTimeoutError,
     StdioTransport,
     Transport,
 )
@@ -161,11 +163,27 @@ def _command_label(command: List[str]) -> str:
     return program.name
 
 
+def split_command(command_line: str, windows: bool = os.name == "nt") -> List[str]:
+    """Split a command line into arguments.
+
+    POSIX rules read a backslash as an escape, which would turn
+    ``C:\\tools\\server.exe`` into ``C:toolsserver.exe``; on Windows only
+    double quotes group, and they are removed.
+    """
+    if not windows:
+        return shlex.split(command_line)
+    return [
+        token[1:-1] if len(token) >= 2 and token[0] == token[-1] == '"' else token
+        for token in shlex.split(command_line, posix=False)
+    ]
+
+
 def command_target(command_line: str, label: Optional[str] = None) -> ServerTarget:
     try:
-        command = shlex.split(command_line)
+        command = split_command(command_line)
     except ValueError as exc:
-        raise PullError(f"cannot parse --mcp-server {command_line!r}: {exc}") from exc
+        # Never quote the command line: its arguments may carry a credential.
+        raise PullError(f"cannot parse a --mcp-server command line: {exc}") from exc
     if not command:
         raise PullError("--mcp-server is empty")
     return ServerTarget(
@@ -213,9 +231,12 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
     command = entry.get("command")
     if isinstance(command, str) and command:
         args = entry.get("args")
-        argv = [_expand(command)] + [
-            _expand(str(a)) for a in (args if isinstance(args, list) else [])
-        ]
+        if args is None:
+            args = []
+        if not isinstance(args, list):
+            # Dropping them would start a different program invocation.
+            raise PullError("its 'args' is not an array")
+        argv = [_expand(command)] + [_expand(str(a)) for a in args]
         env = dict(os.environ)
         raw_env = entry.get("env")
         if isinstance(raw_env, Mapping):
@@ -505,8 +526,9 @@ class _ServerPull:
         # around it; fetch each URI once, keeping what verifying it needs.
         self.fetched: Dict[str, Tuple[int, str]] = {}
         self.frontmatter: Dict[str, Optional[Mapping[str, Any]]] = {}
-        # Stored paths, case-folded: macOS and Windows would merge two that
-        # differ only in case, so a snapshot holding both could not be checked out.
+        # Stored paths, case-folded and normalized: macOS and Windows would
+        # merge two that differ only so, and a snapshot holding both could
+        # not be checked out there.
         self.stored: Dict[str, str] = {}
         self.record: Dict[str, Any] = {
             "label": target.label,
@@ -536,7 +558,7 @@ class _ServerPull:
         session = McpSession(transport, timeout=timeout, max_bytes=self.max_bytes)
         try:
             self._pull(session)
-        except McpBudgetError as exc:
+        except (McpBudgetError, McpTimeoutError) as exc:
             self.error(f"stopped: {exc}; later skills and files were not fetched")
         except McpAuthError as exc:
             self.error(
@@ -678,16 +700,20 @@ class _ServerPull:
         if not parts:
             self.error("refused: the URI cannot be stored safely", file_uri)
             return None
-        folded = "/".join(parts).casefold()
+        # NFC as well as case: macOS treats canonically equivalent names as one.
+        folded = unicodedata.normalize(
+            "NFC", unicodedata.normalize("NFC", "/".join(parts)).casefold()
+        )
         if self.stored.setdefault(folded, file_uri) != file_uri:
             self.error(
-                f"refused: its path differs only in case from {self.stored[folded]}", file_uri
+                f"refused: on macOS and Windows its path is the same as {self.stored[folded]}",
+                file_uri,
             )
             return None
         try:
             data = session.read_resource(file_uri)
-        except McpBudgetError:
-            raise
+        except (McpBudgetError, McpTimeoutError):
+            raise  # a server that stopped answering would cost a timeout per file
         except McpError as exc:
             self.error(f"read failed: {exc}", file_uri)
             return None
@@ -729,7 +755,7 @@ class _ServerPull:
                 children, listed = session.read_directory(
                     directory, max_pages=budget, max_entries=limit + 1
                 )
-            except McpBudgetError:
+            except (McpBudgetError, McpTimeoutError):
                 raise
             except McpError as exc:
                 self.error(f"directory read failed: {exc}", directory)

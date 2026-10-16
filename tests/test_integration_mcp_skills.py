@@ -90,6 +90,22 @@ def test_safe_uri_segments_map_under_the_server():
 
 
 @pytest.mark.parametrize(
+    "line,windows,expected",
+    [
+        ('npx -y "@acme/skills server"', False, ["npx", "-y", "@acme/skills server"]),
+        (
+            r'C:\tools\server.exe --root "C:\Program Files\data"',
+            True,
+            [r"C:\tools\server.exe", "--root", r"C:\Program Files\data"],
+        ),
+    ],
+    ids=["posix", "windows"],
+)
+def test_command_lines_split_by_platform_rules(line, windows, expected):
+    assert pull_module.split_command(line, windows=windows) == expected
+
+
+@pytest.mark.parametrize(
     "value,expected",
     [
         ("Bearer ${MCP_SET}", "Bearer set"),
@@ -639,6 +655,54 @@ class TestPull:
         [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
         assert error["message"].startswith("the advertised frontmatter differs")
 
+    def test_a_server_that_stops_answering_is_not_waited_on_per_file(self, tmp_path):
+        server, httpd, url = http_server(fake.Options(stall_reads_seconds=3))
+        try:
+            result, out = pull(tmp_path, url, "--mcp-timeout", "0.5")
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        # One timeout stops the server, rather than one per remaining file.
+        assert server.calls.count("resources/read") == 1
+        assert any(
+            e["message"].startswith("stopped: timed out after 0.5s waiting for resources/read")
+            for e in pulled(out)["errors"]
+        )
+
+    def test_a_malformed_cursor_is_a_problem_not_the_end(self, tmp_path):
+        server, httpd, url = http_server(fake.Options(malformed_cursor=True))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        assert any("nextCursor that is not a string" in e["message"] for e in pulled(out)["errors"])
+
+    def test_paths_differing_only_in_normalization_are_refused(self, tmp_path):
+        # macOS treats NFC é and NFD é as one name.
+        root = "skill://accented"
+        files = {
+            f"{root}/SKILL.md": b"---\nname: accented\ndescription: Accented. Use when testing.\n---\n",
+            f"{root}/caf%C3%A9.md": b"composed\n",
+            f"{root}/cafe%CC%81.md": b"decomposed\n",
+        }
+        resources = [
+            {"uri": uri, "digest": mcp_skills.sha256_digest(data), "size": len(data)}
+            for uri, data in files.items()
+        ]
+        frontmatter = {"name": "accented", "description": "Accented. Use when testing."}
+        entry = {"uri": f"{root}/SKILL.md", "frontmatter": frontmatter, "resources": resources}
+        server, httpd, url = http_server(fake.Options(extra_entries=[entry], extra_files=files))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == f"{root}/cafe%CC%81.md"]
+        assert error["message"] == (
+            f"refused: on macOS and Windows its path is the same as {root}/caf%C3%A9.md"
+        )
+
     def test_paths_differing_only_in_case_are_refused(self, tmp_path):
         # macOS and Windows would merge them, so the snapshot could not be checked out.
         root = "skill://cased"
@@ -660,7 +724,9 @@ class TestPull:
             httpd.shutdown()
         assert result.returncode == 1
         [error] = [e for e in pulled(out)["errors"] if e.get("uri") == f"{root}/readme.md"]
-        assert error["message"] == f"refused: its path differs only in case from {root}/README.md"
+        assert error["message"] == (
+            f"refused: on macOS and Windows its path is the same as {root}/README.md"
+        )
         assert not (out / "fake" / "cased" / "readme.md").exists()
 
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
@@ -742,6 +808,20 @@ class TestPull:
         assert result.returncode == 1
         assert "must look like 'Name: value'" in result.stderr
         assert "s3cret" not in result.stderr
+
+    def test_an_unparseable_command_line_is_refused_unquoted(self):
+        result = run_cli(["lint", "--mcp-server", 'server --token s3cret "unclosed'])
+        assert result.returncode == 1
+        assert "cannot parse a --mcp-server command line" in result.stderr
+        assert "s3cret" not in result.stderr
+
+    def test_config_args_that_are_not_an_array_are_refused(self, tmp_path):
+        config = tmp_path / "mcp.json"
+        entry = {"command": sys.executable, "args": "--safe-mode"}
+        config.write_text(json.dumps({"mcpServers": {"stringly": entry}}))
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 1
+        assert "Skipping stringly: its 'args' is not an array" in result.stderr
 
     def test_a_disabled_server_is_never_started(self, tmp_path):
         marker = tmp_path / "started"
