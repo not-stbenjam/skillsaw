@@ -74,7 +74,7 @@ def _run_lint(args):
 
     missing_count = 0
     valid_raw_paths = []
-    for p in args.path:
+    for p in args.path or [Path.cwd()]:
         if not p.exists():
             print(f"Error: Path not found: {p}", file=sys.stderr)
             missing_count += 1
@@ -171,11 +171,15 @@ def _run_lint(args):
         removed_skips.intersection_update(linter.removed_skip_rule_ids)
 
         # After Linter construction plugin repo type detectors have run, so
-        # a repository recognized only by a plugin is not warned about.
+        # a repository recognized only by a plugin is not warned about. Skills
+        # fetched from MCP servers land in a directory skillsaw made, and a
+        # server that serves none is not a mistake.
         if (
             context.repo_type == RepositoryType.UNKNOWN
             and not context.plugin_repo_types
             and not context.lint_tree.children
+            and not getattr(args, "mcp_servers", None)
+            and not getattr(args, "mcp_config", None)
         ):
             print(
                 "Warning: Directory doesn't appear to be a recognized repository",
