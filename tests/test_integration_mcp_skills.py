@@ -90,6 +90,21 @@ def test_safe_uri_segments_map_under_the_server():
 
 
 @pytest.mark.parametrize(
+    "url,described",
+    [
+        ("https://mcp.example.com/api/s3cret/mcp?key=x", "https://mcp.example.com"),
+        ("https://user:pw@mcp.example.com:8443/mcp", "https://mcp.example.com:8443"),
+        ("http://[::1]:8080/mcp", "http://[::1]:8080"),
+    ],
+    ids=["path-key", "user-info", "ipv6"],
+)
+def test_a_target_is_described_by_its_origin(url, described):
+    # Some services carry an API key in the path; the description is printed
+    # and recorded in the snapshot.
+    assert pull_module.ServerTarget(label="x", kind="http", url=url).describe() == described
+
+
+@pytest.mark.parametrize(
     "line,windows,expected",
     [
         ('npx -y "@acme/skills server"', False, ["npx", "-y", "@acme/skills server"]),
@@ -245,7 +260,7 @@ class TestPull:
             httpd.shutdown()
         server = json.loads((out / mcp_skills.SNAPSHOT_FILENAME).read_text())["servers"][0]
         assert server["protocolVersion"] == version
-        assert server["target"] == url
+        assert server["target"] == url.removesuffix("/mcp")  # the origin only
         assert server["errors"] == []
         assert result.returncode == 0, result.stderr
 
@@ -678,6 +693,18 @@ class TestPull:
         assert result.returncode == 1
         assert any("nextCursor that is not a string" in e["message"] for e in pulled(out)["errors"])
 
+    def test_a_malformed_directory_entry_is_a_problem(self, tmp_path):
+        options = fake.Options(dynamic=["pdf-processing"], malformed_directory_entry=True)
+        server, httpd, url = http_server(options)
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        assert any(
+            "listed an entry that is not an object" in e["message"] for e in pulled(out)["errors"]
+        )
+
     def test_paths_differing_only_in_normalization_are_refused(self, tmp_path):
         # macOS treats NFC é and NFD é as one name.
         root = "skill://accented"
@@ -815,13 +842,23 @@ class TestPull:
         assert "cannot parse a --mcp-server command line" in result.stderr
         assert "s3cret" not in result.stderr
 
-    def test_config_args_that_are_not_an_array_are_refused(self, tmp_path):
+    @pytest.mark.parametrize(
+        "field,value,message",
+        [
+            ("args", "--safe-mode", "its 'args' is not an array"),
+            ("env", ["SAFE_MODE=1"], "its 'env' is not an object"),
+        ],
+    )
+    def test_config_launch_fields_of_the_wrong_shape_are_refused(
+        self, tmp_path, field, value, message
+    ):
+        # Dropping them would start a different server than the config names.
         config = tmp_path / "mcp.json"
-        entry = {"command": sys.executable, "args": "--safe-mode"}
-        config.write_text(json.dumps({"mcpServers": {"stringly": entry}}))
+        entry = {"command": sys.executable, field: value}
+        config.write_text(json.dumps({"mcpServers": {"misshapen": entry}}))
         result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
         assert result.returncode == 1
-        assert "Skipping stringly: its 'args' is not an array" in result.stderr
+        assert f"Skipping misshapen: {message}" in result.stderr
 
     def test_a_disabled_server_is_never_started(self, tmp_path):
         marker = tmp_path / "started"

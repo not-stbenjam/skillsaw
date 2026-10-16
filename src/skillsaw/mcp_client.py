@@ -1120,8 +1120,10 @@ class McpSession:
             for item in resources:
                 if len(children) >= max_entries:
                     return children, False
-                if isinstance(item, Mapping):
-                    children.append(item)
+                if not isinstance(item, Mapping):
+                    # Skipping it could leave a file out of a listing called complete.
+                    raise McpError("resources/directory/read listed an entry that is not an object")
+                children.append(item)
             next_cursor = result.get("nextCursor")
             if next_cursor is None or next_cursor == "":
                 return children, True

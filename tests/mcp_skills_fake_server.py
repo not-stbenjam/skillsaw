@@ -26,6 +26,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from skillsaw.utils import _SAFE_LOADER
+
 EXTENSION = "io.modelcontextprotocol/skills"
 MODERN = "2026-07-28"
 PAGE_SIZE = 2
@@ -71,6 +73,8 @@ class Options:
     stall_reads_seconds: float = 0.0
     # skills/list pages carry their cursor as a number, not a string.
     malformed_cursor: bool = False
+    # Every directory listing carries an entry that is not an object.
+    malformed_directory_entry: bool = False
 
 
 def _digest(data: bytes) -> str:
@@ -81,7 +85,7 @@ def _frontmatter(text: str) -> Dict[str, Any]:
     if not text.startswith("---\n"):
         return {}
     end = text.find("\n---", 4)
-    data = yaml.safe_load(text[4:end]) if end != -1 else None
+    data = yaml.load(text[4:end], Loader=_SAFE_LOADER) if end != -1 else None
     return data if isinstance(data, dict) else {}
 
 
@@ -274,6 +278,8 @@ class Server:
                 )
                 for c in self.catalog.dirs[uri]
             ]
+            if self.options.malformed_directory_entry:
+                children.append(5)
             return {
                 "resultType": "complete",
                 "resources": children,

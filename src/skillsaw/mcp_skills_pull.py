@@ -77,13 +77,19 @@ class ServerTarget:
         return StdioTransport(self.command, env=self.env, cwd=self.cwd)
 
     def describe(self) -> str:
-        """Where the skills came from, without credentials."""
+        """Where the skills came from, without credentials.
+
+        Only the origin: some services carry an API key in the URL path, and
+        this is printed and recorded in the snapshot.
+        """
         if self.kind == "http" and self.url:
             parts = urlsplit(self.url)
             host = parts.hostname or ""
+            if ":" in host:
+                host = f"[{host}]"  # an IPv6 literal
             if parts.port:
                 host = f"{host}:{parts.port}"
-            return urlunsplit((parts.scheme, host, parts.path, "", ""))
+            return urlunsplit((parts.scheme, host, "", "", ""))
         return Path(self.command[0]).name if self.command else "stdio"
 
 
@@ -239,8 +245,9 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
         argv = [_expand(command)] + [_expand(str(a)) for a in args]
         env = dict(os.environ)
         raw_env = entry.get("env")
-        if isinstance(raw_env, Mapping):
-            env.update({str(k): _expand(str(v)) for k, v in raw_env.items()})
+        if raw_env is not None and not isinstance(raw_env, Mapping):
+            raise PullError("its 'env' is not an object")  # as with args, never drop it
+        env.update({str(k): _expand(str(v)) for k, v in (raw_env or {}).items()})
         workdir = entry.get("cwd")
         if isinstance(workdir, str) and workdir:
             cwd = cwd / _expand(workdir)  # relative to the config, as clients resolve it

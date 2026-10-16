@@ -88,8 +88,9 @@ skillsaw sends credentials it is given; it does not run an OAuth login.
   can log in, commit its directory, and lint that in CI like any other.
 
 Credentials stay out of the snapshot: it records the server's scheme, host and
-path, but no headers, query string or user info. Redirects are refused, so a
-server cannot forward your header to another host.
+port, but no path (some services carry a key there), headers, query string or
+user info. Redirects are refused, so a server cannot forward your header to
+another host.
 
 ## Pulling skills
 
