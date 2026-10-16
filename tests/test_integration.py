@@ -5866,6 +5866,43 @@ class TestOutputFormats:
         quiet_info = [v for v in violations(quiet) if v["severity"] == "info"]
         assert len(verbose_info) > len(quiet_info)
 
+    def test_quiet_clean_run_prints_nothing(self, tmp_path):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        report = tmp_path / "report.json"
+        r = run_lint(repo, "--quiet", "--output", str(report), verbose=False, fmt="text")
+        assert r["rc"] == 0
+        assert r["stdout"] == ""
+        # Report files are still written in full.
+        assert "violations" in json.loads(report.read_text())
+
+    def test_quiet_prints_findings_and_summary_only(self, tmp_path):
+        repo = copy_fixture("single-plugin/broken", tmp_path)
+        loud = run_lint(repo, verbose=False, fmt="text")
+        r = run_lint(repo, "-q", verbose=False, fmt="text")
+        assert r["rc"] == loud["rc"] == 1
+        assert "skillsaw " not in r["stdout"].splitlines()[0]
+        assert "Linting:" not in r["stdout"]
+        assert "Scanned:" not in r["stdout"]
+        assert "Errors:" in r["stdout"]
+        assert "Summary:" in r["stdout"]
+        finding_lines = [line for line in loud["stdout"].splitlines() if line.startswith("  ✗")]
+        assert finding_lines
+        assert all(line in r["stdout"] for line in finding_lines)
+
+    def test_quiet_with_verbose_shows_info_findings(self, tmp_path):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        r = run_lint(repo, "-q", verbose=True, fmt="text")
+        assert r["rc"] == 0
+        assert "Info:" in r["stdout"]
+        assert "Scanned:" not in r["stdout"]
+        assert "All checks passed" in r["stdout"]
+
+    def test_quiet_leaves_json_output_unchanged(self, tmp_path):
+        repo = copy_fixture("single-plugin/clean", tmp_path)
+        r = run_lint(repo, "-q", verbose=False)
+        assert "stats" in r["out"]
+        assert "summary" in r["out"]
+
     def test_sarif_output(self, tmp_path):
         repo = copy_fixture("single-plugin/broken", tmp_path)
         sarif_path = tmp_path / "report.sarif"

@@ -261,6 +261,18 @@ skillsaw supports several machine-readable output formats — `--format`
 2.1.0](https://sarifweb.azurewebsites.net/) for tools that ingest it.
 See the [CLI reference](cli.md) for details.
 
+## Quiet logs
+
+`skillsaw lint --quiet` (`-q`) keeps CI logs short. A clean run prints
+nothing to stdout. A run with findings prints the findings and the summary
+without the banner or scan stats. The flag changes only the text report on
+stdout, so files requested with `--output` are written in full and the exit
+code is unchanged:
+
+```bash
+skillsaw lint --quiet --output skillsaw-summary.html .
+```
+
 ## GitLab CI
 
 For GitLab merge-request widgets, use the `gitlab` output format (a Code
