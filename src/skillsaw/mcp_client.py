@@ -88,7 +88,9 @@ class McpRpcError(McpError):
 
     def __init__(self, code: Any, message: Any, data: Any = None):
         super().__init__(f"{message} (code {code})")
-        self.code = code
+        # Only an integer is a code; anything else (a list, say) cannot even
+        # be looked up in a set of codes.
+        self.code = code if isinstance(code, int) and not isinstance(code, bool) else None
         self.rpc_message = message
         self.data = data
 
@@ -755,7 +757,9 @@ class HttpTransport(Transport):
         except McpSizeError:
             raise
         except (McpError, OSError, http.client.HTTPException) as exc:
-            if watchdog.fired or watchdog.remaining() <= 0:
+            # Not remaining(), which never reaches 0: a socket timeout can
+            # land at the deadline before the timer thread runs.
+            if watchdog.fired or time.monotonic() >= watchdog.deadline:
                 raise _timed_out(timeout, message["method"]) from exc
             raise
         finally:

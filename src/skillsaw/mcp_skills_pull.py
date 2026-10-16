@@ -43,7 +43,7 @@ from .mcp_client import (
     StdioTransport,
     Transport,
 )
-from .utils import _SAFE_LOADER, _extract_frontmatter_text
+from .utils import _SAFE_LOADER, _extract_frontmatter_text, read_jsonc
 
 DEFAULT_MAX_SKILLS = 256
 DEFAULT_MAX_BYTES = 64 * 1024 * 1024
@@ -153,6 +153,8 @@ def url_target(url: str, headers: Mapping[str, str], label: Optional[str] = None
 #: verbs some of them take first (``uv run``, ``docker run``, ``pnpm dlx``).
 _LAUNCHERS = {"npx", "pnpx", "bunx", "uvx", "pipx", "uv", "pnpm", "node", "deno", "bun", "docker"}
 _LAUNCHER_VERBS = {"run", "x", "exec", "dlx", "tool"}
+#: Flags whose next argument is a program's source, as in ``python -c``.
+_INLINE_CODE_FLAGS = {"-c", "-e", "--eval", "-p", "--print"}
 
 
 def _command_label(command: List[str]) -> str:
@@ -163,6 +165,8 @@ def _command_label(command: List[str]) -> str:
     """
     program = Path(command[0])
     launcher = program.stem.lower()
+    if any(arg in _INLINE_CODE_FLAGS for arg in command[1:]):
+        return program.name  # the code may hold a credential; it is no name
     if launcher in _LAUNCHERS or launcher.startswith("python"):
         for arg in command[1:]:
             if not arg.startswith("-") and arg not in _LAUNCHER_VERBS:
@@ -202,24 +206,35 @@ def command_target(command_line: str, label: Optional[str] = None) -> ServerTarg
     )
 
 
-def config_servers(config_path: Path) -> Dict[str, Mapping[str, Any]]:
-    """The server map of an MCP client config (``mcpServers`` or ``servers``)."""
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError) as exc:
-        raise PullError(f"cannot read {config_path}: {exc}") from exc
-    except RecursionError:
-        raise PullError(f"cannot read {config_path}: it nests too deeply") from None
+def config_servers(config_path: Path) -> Dict[str, Any]:
+    """The server map of an MCP client config.
+
+    ``mcpServers`` or ``servers``, or the whole file when it is a bare map
+    of servers, as a plugin's ``.mcp.json`` may be. VS Code and Cursor
+    configs are JSONC. Entries are returned whatever their shape, so one
+    that is not an object is reported, not dropped.
+    """
+    data, error = read_jsonc(config_path, allow_duplicate_keys=True)
+    if error is not None:
+        raise PullError(f"cannot read {config_path}: {error}")
     if not isinstance(data, Mapping):
         raise PullError(f"{config_path} is not a JSON object")
     servers = data.get("mcpServers", data.get("servers"))
+    if servers is None and data and all(_names_a_server(entry) for entry in data.values()):
+        servers = data
     if not isinstance(servers, Mapping):
         raise PullError(f"{config_path} has no 'mcpServers' or 'servers' map")
-    return {str(k): v for k, v in servers.items() if isinstance(v, Mapping)}
+    return {str(k): v for k, v in servers.items()}
 
 
-def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarget:
+def _names_a_server(entry: Any) -> bool:
+    return isinstance(entry, Mapping) and ("command" in entry or "url" in entry)
+
+
+def config_target(name: str, entry: Any, cwd: Path) -> ServerTarget:
     """A target for one server entry of an MCP client config."""
+    if not isinstance(entry, Mapping):
+        raise PullError("it is not an object")
     if entry.get("disabled") is True:
         raise PullError("it is disabled")  # never start a server the user switched off
     label = mcp_skills.sanitize_label(name)
@@ -243,6 +258,8 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
         if not isinstance(args, list):
             # Dropping them would start a different program invocation.
             raise PullError("its 'args' is not an array")
+        if not all(isinstance(arg, str) for arg in args):
+            raise PullError("its 'args' holds a value that is not a string")
         argv = [_expand(command)] + [_expand(str(a)) for a in args]
         env = dict(os.environ)
         raw_env = entry.get("env")
@@ -250,7 +267,9 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
             raise PullError("its 'env' is not an object")  # as with args, never drop it
         env.update({str(k): _expand(str(v)) for k, v in (raw_env or {}).items()})
         workdir = entry.get("cwd")
-        if isinstance(workdir, str) and workdir:
+        if workdir is not None and not isinstance(workdir, str):
+            raise PullError("its 'cwd' is not a string")  # never start it elsewhere
+        if workdir:
             cwd = cwd / _expand(workdir)  # relative to the config, as clients resolve it
         return ServerTarget(label=label, kind="stdio", command=argv, env=env, cwd=cwd)
     raise PullError("it has neither a 'url' nor a 'command'")
@@ -303,8 +322,9 @@ def prepare_output(out_dir: Path) -> None:
                     f"{out_dir} holds files that are not a skillsaw snapshot; choose an "
                     "empty directory or an earlier snapshot"
                 )
-            for entry in entries:
-                if entry.name == mcp_skills.SNAPSHOT_FILENAME:
+            # The record goes last, so a cleanup cut short can still be replaced.
+            for entry in sorted(entries, key=lambda e: e.name in _RECORD_NAMES):
+                if entry.name in _RECORD_NAMES:
                     entry.unlink()
                 else:
                     shutil.rmtree(entry)
@@ -341,10 +361,14 @@ def _snapshot_labels(out_dir: Path) -> set:
     return {label for label in labels if isinstance(label, str)}
 
 
+#: The snapshot record, and the file it is written to before it is renamed.
+_RECORD_NAMES = {mcp_skills.SNAPSHOT_FILENAME, f".{mcp_skills.SNAPSHOT_FILENAME}.partial"}
+
+
 def _replaceable(entry: Path, labels: set) -> bool:
     if entry.is_symlink():
         return False
-    if entry.name == mcp_skills.SNAPSHOT_FILENAME:
+    if entry.name in _RECORD_NAMES:
         return entry.is_file()
     return (
         entry.name in labels
@@ -428,14 +452,13 @@ def _same_frontmatter(served: Any, advertised: Any) -> bool:
     if isinstance(served, (Mapping, list)) or isinstance(advertised, (Mapping, list)):
         return False
     if isinstance(served, str) != isinstance(advertised, str):
-        # Read the text side as the unquoted YAML scalar it would be in the
-        # file, so its spelling is compared, not its type.
+        # Read advertised text as the unquoted YAML scalar it would be in the
+        # file, so its spelling is compared, not its type. Served text was
+        # quoted, and is text to every YAML parser, so it is compared as is.
         if isinstance(advertised, str):
             advertised = _as_yaml_scalar(advertised)
-        else:
-            served = _as_yaml_scalar(served)
-        if _same_day(served, advertised):
-            return True
+            if _same_day(served, advertised):
+                return True
     if isinstance(served, bool) or isinstance(advertised, bool):
         return type(served) is type(advertised) and served == advertised  # true is not 1
     return served == advertised
@@ -556,7 +579,7 @@ class _ServerPull:
         self.record: Dict[str, Any] = {
             "label": target.label,
             "transport": target.kind,
-            "target": target.describe(),
+            "target": _clean_text(target.describe()),
             "protocolVersion": None,
             "serverInfo": None,
             "extension": None,
@@ -836,6 +859,19 @@ def pull(
     from . import __version__
 
     unique_labels(targets)
+    started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    unfinished = {"message": "the pull did not finish"}
+    # Recorded before anything is fetched: a pull cut short still leaves a
+    # record of the directories it made, so the next pull can replace them.
+    _write_snapshot(
+        out_dir,
+        {
+            "snapshotVersion": mcp_skills.SNAPSHOT_VERSION,
+            "generator": f"skillsaw {__version__}",
+            "pulledAt": started,
+            "servers": [{"label": t.label, "errors": [unfinished]} for t in targets],
+        },
+    )
     servers = []
     for target in targets:
         if progress is not None:
@@ -846,10 +882,15 @@ def pull(
     snapshot = {
         "snapshotVersion": mcp_skills.SNAPSHOT_VERSION,
         "generator": f"skillsaw {__version__}",
-        "pulledAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pulledAt": started,
         "servers": servers,
     }
-    # Write beside, then rename: a snapshot file is either whole or absent.
+    _write_snapshot(out_dir, snapshot)
+    return snapshot
+
+
+def _write_snapshot(out_dir: Path, snapshot: Dict[str, Any]) -> None:
+    """Write the record beside, then rename: it is either whole or absent."""
     final = out_dir / mcp_skills.SNAPSHOT_FILENAME
     partial = out_dir / f".{mcp_skills.SNAPSHOT_FILENAME}.partial"
     try:
@@ -863,4 +904,3 @@ def pull(
         except OSError:
             pass
         raise PullError(f"cannot write {final}: {exc.strerror or exc}") from exc
-    return snapshot

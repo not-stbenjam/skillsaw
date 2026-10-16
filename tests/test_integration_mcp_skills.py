@@ -781,6 +781,54 @@ class TestPull:
         [error] = pulled(out)["errors"]
         assert "hold a character the system refuses" in error["message"]
 
+    def test_a_pull_cut_short_can_be_replaced(self, tmp_path, monkeypatch):
+        out = tmp_path / "snapshot"
+        pull_module.prepare_output(out)
+        target = pull_module.ServerTarget(label="docs", kind="http", url="http://x/")
+
+        def interrupted(self, timeout):
+            self.server_dir.mkdir(parents=True)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(pull_module._ServerPull, "run", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            pull_module.pull([target], out)
+        # The record written before the fetch still names what it made.
+        pull_module.prepare_output(out)
+        assert list(out.iterdir()) == []
+
+    def test_a_quoted_served_value_is_compared_as_text(self, tmp_path):
+        # Quoted, "yes" is text to every YAML parser, never true.
+        uri = "skill://quoted/SKILL.md"
+        skill_md = b'---\nname: quoted\ndescription: Quoted. Use when testing.\nbeta: "yes"\n---\n'
+        frontmatter = {"name": "quoted", "description": "Quoted. Use when testing."}
+        entry = {
+            "uri": uri,
+            "frontmatter": {**frontmatter, "beta": True},
+            "resources": [
+                {"uri": uri, "digest": mcp_skills.sha256_digest(skill_md), "size": len(skill_md)}
+            ],
+        }
+        server, httpd, url = http_server(
+            fake.Options(extra_entries=[entry], extra_files={uri: skill_md})
+        )
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
+        assert error["message"].startswith("the advertised frontmatter differs")
+
+    def test_an_unencodable_host_does_not_stop_the_snapshot(self, tmp_path):
+        config = tmp_path / "mcp.json"
+        config.write_text(json.dumps({"servers": {"odd": {"url": "http://exa\ud800mple.com/mcp"}}}))
+        out = tmp_path / "out"
+        result = run_cli(["pull", "--mcp-config", config, "-o", out])
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+        assert pulled(out)["errors"]
+
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
         out = tmp_path / "snapshot"
         (out / ".git").mkdir(parents=True)
@@ -879,6 +927,8 @@ class TestPull:
         [
             ("args", "--safe-mode", "its 'args' is not an array"),
             ("env", ["SAFE_MODE=1"], "its 'env' is not an object"),
+            ("args", ["--port", None], "its 'args' holds a value that is not a string"),
+            ("cwd", 0, "its 'cwd' is not a string"),
         ],
     )
     def test_config_launch_fields_of_the_wrong_shape_are_refused(
@@ -891,6 +941,30 @@ class TestPull:
         result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
         assert result.returncode == 1
         assert f"Skipping misshapen: {message}" in result.stderr
+
+    def test_jsonc_configs_and_odd_entries(self, tmp_path):
+        # VS Code and Cursor configs carry comments and trailing commas; an
+        # entry that is not an object is reported rather than dropped.
+        config = tmp_path / "mcp.json"
+        docs = json.dumps({"command": sys.executable, "args": [str(FAKE_SERVER), str(SERVED)]})
+        config.write_text(
+            '{\n  // the docs server\n  "servers": {\n'
+            f'    "docs": {docs},\n    "broken": "oops",\n'
+            "  },\n}\n"
+        )
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 0, result.stderr
+        assert "docs: 5 skill(s)" in result.stderr
+        assert "Skipping broken: it is not an object" in result.stderr
+
+    def test_a_bare_server_map_is_a_config(self, tmp_path):
+        # A plugin's .mcp.json may be the server map itself.
+        config = tmp_path / ".mcp.json"
+        entry = {"command": sys.executable, "args": [str(FAKE_SERVER), str(SERVED)]}
+        config.write_text(json.dumps({"docs": entry}))
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 0, result.stderr
+        assert "docs: 5 skill(s)" in result.stderr
 
     def test_a_disabled_server_is_never_started(self, tmp_path):
         marker = tmp_path / "started"
@@ -919,7 +993,7 @@ class TestPull:
         config.write_text("[" * 64 + "]" * 64)
         result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
         assert result.returncode == 1
-        assert "it nests too deeply" in result.stderr
+        assert "Nesting too deep to parse" in result.stderr
         assert "Traceback" not in result.stderr
 
     def test_credentials_in_a_url_are_refused_unquoted(self):
@@ -1116,6 +1190,23 @@ class TestStdioShutdown:
             transport.close()
         # A read already waiting may finish its chunk; nothing more is taken in.
         assert transport.bytes_received <= mcp_client._READ_CHUNK + 1
+
+    def test_an_error_code_that_is_not_an_integer_is_no_crash(self):
+        transport = python_server(
+            "import json, sys\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    if 'id' in request:\n"
+            "        error = {'code': [1], 'message': 'odd'}\n"
+            "        reply = {'jsonrpc': '2.0', 'id': request['id'], 'error': error}\n"
+            "        print(json.dumps(reply), flush=True)\n"
+        )
+        session = mcp_client.McpSession(transport, timeout=10)
+        try:
+            with pytest.raises(mcp_client.McpError):
+                session.connect()
+        finally:
+            session.close()
 
     def test_an_unsupported_legacy_version_is_refused(self):
         transport = python_server(
@@ -1360,6 +1451,19 @@ class TestBoundedReads:
         with pytest.raises(mcp_client.McpError):
             transport.send({"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers={}, timeout=0.3)
         assert time.monotonic() - start < 1.5
+
+    def test_a_failure_at_the_deadline_is_a_timeout(self, monkeypatch):
+        # The socket timeout can land before the watchdog's timer thread runs.
+        monkeypatch.setattr(mcp_client._Watchdog, "_fire", lambda self: None)
+
+        def stalled(self, message, headers, watchdog, timeout, limit):
+            time.sleep(timeout + 0.1)
+            raise mcp_client.McpError("could not reach server: timed out")
+
+        monkeypatch.setattr(mcp_client.HttpTransport, "_exchange", stalled)
+        transport = mcp_client.HttpTransport("http://127.0.0.1:9/mcp")
+        with pytest.raises(mcp_client.McpTimeoutError):
+            transport.send({"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers={}, timeout=0.2)
 
     def test_invalid_request_errors_do_not_quote_header_values(self):
         server, httpd, url = http_server(fake.Options())
@@ -1690,6 +1794,17 @@ class TestUnicode:
 
 
 class TestLabels:
+    @pytest.mark.parametrize(
+        "command,label",
+        [
+            (["python3", "-c", 'token="s3cret"; serve()'], "python3"),
+            (["node", "-e", "serve('s3cret')"], "node"),
+            (["python3", "-m", "acme.server"], "acme.server"),
+        ],
+    )
+    def test_inline_code_never_names_a_server(self, command, label):
+        assert pull_module._command_label(command) == label
+
     def test_the_snapshot_file_name_is_reserved(self):
         targets = [
             pull_module.ServerTarget(
