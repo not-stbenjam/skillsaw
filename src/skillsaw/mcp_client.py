@@ -568,20 +568,43 @@ def _shut_down(sock: socket.socket) -> None:
         pass  # already closed, or detached when TLS wrapped it
 
 
+def _resolve_within(watchdog: _Watchdog, host: str, port: int) -> List[Tuple[Any, ...]]:
+    """``getaddrinfo`` inside the deadline.
+
+    A stalled resolver cannot be interrupted, so it runs on a daemon thread
+    that is left behind if the deadline passes first.
+    """
+    outcome: Dict[str, Any] = {}
+
+    def resolve() -> None:
+        try:
+            outcome["addresses"] = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+        except Exception as exc:  # re-raised on the caller's thread
+            outcome["error"] = exc
+
+    resolver = threading.Thread(target=resolve, daemon=True)
+    resolver.start()
+    resolver.join(max(0.0, watchdog.deadline - time.monotonic()))
+    if resolver.is_alive():
+        raise socket.timeout("timed out resolving the server's address")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["addresses"]
+
+
 def _connect_within(watchdog: _Watchdog, address, timeout=None, source_address=None):
     """:func:`socket.create_connection`, with every attempt inside the deadline.
 
     The standard function gives each resolved address the full timeout, so
     a host with several unreachable addresses could outlast the deadline
     many times over. Each socket is watched before it connects, and each
-    attempt gets only the time left. (Name resolution itself cannot be
-    interrupted.)
+    attempt gets only the time left, and so does name resolution.
     """
     host, port = address
     if not isinstance(timeout, (int, float)):
         timeout = socket.getdefaulttimeout()
     error: OSError = OSError("getaddrinfo returns an empty list")
-    for family, kind, proto, _, sockaddr in socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM):
+    for family, kind, proto, _, sockaddr in _resolve_within(watchdog, host, port):
         if watchdog.fired or time.monotonic() >= watchdog.deadline:
             raise socket.timeout("timed out")
         sock = None
@@ -658,11 +681,16 @@ if hasattr(urllib.request, "HTTPSHandler"):
 _OPENER = urllib.request.build_opener(*_HANDLERS)
 
 
-def _header_bytes(headers: Any) -> int:
-    """Roughly the bytes a status line and *headers* took on the wire."""
+def _header_bytes(headers: Any, reason: Any = "") -> int:
+    """Roughly the bytes a status line and *headers* took on the wire.
+
+    The reason phrase is counted too: ``http.client`` accepts nearly 64 KiB
+    of it on every response.
+    """
     if headers is None:
         return 0
-    return 16 + sum(len(name) + len(value) + 4 for name, value in headers.items())
+    status_line = 16 + len(reason if isinstance(reason, str) else "")
+    return status_line + sum(len(name) + len(value) + 4 for name, value in headers.items())
 
 
 class _Counted:
@@ -720,7 +748,7 @@ class HttpTransport(Transport):
                 response = _OPENER.open(request, timeout=watchdog.remaining())
                 break
             except urllib.error.HTTPError as exc:
-                self.bytes_received += _header_bytes(exc.headers)
+                self.bytes_received += _header_bytes(exc.headers, exc.reason)
                 delay = _busy_delay(exc, attempt, watchdog.deadline)
                 if delay is None:
                     return self._error_status(exc, message, bounds, limit)
@@ -736,7 +764,7 @@ class HttpTransport(Transport):
             except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
                 reason = getattr(exc, "reason", exc)
                 raise McpError(f"could not reach server: {reason}") from exc
-        self.bytes_received += _header_bytes(response.headers)
+        self.bytes_received += _header_bytes(response.headers, response.reason)
         # Reading the body can fail or stall after the headers arrived; that
         # is the server's failure too, not the caller's.
         try:
@@ -1016,12 +1044,16 @@ class McpSession:
         contents = result.get("contents")
         if not isinstance(contents, list) or not contents:
             raise McpError("resources/read returned no contents")
-        match = next(
-            (c for c in contents if isinstance(c, Mapping) and c.get("uri") == uri),
-            contents[0],
-        )
-        if not isinstance(match, Mapping):
-            raise McpError("resources/read returned malformed contents")
+        match = next((c for c in contents if isinstance(c, Mapping) and c.get("uri") == uri), None)
+        if match is None:
+            # A lone entry naming no URI can only be the one asked for; any
+            # other answer would be stored as this file without a check.
+            only = contents[0] if len(contents) == 1 else None
+            if not isinstance(only, Mapping):
+                raise McpError("resources/read returned malformed contents")
+            if "uri" in only:
+                raise McpError("resources/read returned contents for a different URI")
+            match = only
         if isinstance(match.get("text"), str):
             try:
                 return match["text"].encode("utf-8")

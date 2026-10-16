@@ -316,6 +316,10 @@ class TestPull:
                         },
                         "events": {"type": "sse", "url": "http://127.0.0.1:9/sse"},
                         "half-written": {},
+                        "listed-headers": {
+                            "url": "https://mcp.example.com/mcp",
+                            "headers": ["Authorization: x"],
+                        },
                     }
                 }
             )
@@ -333,6 +337,7 @@ class TestPull:
         # Entries skillsaw cannot fetch from are skipped, not fatal.
         assert "Skipping events: it uses the retired HTTP+SSE transport" in result.stderr
         assert "Skipping half-written: it has neither a 'url' nor a 'command'" in result.stderr
+        assert "Skipping listed-headers: its 'headers' is not an object" in result.stderr
         config.write_text(json.dumps({"mcpServers": {"half-written": {}}}))
         result = run_cli(["pull", "--mcp-config", ".mcp.json", "-o", out], cwd=tmp_path)
         assert result.returncode == 1
@@ -530,7 +535,7 @@ class TestPull:
         uri = "skill://dated/SKILL.md"
         skill_md = (
             b"---\nname: dated\ndescription: Dated notes. Use when testing.\n"
-            b"updated: 2024-01-01\nbeta: yes\n---\n\n# Dated\n"
+            b"updated: 2024-01-01\nreleased: 2024-02-03\nbeta: yes\nmode: 0755\n---\n\n# Dated\n"
         )
         entry = {
             "uri": uri,
@@ -538,7 +543,9 @@ class TestPull:
                 "name": "dated",
                 "description": "Dated notes. Use when testing.",
                 "updated": "2024-01-01",
+                "released": "2024-02-03T00:00:00.000Z",  # a JavaScript Date
                 "beta": "yes",
+                "mode": "0755",
             },
             "resources": [
                 {"uri": uri, "digest": mcp_skills.sha256_digest(skill_md), "size": len(skill_md)}
@@ -576,6 +583,30 @@ class TestPull:
         [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
         assert "beyond the 512-file / 16 MiB limits hosts must accept" in error["message"]
         assert not (out / "fake" / "huge").exists()
+
+    def test_a_typed_value_is_still_compared(self, tmp_path):
+        uri = "skill://counted/SKILL.md"
+        skill_md = (
+            b"---\nname: counted\ndescription: Counted. Use when testing.\nrevision: 123\n---\n"
+        )
+        frontmatter = {"name": "counted", "description": "Counted. Use when testing."}
+        entry = {
+            "uri": uri,
+            "frontmatter": {**frontmatter, "revision": "other"},
+            "resources": [
+                {"uri": uri, "digest": mcp_skills.sha256_digest(skill_md), "size": len(skill_md)}
+            ],
+        }
+        server, httpd, url = http_server(
+            fake.Options(extra_entries=[entry], extra_files={uri: skill_md})
+        )
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
+        assert error["message"].startswith("the advertised frontmatter differs")
 
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
         out = tmp_path / "snapshot"
@@ -669,6 +700,39 @@ class TestPull:
             if e.get("uri", "").startswith("skill://pdf-processing/")
         ]
         assert "stopped: the skill's files exceed 16 MiB" in messages
+
+    def test_files_another_skill_fetched_count_toward_this_one(self, tmp_path, monkeypatch):
+        # Listed first, reports/daily fetches its SKILL.md; the dynamic parent's
+        # walk reaches the same file, and it must count there too.
+        monkeypatch.setattr(mcp_skills, "MAX_BYTES_PER_SKILL", 500)
+        server, httpd, url = http_server(fake.Options(dynamic=["reports"], reverse_listing=True))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        assert any(
+            e["message"] == "stopped: the skill's files exceed 16 MiB"
+            and e.get("uri", "").startswith("skill://reports/")
+            for e in pulled(out)["errors"]
+        )
+
+    def test_contents_for_another_uri_are_refused(self, tmp_path):
+        # A dynamic skill advertises no digest that would catch the swap.
+        invoice = "skill://pdf-processing/templates/invoice.md"
+        options = fake.Options(
+            dynamic=["pdf-processing"],
+            misattributed_reads={invoice: "skill://release-notes/SKILL.md"},
+        )
+        server, httpd, url = http_server(options)
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == invoice]
+        assert "returned contents for a different URI" in error["message"]
+        assert not (out / "fake" / "pdf-processing" / "templates" / "invoice.md").exists()
 
     def test_a_deeply_nested_entry_is_refused_not_fatal(self, tmp_path):
         nested: dict = {}
@@ -972,6 +1036,42 @@ class TestBoundedReads:
         assert "Traceback" not in result.stderr
         [error] = pulled(out)["errors"]
         assert "timed out after 0.5s waiting for server/discover" in error["message"]
+
+    def test_status_line_counts_against_the_budget(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        reason = "x" * 60000
+
+        class Verbose(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                body = json.dumps({"jsonrpc": "2.0", "id": request["id"], "result": {}}).encode()
+                self.send_response(200, reason)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Verbose)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            transport = mcp_client.HttpTransport(f"http://127.0.0.1:{httpd.server_address[1]}/mcp")
+            transport.send({"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers={}, timeout=5)
+        finally:
+            httpd.shutdown()
+        assert transport.bytes_received > len(reason)
+
+    def test_name_resolution_shares_the_deadline(self, monkeypatch):
+        monkeypatch.setattr(mcp_client.socket, "getaddrinfo", lambda *a, **k: time.sleep(5))
+        transport = mcp_client.HttpTransport("http://stalled-resolver.invalid/mcp")
+        start = time.monotonic()
+        with pytest.raises(mcp_client.McpError):
+            transport.send({"jsonrpc": "2.0", "id": 1, "method": "ping"}, headers={}, timeout=0.3)
+        assert time.monotonic() - start < 1.5
 
     def test_invalid_request_errors_do_not_quote_header_values(self):
         server, httpd, url = http_server(fake.Options())

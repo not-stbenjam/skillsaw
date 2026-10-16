@@ -24,7 +24,7 @@ import re
 import shlex
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
@@ -198,10 +198,10 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
     if isinstance(url, str) and url:
         if kind == "sse":
             raise PullError("it uses the retired HTTP+SSE transport")
-        headers = entry.get("headers")
-        expanded = {
-            str(k): _expand(str(v)) for k, v in (headers or {}).items() if isinstance(v, str)
-        }
+        headers = entry.get("headers") or {}
+        if not isinstance(headers, Mapping):
+            raise PullError("its 'headers' is not an object")
+        expanded = {str(k): _expand(v) for k, v in headers.items() if isinstance(v, str)}
         target = url_target(_expand(url), expanded)
         target.label = label
         return target
@@ -379,10 +379,38 @@ def _same_frontmatter(served: Any, advertised: Any) -> bool:
     if isinstance(served, (Mapping, list)) or isinstance(advertised, (Mapping, list)):
         return False
     if isinstance(served, str) != isinstance(advertised, str):
-        return True
+        # Read the text side as the unquoted YAML scalar it would be in the
+        # file, so its spelling is compared, not its type.
+        if isinstance(advertised, str):
+            advertised = _as_yaml_scalar(advertised)
+        else:
+            served = _as_yaml_scalar(served)
+        if _same_day(served, advertised):
+            return True
     if isinstance(served, bool) or isinstance(advertised, bool):
         return type(served) is type(advertised) and served == advertised  # true is not 1
     return served == advertised
+
+
+def _as_yaml_scalar(text: str) -> Any:
+    """*text* typed as PyYAML would type it, unquoted, in a ``SKILL.md``."""
+    try:
+        return yaml.load(text, Loader=_SAFE_LOADER)
+    except (yaml.YAMLError, RecursionError):
+        return text
+
+
+def _same_day(left: Any, right: Any) -> bool:
+    """A YAML date against the midnight a JSON encoder may write it as."""
+    for day, moment in ((left, right), (right, left)):
+        if (
+            isinstance(day, date)
+            and not isinstance(day, datetime)
+            and isinstance(moment, datetime)
+            and moment.time() == time.min
+        ):
+            return moment.date() == day
+    return False
 
 
 def _served_frontmatter(data: bytes) -> Optional[Mapping[str, Any]]:
@@ -602,14 +630,17 @@ class _ServerPull:
             return  # nothing to fetch; the malformed entry is recorded
         skill_bytes = 0
         for file_uri in files:
-            if file_uri not in self.fetched:
+            # A file another listed skill already fetched still counts here.
+            if file_uri in self.fetched:
+                skill_bytes += self.fetched[file_uri][0]
+            else:
                 data = self._fetch(session, file_uri)
                 if data is None:
                     continue
                 skill_bytes += len(data)
-                if skill_bytes > mcp_skills.MAX_BYTES_PER_SKILL:
-                    self.error("stopped: the skill's files exceed 16 MiB", file_uri)
-                    return
+            if skill_bytes > mcp_skills.MAX_BYTES_PER_SKILL:
+                self.error("stopped: the skill's files exceed 16 MiB", file_uri)
+                return
         mismatched = [
             file_uri[len(root_uri) + 1 :] or file_uri
             for file_uri, item in advertised.items()

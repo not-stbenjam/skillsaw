@@ -63,6 +63,10 @@ class Options:
     # HTTP only: answer 401, as an OAuth-protected server does, unless the
     # request carries "Authorization: Bearer <this token>".
     require_token: str = ""
+    # skills/list in reverse order, so a nested skill comes before its parent.
+    reverse_listing: bool = False
+    # resources/read of a key answers with the value's URI and contents.
+    misattributed_reads: Dict[str, str] = field(default_factory=dict)
 
 
 def _digest(data: bytes) -> str:
@@ -101,6 +105,8 @@ class Catalog:
             entry: Dict[str, Any] = {"uri": f"{base}/SKILL.md", "frontmatter": frontmatter}
             entry["resources"] = "dynamic" if skill_dir.name in options.dynamic else resources
             self.entries.append(entry)
+        if options.reverse_listing:
+            self.entries.reverse()
         self.entries.extend(options.extra_entries)
         self.files.update(options.extra_files)
         for uri in list(self.files):
@@ -220,7 +226,7 @@ class Server:
                 "cacheScope": "private",
             }
         if method == "resources/read":
-            uri = params.get("uri")
+            uri = self.options.misattributed_reads.get(params.get("uri"), params.get("uri"))
             data = self.catalog.files.get(uri)
             if data is None:
                 raise _RpcError(-32602, "No such resource")
