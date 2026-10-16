@@ -627,6 +627,25 @@ def pulled(out):
     return json.loads((out / mcp_skills.SNAPSHOT_FILENAME).read_text())["servers"][0]
 
 
+@pytest.fixture
+def parser_gives_up_on_nesting(monkeypatch):
+    """Make ``json.loads`` raise ``RecursionError`` on deeply nested arrays.
+
+    How deep CPython can parse depends on the platform's stack: 3.14 on a
+    large stack parses nesting that raises ``RecursionError`` elsewhere, so
+    the tests simulate the parser giving up rather than rely on either.
+    """
+    real = json.loads
+
+    def loads(data, *args, **kwargs):
+        head = data[:4] if isinstance(data, (bytes, bytearray)) else str(data[:4]).encode()
+        if bytes(head) == b"[[[[":
+            raise RecursionError("maximum recursion depth exceeded while decoding a JSON array")
+        return real(data, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", loads)
+
+
 def python_server(source):
     """A stdio "server" running *source*, for transport-level misbehavior."""
     return mcp_client.StdioTransport([sys.executable, "-c", source])
@@ -660,11 +679,11 @@ class TestStdioShutdown:
         assert time.monotonic() - start < 3
         assert not transport._reader.is_alive()
 
-    def test_deeply_nested_json_is_a_server_error(self):
+    def test_deeply_nested_json_is_a_server_error(self, parser_gives_up_on_nesting):
         transport = python_server(
             "import sys\n"
             "sys.stdin.readline()\n"
-            "print('[' * 100000 + ']' * 100000, flush=True)\n"
+            "print('[' * 64 + ']' * 64, flush=True)\n"
             "sys.stdin.read()\n"
         )
         try:
@@ -879,11 +898,13 @@ class TestBoundedReads:
         [error] = pulled(out)["errors"]
         assert "timed out after 0.5s waiting for server/discover" in error["message"]
 
-    def test_deeply_nested_http_json_is_a_server_problem(self, tmp_path):
+    def test_deeply_nested_http_json_is_a_server_problem(
+        self, tmp_path, parser_gives_up_on_nesting
+    ):
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
         import threading
 
-        body = b"[" * 100000 + b"]" * 100000
+        body = b"[" * 64 + b"]" * 64
 
         class Deep(BaseHTTPRequestHandler):
             def log_message(self, *args):
