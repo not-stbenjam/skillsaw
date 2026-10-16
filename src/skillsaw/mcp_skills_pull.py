@@ -134,7 +134,8 @@ def url_target(url: str, headers: Mapping[str, str], label: Optional[str] = None
         raise PullError("the URL contains spaces or control characters")
     for name, value in headers.items():
         if not _HEADER_NAME.fullmatch(name):
-            raise PullError(f"{name!r} is not a valid HTTP header name")
+            # Not quoted: a misplaced colon can leave the value in the name.
+            raise PullError("a header name is not a valid HTTP token")
         if any(ch in value for ch in "\r\n\x00"):
             raise PullError(
                 f"the {name} header's value contains a line break or NUL; a trailing "
@@ -312,10 +313,25 @@ def prepare_output(out_dir: Path) -> None:
         raise PullError(f"cannot prepare {out_dir}: {exc.strerror or exc}") from exc
 
 
+#: The most of an earlier snapshot record read to learn what it may replace.
+MAX_SNAPSHOT_RECORD_BYTES = 16 * 1024 * 1024
+
+
 def _snapshot_labels(out_dir: Path) -> set:
-    """The server labels an earlier pull recorded in *out_dir*."""
+    """The server labels an earlier pull recorded in *out_dir*.
+
+    Only a regular file is read, and only so much of it: a record checked in
+    as a symlink to ``/dev/zero`` or a FIFO must not hang the pull.
+    """
+    record = out_dir / mcp_skills.SNAPSHOT_FILENAME
     try:
-        data = json.loads((out_dir / mcp_skills.SNAPSHOT_FILENAME).read_text(encoding="utf-8"))
+        if record.is_symlink() or not record.is_file():
+            return set()
+        with record.open("rb") as handle:
+            raw = handle.read(MAX_SNAPSHOT_RECORD_BYTES + 1)
+        if len(raw) > MAX_SNAPSHOT_RECORD_BYTES:
+            return set()
+        data = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError, RecursionError):
         return set()
     servers = data.get("servers") if isinstance(data, dict) else None
@@ -768,9 +784,11 @@ class _ServerPull:
                 self.error(f"directory read failed: {exc}", directory)
                 continue
             complete = complete and listed
+            unnamed = 0
             for child in children:
                 child_uri = child.get("uri")
                 if not isinstance(child_uri, str):
+                    unnamed += 1  # it may be a file this walk would then leave out
                     continue
                 parent, _, name = child_uri.rpartition("/")
                 if parent != directory or not name:
@@ -789,6 +807,12 @@ class _ServerPull:
                         continue
                     seen.add(child_uri)
                     files.append(child_uri)
+            if unnamed:
+                self.error(
+                    f"{unnamed} directory listing entr{'y' if unnamed == 1 else 'ies'} carry "
+                    "no string uri; the skill's file list may be incomplete",
+                    directory,
+                )
         if not complete:
             self.error(
                 f"directory walk stopped at its bounds ({limit} files, {MAX_DIRECTORY_DEPTH} "

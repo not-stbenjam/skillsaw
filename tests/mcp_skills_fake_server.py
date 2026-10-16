@@ -73,8 +73,8 @@ class Options:
     stall_reads_seconds: float = 0.0
     # skills/list pages carry their cursor as a number, not a string.
     malformed_cursor: bool = False
-    # Every directory listing carries an entry that is not an object.
-    malformed_directory_entry: bool = False
+    # Every directory listing also carries this malformed entry.
+    malformed_directory_entry: Any = None
 
 
 def _digest(data: bytes) -> str:
@@ -278,8 +278,8 @@ class Server:
                 )
                 for c in self.catalog.dirs[uri]
             ]
-            if self.options.malformed_directory_entry:
-                children.append(5)
+            if self.options.malformed_directory_entry is not None:
+                children.append(self.options.malformed_directory_entry)
             return {
                 "resultType": "complete",
                 "resources": children,

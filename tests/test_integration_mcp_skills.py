@@ -693,17 +693,21 @@ class TestPull:
         assert result.returncode == 1
         assert any("nextCursor that is not a string" in e["message"] for e in pulled(out)["errors"])
 
-    def test_a_malformed_directory_entry_is_a_problem(self, tmp_path):
-        options = fake.Options(dynamic=["pdf-processing"], malformed_directory_entry=True)
+    @pytest.mark.parametrize(
+        "entry,message",
+        [(5, "listed an entry that is not an object"), ({"uri": 1}, "carry no string uri")],
+        ids=["not-an-object", "no-uri"],
+    )
+    def test_a_malformed_directory_entry_is_a_problem(self, tmp_path, entry, message):
+        # Skipping it could leave a file out of a listing called complete.
+        options = fake.Options(dynamic=["pdf-processing"], malformed_directory_entry=entry)
         server, httpd, url = http_server(options)
         try:
             result, out = pull(tmp_path, url)
         finally:
             httpd.shutdown()
         assert result.returncode == 1
-        assert any(
-            "listed an entry that is not an object" in e["message"] for e in pulled(out)["errors"]
-        )
+        assert any(message in e["message"] for e in pulled(out)["errors"])
 
     def test_paths_differing_only_in_normalization_are_refused(self, tmp_path):
         # macOS treats NFC é and NFD é as one name.
@@ -755,6 +759,27 @@ class TestPull:
             f"refused: on macOS and Windows its path is the same as {root}/README.md"
         )
         assert not (out / "fake" / "cased" / "readme.md").exists()
+
+    @pytest.mark.skipif(not os.path.exists("/dev/zero"), reason="needs /dev/zero")
+    def test_a_snapshot_record_symlink_is_not_read(self, tmp_path):
+        # Following it to /dev/zero would read without end.
+        out = tmp_path / "snapshot"
+        (out / "docs").mkdir(parents=True)
+        os.symlink("/dev/zero", out / mcp_skills.SNAPSHOT_FILENAME)
+        result, _ = pull(tmp_path, fake_command())
+        assert result.returncode == 1 and "not a skillsaw snapshot" in result.stderr
+        assert (out / "docs").is_dir()
+
+    def test_a_launch_value_the_system_refuses_is_a_server_problem(self, tmp_path):
+        config = tmp_path / "mcp.json"
+        entry = {"command": sys.executable, "args": ["-c", "pass\u0000"]}
+        config.write_text(json.dumps({"mcpServers": {"nul": entry}}))
+        out = tmp_path / "out"
+        result = run_cli(["pull", "--mcp-config", config, "-o", out])
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+        [error] = pulled(out)["errors"]
+        assert "hold a character the system refuses" in error["message"]
 
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
         out = tmp_path / "snapshot"
@@ -827,13 +852,20 @@ class TestPull:
         assert "Authorization header's value contains a line break" in result.stderr
         assert "s3cret" not in result.stderr
 
-    @pytest.mark.parametrize("spec", ["Authorization Bearer s3cret", ": Bearer s3cret"])
-    def test_a_malformed_header_is_refused_unquoted(self, spec):
+    @pytest.mark.parametrize(
+        "spec,message",
+        [
+            ("Authorization Bearer s3cret", "must look like 'Name: value'"),
+            (": Bearer s3cret", "must look like 'Name: value'"),
+            ("Authorization Bearer s3cret: x", "a header name is not a valid HTTP token"),
+        ],
+    )
+    def test_a_malformed_header_is_refused_unquoted(self, spec, message):
         result = run_cli(
             ["lint", "--mcp-server", "https://mcp.example.com/mcp", "--mcp-header", spec]
         )
         assert result.returncode == 1
-        assert "must look like 'Name: value'" in result.stderr
+        assert message in result.stderr
         assert "s3cret" not in result.stderr
 
     def test_an_unparseable_command_line_is_refused_unquoted(self):

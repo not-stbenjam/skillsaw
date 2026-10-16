@@ -223,6 +223,13 @@ class StdioTransport(Transport):
             )
         except OSError as exc:
             raise McpError(f"could not start {command[0]!r}: {exc.strerror or exc}") from exc
+        except ValueError as exc:
+            # A NUL in the command, an argument, the environment or the working
+            # directory; not quoted, as any of them may carry a credential.
+            raise McpError(
+                "could not start the server: its command, arguments, environment or working "
+                "directory hold a character the system refuses"
+            ) from exc
         # Bounded in messages and bytes, so a server that floods stdout
         # blocks instead of filling memory; the reader gives up waiting for
         # room once closing starts.
