@@ -99,7 +99,8 @@ def parse_header(spec: str) -> tuple:
     """``Name: value`` from the command line."""
     name, sep, value = spec.partition(":")
     if not sep or not name.strip():
-        raise PullError(f"header must look like 'Name: value', got {spec!r}")
+        # Never quote the argument: it is usually a credential.
+        raise PullError("a --mcp-header must look like 'Name: value'")
     return name.strip(), value.strip()
 
 
@@ -182,6 +183,8 @@ def config_servers(config_path: Path) -> Dict[str, Mapping[str, Any]]:
         data = json.loads(config_path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
         raise PullError(f"cannot read {config_path}: {exc}") from exc
+    except RecursionError:
+        raise PullError(f"cannot read {config_path}: it nests too deeply") from None
     if not isinstance(data, Mapping):
         raise PullError(f"{config_path} is not a JSON object")
     servers = data.get("mcpServers", data.get("servers"))
@@ -192,6 +195,8 @@ def config_servers(config_path: Path) -> Dict[str, Mapping[str, Any]]:
 
 def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarget:
     """A target for one server entry of an MCP client config."""
+    if entry.get("disabled") is True:
+        raise PullError("it is disabled")  # never start a server the user switched off
     label = mcp_skills.sanitize_label(name)
     kind = str(entry.get("type") or "").lower()
     url = entry.get("url")
@@ -396,7 +401,7 @@ def _as_yaml_scalar(text: str) -> Any:
     """*text* typed as PyYAML would type it, unquoted, in a ``SKILL.md``."""
     try:
         return yaml.load(text, Loader=_SAFE_LOADER)
-    except (yaml.YAMLError, RecursionError):
+    except (yaml.YAMLError, ValueError, RecursionError):  # 2024-99-99 raises ValueError
         return text
 
 
@@ -424,7 +429,7 @@ def _served_frontmatter(data: bytes) -> Optional[Mapping[str, Any]]:
         return None
     try:
         parsed = yaml.load(fm_text, Loader=_SAFE_LOADER)
-    except (yaml.YAMLError, RecursionError):
+    except (yaml.YAMLError, ValueError, RecursionError):  # 2024-99-99 raises ValueError
         return None
     return parsed if isinstance(parsed, Mapping) else None
 
@@ -500,6 +505,9 @@ class _ServerPull:
         # around it; fetch each URI once, keeping what verifying it needs.
         self.fetched: Dict[str, Tuple[int, str]] = {}
         self.frontmatter: Dict[str, Optional[Mapping[str, Any]]] = {}
+        # Stored paths, case-folded: macOS and Windows would merge two that
+        # differ only in case, so a snapshot holding both could not be checked out.
+        self.stored: Dict[str, str] = {}
         self.record: Dict[str, Any] = {
             "label": target.label,
             "transport": target.kind,
@@ -669,6 +677,12 @@ class _ServerPull:
         parts = mcp_skills.local_parts(file_uri)
         if not parts:
             self.error("refused: the URI cannot be stored safely", file_uri)
+            return None
+        folded = "/".join(parts).casefold()
+        if self.stored.setdefault(folded, file_uri) != file_uri:
+            self.error(
+                f"refused: its path differs only in case from {self.stored[folded]}", file_uri
+            )
             return None
         try:
             data = session.read_resource(file_uri)

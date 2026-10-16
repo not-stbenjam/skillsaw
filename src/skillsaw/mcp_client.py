@@ -225,6 +225,9 @@ class StdioTransport(Transport):
         self._messages: "queue.Queue[Optional[Tuple[Any, int]]]" = queue.Queue(_STDIO_BACKLOG)
         self._room = threading.Condition()
         self._backlog_bytes = 0
+        # What the current request may receive; the reader never takes more
+        # of a line, so a small byte budget also bounds what is read ahead.
+        self._line_limit = MAX_MESSAGE_BYTES
         self._outbox: "queue.Queue[Optional[Tuple[bytes, threading.Event]]]" = queue.Queue()
         self._closing = threading.Event()
         self._exited = False
@@ -235,12 +238,26 @@ class StdioTransport(Transport):
         self._reader.start()
         self._writer.start()
 
+    def _read_line(self, stdout) -> bytes:
+        """The next line, or as much of it as the current request may receive, plus a byte.
+
+        Read in chunks so a limit lowered while a read is waiting still
+        applies; empty at the end of output.
+        """
+        line = bytearray()
+        while True:
+            room = self._line_limit + 1 - len(line)
+            piece = stdout.readline(max(1, min(_READ_CHUNK, room)))
+            line += piece
+            if not piece or piece.endswith(b"\n") or len(line) > self._line_limit:
+                return bytes(line)
+
     def _read(self) -> None:
         stdout = self._process.stdout
         assert stdout is not None
         try:
             while True:
-                line = stdout.readline(MAX_MESSAGE_BYTES)
+                line = self._read_line(stdout)
                 if not line:
                     break
                 try:
@@ -259,13 +276,13 @@ class StdioTransport(Transport):
     def _put(self, item: Optional[Tuple[Any, int]]) -> bool:
         """Queue *item*, waiting for room until the transport closes.
 
-        Past the first message, the backlog holds at most
-        ``MAX_MESSAGE_BYTES``: the byte budget is charged only as messages
-        are taken, so it cannot bound what waits here.
+        Past the first message, the backlog holds at most what the current
+        request may receive: the byte budget is charged only as messages are
+        taken, so it cannot bound what waits here.
         """
         size = 0 if item is None else item[1]
         with self._room:
-            while self._backlog_bytes and self._backlog_bytes + size > MAX_MESSAGE_BYTES:
+            while self._backlog_bytes and self._backlog_bytes + size > self._line_limit:
                 if self._closing.is_set():
                     return False
                 self._room.wait(0.1)
@@ -311,6 +328,7 @@ class StdioTransport(Transport):
         if self._exited:
             raise McpError("server process exited")
         method = message.get("method", "a reply")
+        self._line_limit = min(limit, MAX_MESSAGE_BYTES)
         # One deadline for the exchange: neither a slow write nor
         # notifications arriving first may extend it.
         deadline = time.monotonic() + timeout
@@ -984,6 +1002,11 @@ class McpSession:
         negotiated = result.get("protocolVersion")
         if not isinstance(negotiated, str):
             raise McpError("initialize result has no protocolVersion")
+        if negotiated not in LEGACY_VERSIONS:
+            # The handshake says to disconnect rather than guess at its shapes.
+            raise McpError(
+                f"server chose protocol version {negotiated[:40]!r}, which is not supported"
+            )
         # A failed notification is the server's problem, unless what it sent
         # back spent the budget.
         try:

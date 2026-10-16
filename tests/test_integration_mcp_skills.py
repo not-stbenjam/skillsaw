@@ -608,6 +608,61 @@ class TestPull:
         [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
         assert error["message"].startswith("the advertised frontmatter differs")
 
+    @pytest.mark.parametrize(
+        "served,advertised",
+        [("2024-99-99", "2024-01-01"), ("2024-01-01", "2024-99-99")],
+        ids=["served", "advertised"],
+    )
+    def test_an_impossible_date_is_a_mismatch_not_a_crash(self, tmp_path, served, advertised):
+        # PyYAML raises a bare ValueError constructing 2024-99-99.
+        uri = "skill://dated/SKILL.md"
+        skill_md = (
+            "---\nname: dated\ndescription: Dated. Use when testing.\n" f"released: {served}\n---\n"
+        ).encode()
+        frontmatter = {"name": "dated", "description": "Dated. Use when testing."}
+        entry = {
+            "uri": uri,
+            "frontmatter": {**frontmatter, "released": advertised},
+            "resources": [
+                {"uri": uri, "digest": mcp_skills.sha256_digest(skill_md), "size": len(skill_md)}
+            ],
+        }
+        server, httpd, url = http_server(
+            fake.Options(extra_entries=[entry], extra_files={uri: skill_md})
+        )
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert "Traceback" not in result.stderr
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
+        assert error["message"].startswith("the advertised frontmatter differs")
+
+    def test_paths_differing_only_in_case_are_refused(self, tmp_path):
+        # macOS and Windows would merge them, so the snapshot could not be checked out.
+        root = "skill://cased"
+        files = {
+            f"{root}/SKILL.md": b"---\nname: cased\ndescription: Cased. Use when testing.\n---\n",
+            f"{root}/README.md": b"upper\n",
+            f"{root}/readme.md": b"lower\n",
+        }
+        resources = [
+            {"uri": uri, "digest": mcp_skills.sha256_digest(data), "size": len(data)}
+            for uri, data in files.items()
+        ]
+        frontmatter = {"name": "cased", "description": "Cased. Use when testing."}
+        entry = {"uri": f"{root}/SKILL.md", "frontmatter": frontmatter, "resources": resources}
+        server, httpd, url = http_server(fake.Options(extra_entries=[entry], extra_files=files))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == f"{root}/readme.md"]
+        assert error["message"] == f"refused: its path differs only in case from {root}/README.md"
+        assert not (out / "fake" / "cased" / "readme.md").exists()
+
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
         out = tmp_path / "snapshot"
         (out / ".git").mkdir(parents=True)
@@ -678,6 +733,45 @@ class TestPull:
         assert result.returncode == 1
         assert "Authorization header's value contains a line break" in result.stderr
         assert "s3cret" not in result.stderr
+
+    @pytest.mark.parametrize("spec", ["Authorization Bearer s3cret", ": Bearer s3cret"])
+    def test_a_malformed_header_is_refused_unquoted(self, spec):
+        result = run_cli(
+            ["lint", "--mcp-server", "https://mcp.example.com/mcp", "--mcp-header", spec]
+        )
+        assert result.returncode == 1
+        assert "must look like 'Name: value'" in result.stderr
+        assert "s3cret" not in result.stderr
+
+    def test_a_disabled_server_is_never_started(self, tmp_path):
+        marker = tmp_path / "started"
+        config = tmp_path / "mcp.json"
+        started = {"command": sys.executable, "args": ["-c", f"open({str(marker)!r}, 'w')"]}
+        config.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "off": {**started, "disabled": True},
+                        "docs": {
+                            "command": sys.executable,
+                            "args": [str(FAKE_SERVER), str(SERVED)],
+                        },
+                    }
+                }
+            )
+        )
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 0, result.stderr
+        assert "Skipping off: it is disabled" in result.stderr
+        assert not marker.exists()
+
+    def test_a_config_nested_too_deeply_is_an_error(self, tmp_path, parser_gives_up_on_nesting):
+        config = tmp_path / "mcp.json"
+        config.write_text("[" * 64 + "]" * 64)
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 1
+        assert "it nests too deeply" in result.stderr
+        assert "Traceback" not in result.stderr
 
     def test_credentials_in_a_url_are_refused_unquoted(self):
         result = run_cli(["lint", "--mcp-server", "https://user:s3cret@mcp.example.com/mcp"])
@@ -853,6 +947,50 @@ class TestStdioShutdown:
         finally:
             transport.close()
 
+    def test_a_line_is_read_only_up_to_the_request_limit(self):
+        # A small byte budget must also bound what the reader takes in.
+        transport = python_server(
+            "import sys\n"
+            "sys.stdin.readline()\n"
+            "print('x' * 1000000, flush=True)\n"
+            "sys.stdin.read()\n"
+        )
+        try:
+            with pytest.raises(mcp_client.McpSizeError):
+                transport.send(
+                    {"jsonrpc": "2.0", "id": 1, "method": "skills/list"},
+                    headers={},
+                    timeout=10,
+                    limit=1000,
+                )
+        finally:
+            transport.close()
+        # A read already waiting may finish its chunk; nothing more is taken in.
+        assert transport.bytes_received <= mcp_client._READ_CHUNK + 1
+
+    def test_an_unsupported_legacy_version_is_refused(self):
+        transport = python_server(
+            "import json, sys\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    if 'id' not in request:\n"
+            "        continue\n"
+            "    if request['method'] == 'initialize':\n"
+            "        result = {'protocolVersion': '2099-01-01', 'capabilities': {},\n"
+            "                  'serverInfo': {'name': 'future', 'version': '1'}}\n"
+            "        reply = {'jsonrpc': '2.0', 'id': request['id'], 'result': result}\n"
+            "    else:\n"
+            "        error = {'code': -32601, 'message': 'Method not found'}\n"
+            "        reply = {'jsonrpc': '2.0', 'id': request['id'], 'error': error}\n"
+            "    print(json.dumps(reply), flush=True)\n"
+        )
+        session = mcp_client.McpSession(transport, timeout=10)
+        try:
+            with pytest.raises(mcp_client.McpError, match="2099-01-01"):
+                session.connect()
+        finally:
+            session.close()
+
     def test_server_ping_is_answered(self):
         # A legacy server may check the connection mid-request.
         transport = python_server(
@@ -911,7 +1049,8 @@ class TestStdioShutdown:
                     timeout=10,
                     limit=4096,
                 )
-            assert transport.bytes_received > 1000000
+            # The noise counted, and reading stopped soon past the limit.
+            assert 4096 < transport.bytes_received <= mcp_client._READ_CHUNK + 1
         finally:
             transport.close()
 
