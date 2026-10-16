@@ -539,6 +539,29 @@ class TestPull:
         assert result.returncode == 0, result.stderr
         assert pulled(out)["errors"] == []
 
+    @pytest.mark.parametrize(
+        "files,size",
+        [(mcp_skills.MAX_RESOURCES_PER_SKILL + 1, 1), (1, mcp_skills.MAX_BYTES_PER_SKILL + 1)],
+        ids=["files", "bytes"],
+    )
+    def test_skills_beyond_the_host_limits_are_not_fetched(self, tmp_path, files, size):
+        uri = "skill://huge/SKILL.md"
+        digest = "sha256:" + "0" * 64
+        resources = [{"uri": uri, "digest": digest, "size": size}] + [
+            {"uri": f"skill://huge/f{n}.md", "digest": digest, "size": 1} for n in range(files - 1)
+        ]
+        frontmatter = {"name": "huge", "description": "Huge. Use when testing."}
+        entry = {"uri": uri, "frontmatter": frontmatter, "resources": resources}
+        server, httpd, url = http_server(fake.Options(extra_entries=[entry]))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        [error] = [e for e in pulled(out)["errors"] if e.get("uri") == uri]
+        assert "beyond the 512-file / 16 MiB limits hosts must accept" in error["message"]
+        assert not (out / "fake" / "huge").exists()
+
     def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
         out = tmp_path / "snapshot"
         (out / ".git").mkdir(parents=True)
