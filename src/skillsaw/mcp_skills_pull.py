@@ -103,10 +103,34 @@ def parse_header(spec: str) -> tuple:
     return name.strip(), value.strip()
 
 
+_HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+
+
 def url_target(url: str, headers: Mapping[str, str], label: Optional[str] = None) -> ServerTarget:
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise PullError(f"not an http(s) URL: {url!r}")
+    """A target for an HTTP server, refusing what HTTP would echo back in an error.
+
+    Messages here never quote the URL or a header value: either may carry a
+    credential, and errors reach the terminal and the snapshot.
+    """
+    try:
+        parts = urlsplit(url)
+        host, _port = parts.hostname, parts.port  # .port raises on a malformed port
+    except ValueError:
+        raise PullError("not a valid http(s) URL") from None
+    if parts.scheme not in ("http", "https") or not host:
+        raise PullError("not an http(s) URL")
+    if "@" in parts.netloc:
+        raise PullError("the URL carries credentials; send them in a header instead")
+    if any(ord(ch) < 0x21 or ord(ch) == 0x7F for ch in url):
+        raise PullError("the URL contains spaces or control characters")
+    for name, value in headers.items():
+        if not _HEADER_NAME.fullmatch(name):
+            raise PullError(f"{name!r} is not a valid HTTP header name")
+        if any(ch in value for ch in "\r\n\x00"):
+            raise PullError(
+                f"the {name} header's value contains a line break or NUL; a trailing "
+                "newline in an environment variable is a common cause"
+            )
     return ServerTarget(
         label=mcp_skills.sanitize_label(label or parts.hostname),
         kind="http",
@@ -262,7 +286,9 @@ def _snapshot_labels(out_dir: Path) -> set:
     except (OSError, ValueError, RecursionError):
         return set()
     servers = data.get("servers") if isinstance(data, dict) else None
-    labels = [server.get("label") for server in servers or () if isinstance(server, dict)]
+    if not isinstance(servers, list):
+        return set()
+    labels = [server.get("label") for server in servers if isinstance(server, dict)]
     return {label for label in labels if isinstance(label, str)}
 
 
@@ -289,12 +315,34 @@ def _write_exclusive(path: Path, data: bytes, root: Path) -> None:
         handle.write(data)
 
 
+#: Nesting a recorded value may reach. Real entries nest a few levels; the
+#: snapshot is written with Python's recursive encoder, which a parser on a
+#: large stack can outrun.
+MAX_RECORDED_DEPTH = 64
+
+
+def _nests_within(value: Any, limit: int) -> bool:
+    """Whether containers in *value* nest at most *limit* deep, checked without recursion."""
+    pending = [(value, 1)]
+    while pending:
+        item, depth = pending.pop()
+        children = item.values() if isinstance(item, Mapping) else item
+        if isinstance(item, (Mapping, list)):
+            if depth > limit:
+                return False
+            pending.extend((child, depth + 1) for child in children)
+    return True
+
+
 def _jsonable(value: Any) -> Any:
     """*value* if it round-trips through strict JSON as UTF-8, else ``None``.
 
     JSON escapes can spell what UTF-8 cannot hold — an unpaired surrogate
-    such as ``\\ud800`` — and Python accepts ``NaN``; neither can be recorded.
+    such as ``\\ud800`` — and Python accepts ``NaN``; neither can be recorded,
+    nor can nesting past ``MAX_RECORDED_DEPTH``.
     """
+    if not _nests_within(value, MAX_RECORDED_DEPTH):
+        return None
     try:
         return json.loads(json.dumps(value, allow_nan=False, ensure_ascii=False).encode("utf-8"))
     except (TypeError, ValueError, RecursionError):
@@ -304,15 +352,13 @@ def _jsonable(value: Any) -> Any:
 _SURROGATE = re.compile("[\ud800-\udfff]")
 
 
-def _encodable(value: Any) -> Any:
-    """*value* with any unpaired surrogate replaced, so it encodes as UTF-8."""
-    if isinstance(value, str):
-        return value if value.isascii() else _SURROGATE.sub("\ufffd", value)
-    if isinstance(value, list):
-        return [_encodable(item) for item in value]
-    if isinstance(value, dict):
-        return {_encodable(key): _encodable(item) for key, item in value.items()}
-    return value
+def _clean_text(text: str) -> str:
+    """*text* with any unpaired surrogate replaced, so it encodes as UTF-8.
+
+    Server names, versions and error messages echo server text; recorded
+    entries need no cleaning, since ``_jsonable`` refuses a surrogate.
+    """
+    return text if text.isascii() else _SURROGATE.sub("\ufffd", text)
 
 
 def _same_frontmatter(served: Any, advertised: Any) -> bool:
@@ -438,9 +484,9 @@ class _ServerPull:
         }
 
     def error(self, message: str, uri: Optional[str] = None) -> None:
-        entry: Dict[str, Any] = {"message": message}
+        entry: Dict[str, Any] = {"message": _clean_text(message)}
         if uri is not None:
-            entry["uri"] = uri
+            entry["uri"] = _clean_text(uri)
         self.record["errors"].append(entry)
 
     def run(self, timeout: float) -> Dict[str, Any]:
@@ -473,10 +519,10 @@ class _ServerPull:
 
     def _pull(self, session: McpSession) -> None:
         info = session.connect()
-        self.record["protocolVersion"] = info.protocol_version
+        self.record["protocolVersion"] = _clean_text(str(info.protocol_version))
         if info.server_info:
             self.record["serverInfo"] = {
-                key: info.server_info[key]
+                key: _clean_text(info.server_info[key])
                 for key in ("name", "version")
                 if isinstance(info.server_info.get(key), str)
             }
@@ -500,8 +546,8 @@ class _ServerPull:
             recorded = _jsonable(dict(entry))
             if recorded is None:
                 self.error(
-                    f"skills/list entry {index} cannot be recorded: it holds a non-finite "
-                    "number or text that is not valid Unicode"
+                    f"skills/list entry {index} cannot be recorded: it nests too deeply, or "
+                    "holds a non-finite number or text that is not valid Unicode"
                 )
                 continue
             self.record["skills"].append(recorded)
@@ -695,16 +741,12 @@ def pull(
         servers.append(
             _ServerPull(target, out_dir, max_skills=max_skills, max_bytes=max_bytes).run(timeout)
         )
-    # Server names and error messages echo server text, which may hold
-    # unpaired surrogates; entries were already refused for that.
-    snapshot = _encodable(
-        {
-            "snapshotVersion": mcp_skills.SNAPSHOT_VERSION,
-            "generator": f"skillsaw {__version__}",
-            "pulledAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "servers": servers,
-        }
-    )
+    snapshot = {
+        "snapshotVersion": mcp_skills.SNAPSHOT_VERSION,
+        "generator": f"skillsaw {__version__}",
+        "pulledAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "servers": servers,
+    }
     # Write beside, then rename: a snapshot file is either whole or absent.
     final = out_dir / mcp_skills.SNAPSHOT_FILENAME
     partial = out_dir / f".{mcp_skills.SNAPSHOT_FILENAME}.partial"
@@ -714,5 +756,9 @@ def pull(
         )
         os.replace(partial, final)
     except OSError as exc:
+        try:
+            partial.unlink()  # a leftover would block the next pull here
+        except OSError:
+            pass
         raise PullError(f"cannot write {final}: {exc.strerror or exc}") from exc
     return snapshot

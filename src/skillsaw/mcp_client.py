@@ -727,7 +727,13 @@ class HttpTransport(Transport):
                 exc.close()
                 time.sleep(delay)
                 attempt += 1
-            except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
+            except (ValueError, http.client.InvalidURL) as exc:
+                # Their messages can quote the URL or a header value, and so a
+                # credential; errors reach the terminal and the snapshot.
+                raise McpError(
+                    "could not send the request: the URL or a header is not valid HTTP"
+                ) from exc
+            except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
                 reason = getattr(exc, "reason", exc)
                 raise McpError(f"could not reach server: {reason}") from exc
         self.bytes_received += _header_bytes(response.headers)

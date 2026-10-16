@@ -1,7 +1,7 @@
 # Skills over MCP
 
 An MCP server can publish Agent Skills through the Skills extension
-([SEP-2640](https://github.com/modelcontextprotocol/ext-skills),
+([SEP-2640](https://modelcontextprotocol.io/seps/2640-skills-extension),
 `io.modelcontextprotocol/skills`): each file of a skill becomes a `skill://`
 resource, and `skills/list` advertises every skill's frontmatter with a digest
 and size for each of its files. The skills themselves are plain Agent Skills, so
@@ -22,7 +22,10 @@ skillsaw pull --mcp-server URL -o mcp-skills/             # fetch only; lint it 
 
 `lint` and `tree` take these options in place of a path; run local paths
 separately. The configuration is the one the command would use in the current
-directory, so rule settings and severity overrides apply.
+directory, so rule settings and severity overrides apply; a baseline does not,
+since it describes your repository. The skills are fetched into a temporary
+directory that is removed when the run ends, so for report locations that last,
+such as SARIF for code scanning, `skillsaw pull` them and lint that directory.
 
 The client speaks both the `2026-07-28` protocol (`server/discover`) and the
 earlier `initialize` handshake, over Streamable HTTP or stdio. `--mcp-config`

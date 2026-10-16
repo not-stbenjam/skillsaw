@@ -89,6 +89,21 @@ def test_safe_uri_segments_map_under_the_server():
     )
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("Bearer ${MCP_SET}", "Bearer set"),
+        ("${MCP_SET:-fallback}", "set"),
+        ("${MCP_UNSET:-fallback}", "fallback"),
+        ("${MCP_UNSET}", "${MCP_UNSET}"),
+    ],
+)
+def test_config_values_expand_like_mcp_clients(monkeypatch, value, expected):
+    monkeypatch.setenv("MCP_SET", "set")
+    monkeypatch.delenv("MCP_UNSET", raising=False)
+    assert pull_module._expand(value) == expected
+
+
 # ── Fetching and linting ─────────────────────────────────────────
 
 
@@ -572,6 +587,11 @@ class TestPull:
         result, _ = pull(tmp_path, fake_command())
         assert result.returncode == 1 and "not a skillsaw snapshot" in result.stderr
         assert (out / ".git").is_dir() and (out / "README.md").read_text() == "keep me\n"
+        # A malformed record is no snapshot at all.
+        (out / mcp_skills.SNAPSHOT_FILENAME).write_text('{"servers": 5}')
+        result, _ = pull(tmp_path, fake_command())
+        assert result.returncode == 1 and "not a skillsaw snapshot" in result.stderr
+        assert "Traceback" not in result.stderr
 
     def test_a_configured_working_directory_is_used(self, tmp_path):
         server_dir = tmp_path / "servers" / "docs"
@@ -612,6 +632,61 @@ class TestPull:
         shutil.copytree(SERVED, work)
         result = run_cli([command], cwd=work)
         assert "release-notes" in result.stdout, result.stderr
+        assert "Fetching" not in result.stderr  # plain runs never reach a server
+
+    def test_a_header_with_a_line_break_is_refused_unquoted(self, tmp_path):
+        # A trailing newline is a common way for a secret to arrive from CI.
+        config = tmp_path / "mcp.json"
+        headers = {"Authorization": "Bearer ${MCP_TOKEN}"}
+        entry = {"url": "https://mcp.example.com/mcp", "headers": headers}
+        config.write_text(json.dumps({"servers": {"private": entry}}))
+        result = run_cli(
+            ["pull", "--mcp-config", config, "-o", tmp_path / "out"],
+            env={**os.environ, "MCP_TOKEN": "s3cret\n"},
+        )
+        assert result.returncode == 1
+        assert "Authorization header's value contains a line break" in result.stderr
+        assert "s3cret" not in result.stderr
+
+    def test_credentials_in_a_url_are_refused_unquoted(self):
+        result = run_cli(["lint", "--mcp-server", "https://user:s3cret@mcp.example.com/mcp"])
+        assert result.returncode == 1
+        assert "the URL carries credentials" in result.stderr
+        assert "s3cret" not in result.stderr
+
+    def test_served_bytes_are_capped_when_sizes_are_not_advertised(self, tmp_path, monkeypatch):
+        # A dynamic skill advertises no sizes, so only the bytes served bound it.
+        monkeypatch.setattr(mcp_skills, "MAX_BYTES_PER_SKILL", 600)
+        server, httpd, url = http_server(fake.Options(dynamic=["pdf-processing"]))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        messages = [
+            e["message"]
+            for e in pulled(out)["errors"]
+            if e.get("uri", "").startswith("skill://pdf-processing/")
+        ]
+        assert "stopped: the skill's files exceed 16 MiB" in messages
+
+    def test_a_deeply_nested_entry_is_refused_not_fatal(self, tmp_path):
+        nested: dict = {}
+        node = nested
+        for _ in range(600):
+            node["a"] = {}
+            node = node["a"]
+        frontmatter = {"name": "deep", "description": "Deep. Use when testing.", "metadata": nested}
+        entry = {"uri": "skill://deep/SKILL.md", "frontmatter": frontmatter, "resources": []}
+        server, httpd, url = http_server(fake.Options(extra_entries=[entry]))
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+        assert any("nests too deeply" in e["message"] for e in pulled(out)["errors"])
+        assert len(pulled(out)["skills"]) == 5  # the server's other skills are kept
 
 
 # ── Client bounds ────────────────────────────────────────────────
@@ -897,6 +972,21 @@ class TestBoundedReads:
         assert "Traceback" not in result.stderr
         [error] = pulled(out)["errors"]
         assert "timed out after 0.5s waiting for server/discover" in error["message"]
+
+    def test_invalid_request_errors_do_not_quote_header_values(self):
+        server, httpd, url = http_server(fake.Options())
+        try:
+            transport = mcp_client.HttpTransport(url)
+            with pytest.raises(mcp_client.McpError) as raised:
+                transport.send(
+                    {"jsonrpc": "2.0", "id": 1, "method": "skills/list"},
+                    headers={"Authorization": "Bearer s3cret\n"},
+                    timeout=5,
+                )
+        finally:
+            httpd.shutdown()
+        assert "not valid HTTP" in str(raised.value)
+        assert "s3cret" not in str(raised.value)
 
     def test_deeply_nested_http_json_is_a_server_problem(
         self, tmp_path, parser_gives_up_on_nesting
