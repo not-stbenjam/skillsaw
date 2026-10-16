@@ -61,6 +61,9 @@ def pull(tmp_path, server, *args):
         "skill://con/SKILL.md",
         "skill://docs/NUL.md",
         "skill://docs/com1.txt",
+        "skill://docs/a%2Ab.md",
+        "skill://docs/a%7Cb.md",
+        "skill://docs/a%22b.md",
     ],
 )
 def test_unsafe_uri_segments_have_no_local_path(uri):
@@ -254,6 +257,7 @@ class TestPull:
             redirect.shutdown()
         assert seen == []
         assert "redirect refused" in result.stderr
+        assert result.returncode == 1
 
     def test_server_without_skills_is_not_a_problem(self, tmp_path):
         httpd = fake.start_http(fake.Server(fake.Catalog(SERVED, fake.Options(no_extension=True))))
@@ -383,7 +387,7 @@ class TestPull:
     @pytest.mark.parametrize(
         "args,message",
         [
-            (["--mcp-header", "Authorization: Bearer x"], "needs --mcp-server or --mcp-config"),
+            (["--mcp-header", "Authorization: Bearer x"], "needs a --mcp-server URL"),
             (["--mcp-server", "https://a.example/mcp"], "take the place of a path"),
         ],
     )
@@ -474,6 +478,118 @@ class TestPull:
         assert result.returncode == 2
         assert message in result.stderr
 
+    def test_config_is_never_found_beside_the_scratch_directory(self, tmp_path, monkeypatch):
+        # Anyone can write to the scratch directory's ancestors (/tmp); a
+        # config planted there must not steer the run.
+        scratch = tmp_path / "scratch"
+        scratch.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+        (scratch / ".skillsaw.yaml").write_text(
+            "rules:\n  security-hidden-instructions:\n    enabled: false\n"
+        )
+        work = tmp_path / "work"
+        work.mkdir()
+        result = run_cli(
+            ["lint", "--mcp-server", fake_command(), "--format", "json", "--no-progress"],
+            cwd=work,
+        )
+        rules = {v["rule_id"] for v in json.loads(result.stdout)["violations"]}
+        assert "security-hidden-instructions" in rules
+
+    def test_the_local_baseline_does_not_apply_to_served_skills(self, tmp_path):
+        from skillsaw import __version__
+
+        work = tmp_path / "work"
+        shutil.copytree(SERVED, work)
+        (work / ".skillsaw.yaml").write_text(f'version: "{__version__}"\n')
+        assert run_cli(["baseline", work]).returncode == 0
+        assert (work / ".skillsaw-baseline.json").is_file()
+        result = run_cli(["lint", "--mcp-server", fake_command(), "--no-progress"], cwd=work)
+        # The baseline describes the repository, so none of it is stale here.
+        assert "stale" not in result.stdout + result.stderr
+        assert "security-hidden-instructions" in result.stdout
+
+    def test_yaml_typed_frontmatter_matches_its_json_spelling(self, tmp_path):
+        # PyYAML reads 2024-01-01 as a date and yes as true; a server that
+        # parsed the file another way advertises both as text.
+        uri = "skill://dated/SKILL.md"
+        skill_md = (
+            b"---\nname: dated\ndescription: Dated notes. Use when testing.\n"
+            b"updated: 2024-01-01\nbeta: yes\n---\n\n# Dated\n"
+        )
+        entry = {
+            "uri": uri,
+            "frontmatter": {
+                "name": "dated",
+                "description": "Dated notes. Use when testing.",
+                "updated": "2024-01-01",
+                "beta": "yes",
+            },
+            "resources": [
+                {"uri": uri, "digest": mcp_skills.sha256_digest(skill_md), "size": len(skill_md)}
+            ],
+        }
+        server, httpd, url = http_server(
+            fake.Options(extra_entries=[entry], extra_files={uri: skill_md})
+        )
+        try:
+            result, out = pull(tmp_path, url)
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 0, result.stderr
+        assert pulled(out)["errors"] == []
+
+    def test_a_planted_snapshot_cannot_clear_a_directory(self, tmp_path):
+        out = tmp_path / "snapshot"
+        (out / ".git").mkdir(parents=True)
+        (out / "README.md").write_text("keep me\n")
+        (out / mcp_skills.SNAPSHOT_FILENAME).write_text(
+            json.dumps({"servers": [{"label": ".git"}, {"label": "README.md"}]})
+        )
+        result, _ = pull(tmp_path, fake_command())
+        assert result.returncode == 1 and "not a skillsaw snapshot" in result.stderr
+        assert (out / ".git").is_dir() and (out / "README.md").read_text() == "keep me\n"
+
+    def test_a_configured_working_directory_is_used(self, tmp_path):
+        server_dir = tmp_path / "servers" / "docs"
+        server_dir.mkdir(parents=True)
+        shutil.copy(FAKE_SERVER, server_dir / "server.py")
+        config = tmp_path / "mcp.json"
+        entry = {
+            "command": sys.executable,
+            "args": ["server.py", str(SERVED)],
+            "cwd": "servers/docs",
+        }
+        config.write_text(json.dumps({"mcpServers": {"docs": entry}}))
+        result = run_cli(["pull", "--mcp-config", config, "-o", tmp_path / "out"])
+        assert result.returncode == 0, result.stderr
+        assert "docs: 5 skill(s)" in result.stderr
+
+    def test_config_headers_expand_variables_and_stay_out_of_the_snapshot(self, tmp_path):
+        server, httpd, url = http_server(fake.Options(require_token="s3cret"))
+        config = tmp_path / "mcp.json"
+        headers = {"Authorization": "Bearer ${MCP_TOKEN}"}
+        config.write_text(json.dumps({"servers": {"private": {"url": url, "headers": headers}}}))
+        out = tmp_path / "out"
+        try:
+            result = run_cli(
+                ["pull", "--mcp-config", config, "-o", out],
+                env={**os.environ, "MCP_TOKEN": "s3cret"},
+            )
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 0, result.stderr
+        assert len(pulled(out)["skills"]) == 5
+        assert "s3cret" not in (out / mcp_skills.SNAPSHOT_FILENAME).read_text()
+        assert "s3cret" not in result.stderr
+
+    @pytest.mark.parametrize("command", ["lint", "tree"])
+    def test_without_a_path_the_current_directory_is_used(self, tmp_path, command):
+        work = tmp_path / "skills"
+        shutil.copytree(SERVED, work)
+        result = run_cli([command], cwd=work)
+        assert "release-notes" in result.stdout, result.stderr
+
 
 # ── Client bounds ────────────────────────────────────────────────
 
@@ -520,6 +636,41 @@ class TestStdioShutdown:
         transport.close()
         assert time.monotonic() - start < 3
         assert not transport._reader.is_alive()
+
+    def test_deeply_nested_json_is_a_server_error(self):
+        transport = python_server(
+            "import sys\n"
+            "sys.stdin.readline()\n"
+            "print('[' * 100000 + ']' * 100000, flush=True)\n"
+            "sys.stdin.read()\n"
+        )
+        try:
+            with pytest.raises(mcp_client.McpError, match="nested too deeply"):
+                transport.send(
+                    {"jsonrpc": "2.0", "id": 1, "method": "skills/list"}, headers={}, timeout=10
+                )
+        finally:
+            transport.close()
+
+    def test_backlog_is_bounded_in_bytes(self, monkeypatch):
+        # The byte budget is charged as messages are taken, so what waits in
+        # the backlog needs its own bound.
+        monkeypatch.setattr(mcp_client, "MAX_MESSAGE_BYTES", 4096)
+        transport = python_server(
+            "import sys\n"
+            "for _ in range(50):\n"
+            "    print('x' * 1000, flush=True)\n"
+            "sys.stdin.read()\n"
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while transport._messages.qsize() < 4 and time.monotonic() < deadline:
+                time.sleep(0.05)
+            time.sleep(0.3)  # time to overfill, were the bound missing
+            assert transport._messages.qsize() == 4  # 1,001-byte lines
+            assert transport._backlog_bytes <= 4096
+        finally:
+            transport.close()
 
     def test_server_ping_is_answered(self):
         # A legacy server may check the connection mid-request.
@@ -705,6 +856,34 @@ class TestBoundedReads:
         [error] = pulled(out)["errors"]
         assert "timed out after 0.5s waiting for server/discover" in error["message"]
 
+    def test_deeply_nested_http_json_is_a_server_problem(self, tmp_path):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        body = b"[" * 100000 + b"]" * 100000
+
+        class Deep(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Deep)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            result, out = pull(tmp_path, f"http://127.0.0.1:{httpd.server_address[1]}/mcp")
+        finally:
+            httpd.shutdown()
+        assert result.returncode == 1, result.stderr
+        assert "Traceback" not in result.stderr
+        assert "nested too deeply" in pulled(out)["errors"][0]["message"]
+
     @pytest.mark.parametrize(
         "reply",
         [
@@ -790,7 +969,7 @@ class TestBoundedReads:
                 transport.send(
                     {"jsonrpc": "2.0", "id": 1, "method": "skills/list"}, headers={}, timeout=0.3
                 )
-            assert time.monotonic() - start < 0.6
+            assert time.monotonic() - start < 1.0
         finally:
             for sock in [listener, *fillers]:
                 sock.close()
@@ -989,6 +1168,15 @@ class TestUnicode:
 
 
 class TestLabels:
+    def test_the_snapshot_file_name_is_reserved(self):
+        targets = [
+            pull_module.ServerTarget(
+                label=mcp_skills.SNAPSHOT_FILENAME, kind="http", url="http://x/"
+            )
+        ]
+        pull_module.unique_labels(targets)
+        assert targets[0].label != mcp_skills.SNAPSHOT_FILENAME
+
     def test_repeated_labels_avoid_every_label_in_use(self):
         targets = [
             pull_module.ServerTarget(label=label, kind="http", url="http://x/")

@@ -191,6 +191,9 @@ def config_target(name: str, entry: Mapping[str, Any], cwd: Path) -> ServerTarge
         raw_env = entry.get("env")
         if isinstance(raw_env, Mapping):
             env.update({str(k): _expand(str(v)) for k, v in raw_env.items()})
+        workdir = entry.get("cwd")
+        if isinstance(workdir, str) and workdir:
+            cwd = cwd / _expand(workdir)  # relative to the config, as clients resolve it
         return ServerTarget(label=label, kind="stdio", command=argv, env=env, cwd=cwd)
     raise PullError("it has neither a 'url' nor a 'command'")
 
@@ -203,8 +206,9 @@ def unique_labels(targets: List[ServerTarget]) -> None:
     named ``docs``, ``docs`` and ``docs-2`` become ``docs``, ``docs-3`` and
     ``docs-2``. The base is shortened to keep the suffix within the limit.
     """
-    taken = {target.label for target in targets}
-    kept = set()
+    # The snapshot file sits beside the server directories.
+    taken = {target.label for target in targets} | {mcp_skills.SNAPSHOT_FILENAME}
+    kept = {mcp_skills.SNAPSHOT_FILENAME}
     for target in targets:
         if target.label not in kept:
             kept.add(target.label)
@@ -225,33 +229,53 @@ def unique_labels(targets: List[ServerTarget]) -> None:
 def prepare_output(out_dir: Path) -> None:
     """Create *out_dir*, replacing an earlier snapshot but nothing else.
 
-    A directory is replaced only when everything in it is the snapshot file
-    or a server directory that snapshot lists, so pointing the output at a
-    directory that merely contains a snapshot cannot delete anything else.
+    What is in the directory is removed only when all of it is the snapshot
+    file and server directories that snapshot lists — real directories with
+    names skillsaw could have given them. A snapshot planted beside anything
+    else deletes nothing, and *out_dir* itself is never removed.
     """
-    if out_dir.exists():
-        if not out_dir.is_dir() or out_dir.is_symlink():
-            raise PullError(f"{out_dir} exists and is not a directory")
-        names = {entry.name for entry in out_dir.iterdir()}
-        if names:
-            if not names <= _snapshot_names(out_dir):
+    try:
+        if out_dir.exists() or out_dir.is_symlink():
+            if not out_dir.is_dir() or out_dir.is_symlink():
+                raise PullError(f"{out_dir} exists and is not a directory")
+            entries = list(out_dir.iterdir())
+            labels = _snapshot_labels(out_dir) if entries else set()
+            if not all(_replaceable(entry, labels) for entry in entries):
                 raise PullError(
                     f"{out_dir} holds files that are not a skillsaw snapshot; choose an "
                     "empty directory or an earlier snapshot"
                 )
-            shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+            for entry in entries:
+                if entry.name == mcp_skills.SNAPSHOT_FILENAME:
+                    entry.unlink()
+                else:
+                    shutil.rmtree(entry)
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise PullError(f"cannot prepare {out_dir}: {exc.strerror or exc}") from exc
 
 
-def _snapshot_names(out_dir: Path) -> set:
-    """What an earlier pull wrote into *out_dir*; empty if it holds no snapshot."""
+def _snapshot_labels(out_dir: Path) -> set:
+    """The server labels an earlier pull recorded in *out_dir*."""
     try:
         data = json.loads((out_dir / mcp_skills.SNAPSHOT_FILENAME).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return set()
     servers = data.get("servers") if isinstance(data, dict) else None
     labels = [server.get("label") for server in servers or () if isinstance(server, dict)]
-    return {mcp_skills.SNAPSHOT_FILENAME, *(label for label in labels if isinstance(label, str))}
+    return {label for label in labels if isinstance(label, str)}
+
+
+def _replaceable(entry: Path, labels: set) -> bool:
+    if entry.is_symlink():
+        return False
+    if entry.name == mcp_skills.SNAPSHOT_FILENAME:
+        return entry.is_file()
+    return (
+        entry.name in labels
+        and mcp_skills.sanitize_label(entry.name) == entry.name
+        and entry.is_dir()
+    )
 
 
 def _write_exclusive(path: Path, data: bytes, root: Path) -> None:
@@ -260,7 +284,7 @@ def _write_exclusive(path: Path, data: bytes, root: Path) -> None:
         raise PullError(f"refused to write outside the snapshot: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(path, flags, 0o644)
+    fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, "wb") as handle:
         handle.write(data)
 
@@ -273,7 +297,7 @@ def _jsonable(value: Any) -> Any:
     """
     try:
         return json.loads(json.dumps(value, allow_nan=False, ensure_ascii=False).encode("utf-8"))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return None
 
 
@@ -291,19 +315,28 @@ def _encodable(value: Any) -> Any:
     return value
 
 
-def _json_equal(left: Any, right: Any) -> bool:
-    """Equality with JSON's types: ``true`` is not ``1``, unlike in Python."""
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if isinstance(left, Mapping) and isinstance(right, Mapping):
-        return left.keys() == right.keys() and all(
-            _json_equal(left[key], right[key]) for key in left
+def _same_frontmatter(served: Any, advertised: Any) -> bool:
+    """Whether the served frontmatter says what the advertised one does.
+
+    YAML types scalars that JSON carries as text: PyYAML reads an unquoted
+    ``2024-01-01`` as a date and ``yes`` as true, while a server that parsed
+    the file another way advertises strings. A scalar typed on one side only
+    is a difference of spelling, not content, so structure, text and
+    like-typed values are compared.
+    """
+    if isinstance(served, Mapping) and isinstance(advertised, Mapping):
+        return served.keys() == advertised.keys() and all(
+            _same_frontmatter(served[key], advertised[key]) for key in served
         )
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(_json_equal(a, b) for a, b in zip(left, right))
-    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        return left == right
-    return type(left) is type(right) and left == right
+    if isinstance(served, list) and isinstance(advertised, list):
+        return len(served) == len(advertised) and all(map(_same_frontmatter, served, advertised))
+    if isinstance(served, (Mapping, list)) or isinstance(advertised, (Mapping, list)):
+        return False
+    if isinstance(served, str) != isinstance(advertised, str):
+        return True
+    if isinstance(served, bool) or isinstance(advertised, bool):
+        return type(served) is type(advertised) and served == advertised  # true is not 1
+    return served == advertised
 
 
 def _served_frontmatter(data: bytes) -> Optional[Mapping[str, Any]]:
@@ -430,6 +463,10 @@ class _ServerPull:
             )
         except McpError as exc:
             self.error(str(exc))
+        except RecursionError:
+            self.error("the server sent data nested too deeply to check")
+        except OSError as exc:
+            self.error(f"could not store the server's files: {exc.strerror or exc}")
         finally:
             session.close()
         return self.record
@@ -542,7 +579,7 @@ class _ServerPull:
         frontmatter = entry.get("frontmatter")
         if isinstance(frontmatter, Mapping) and uri in self.frontmatter:
             served = self.frontmatter[uri]
-            if served is None or not _json_equal(dict(served), dict(frontmatter)):
+            if served is None or not _same_frontmatter(dict(served), dict(frontmatter)):
                 self.error(
                     "the advertised frontmatter differs from the served SKILL.md. Hosts "
                     "compare them field by field and refuse the skill on any difference; "
@@ -671,6 +708,11 @@ def pull(
     # Write beside, then rename: a snapshot file is either whole or absent.
     final = out_dir / mcp_skills.SNAPSHOT_FILENAME
     partial = out_dir / f".{mcp_skills.SNAPSHOT_FILENAME}.partial"
-    partial.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(partial, final)
+    try:
+        partial.write_text(
+            json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        os.replace(partial, final)
+    except OSError as exc:
+        raise PullError(f"cannot write {final}: {exc.strerror or exc}") from exc
     return snapshot

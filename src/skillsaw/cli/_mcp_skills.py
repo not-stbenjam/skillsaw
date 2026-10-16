@@ -128,6 +128,7 @@ def _fetched(args):
     """
     if args.config is None:
         args.config = find_config(Path.cwd())
+    args.scratch_paths = True  # never discover a config or baseline from the scratch path
     scratch = Path(tempfile.mkdtemp(prefix="skillsaw-"))
     try:
         out_dir = scratch / "mcp-skills"

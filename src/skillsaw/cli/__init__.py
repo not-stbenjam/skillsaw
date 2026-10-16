@@ -81,7 +81,7 @@ def _served_skills(parser, args, *, paths_given: bool) -> bool:
             )
         return True
     if args.mcp_headers:
-        parser.error("--mcp-header needs --mcp-server or --mcp-config")
+        parser.error("--mcp-header needs a --mcp-server URL")
     return False
 
 

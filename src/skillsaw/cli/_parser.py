@@ -51,7 +51,7 @@ def _add_color_flag(subparser) -> None:
 
 
 def _add_mcp_server_args(group) -> None:
-    """The servers to fetch skills from, and the bounds on each; ``lint`` and ``pull`` share them."""
+    """The servers to fetch skills from, and the bounds on each, for lint, tree and pull."""
     group.add_argument(
         "--mcp-server",
         action="append",

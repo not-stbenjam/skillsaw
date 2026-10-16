@@ -27,7 +27,7 @@ MAX_BYTES_PER_SKILL = 16 * 1024 * 1024
 
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-#: The snapshot ``skillsaw lint --mcp-server`` writes at the root of its output.
+#: The record every fetch writes at the root of its output; ``skillsaw pull`` keeps it.
 SNAPSHOT_FILENAME = "mcp-skills-snapshot.json"
 SNAPSHOT_VERSION = 1
 
@@ -63,15 +63,15 @@ def _safe_segment(segment: str) -> Optional[str]:
     """Percent-decode one URI segment, or ``None`` if it is unsafe on disk.
 
     Beyond ``..`` and separators, Windows treats ``D:`` as a drive, ``a:b``
-    as an alternate data stream, ``NUL`` or ``con.md`` as a device, and drops
-    trailing dots and spaces — so ``.. `` would become ``..``. Those
-    spellings are refused on every platform so a snapshot means the same
-    thing wherever it is read.
+    as an alternate data stream, ``NUL`` or ``con.md`` as a device, refuses
+    ``*?"<>|`` in names, and drops trailing dots and spaces — so ``.. ``
+    would become ``..``. Those spellings are refused on every platform so a
+    snapshot means the same thing wherever it is read.
     """
     decoded = unquote(segment)
     if decoded in ("", ".", ".."):
         return None
-    if any(ch in decoded for ch in ("/", "\\", "\x00", ":")):
+    if any(ch in decoded for ch in '/\\\x00:*?"<>|'):
         return None
     if decoded != decoded.rstrip(". ") or _windows_device(decoded):
         return None

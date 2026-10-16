@@ -30,6 +30,11 @@ reads a client config such as `.mcp.json`, `.vscode/mcp.json` or
 `.cursor/mcp.json`, with `${VAR}` expansion. A stdio server, named on the
 command line or in a config, runs its command, so start only servers you trust.
 
+Treat an MCP config like code: it runs its commands and sends the environment
+variables it names to the servers it lists. Never pass `--mcp-config` a config
+from a pull request or anywhere else you would not run code from. In CI, lint a
+committed `skillsaw pull` directory instead.
+
 ## Problems with a server
 
 Some things are wrong with the server, not with any skill, and only fetching can
@@ -70,7 +75,8 @@ skillsaw sends credentials it is given; it does not run an OAuth login.
   `--mcp-header "Authorization: Bearer $TOKEN"`, or give each server its
   `headers` in an MCP config, as `"Authorization": "Bearer ${TOKEN}"`. A token
   another tool obtained, by browser or device-code login, works if the server
-  accepts it.
+  accepts it. Other users of a shared machine can read command-line arguments
+  in the process list, so there prefer a config's headers.
 - **OAuth login:** let a bridge handle the login and serve the server over
   stdio, for example
   `--mcp-server "npx -y mcp-remote https://mcp.example.com/mcp"`, which opens a

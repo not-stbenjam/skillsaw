@@ -116,7 +116,8 @@ def _run_lint(args):
     fix_level = resolve_fix_level(args, config)
 
     baseline = None
-    if not args.no_baseline:
+    # A baseline describes the user's repository, not a scratch directory.
+    if not args.no_baseline and not getattr(args, "scratch_paths", False):
         from ..baseline import find_baseline, load_baseline
 
         baseline_path = find_baseline(config.config_dir or paths[0])
@@ -171,15 +172,14 @@ def _run_lint(args):
         removed_skips.intersection_update(linter.removed_skip_rule_ids)
 
         # After Linter construction plugin repo type detectors have run, so
-        # a repository recognized only by a plugin is not warned about. Skills
-        # fetched from MCP servers land in a directory skillsaw made, and a
-        # server that serves none is not a mistake.
+        # a repository recognized only by a plugin is not warned about. A
+        # scratch directory skillsaw made, such as skills fetched from MCP
+        # servers, may rightly hold nothing.
         if (
             context.repo_type == RepositoryType.UNKNOWN
             and not context.plugin_repo_types
             and not context.lint_tree.children
-            and not getattr(args, "mcp_servers", None)
-            and not getattr(args, "mcp_config", None)
+            and not getattr(args, "scratch_paths", False)
         ):
             print(
                 "Warning: Directory doesn't appear to be a recognized repository",

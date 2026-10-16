@@ -108,6 +108,14 @@ def _header_value(value: str) -> str:
     return "=?base64?" + base64.b64encode(value.encode("utf-8")).decode("ascii") + "?="
 
 
+def _loads(data: Any) -> Any:
+    """``json.loads``, treating nesting too deep for the parser as a server error."""
+    try:
+        return json.loads(data)
+    except RecursionError:
+        raise McpError("the server sent JSON nested too deeply to parse") from None
+
+
 def _response_for(message: Any, request_id: int) -> Optional[Mapping[str, Any]]:
     """*message* if it is the response to *request_id*."""
     if isinstance(message, Mapping) and message.get("id") == request_id:
@@ -211,9 +219,12 @@ class StdioTransport(Transport):
             )
         except OSError as exc:
             raise McpError(f"could not start {command[0]!r}: {exc.strerror or exc}") from exc
-        # Bounded, so a server that floods stdout blocks instead of filling
-        # memory; the reader gives up on a full queue once closing starts.
+        # Bounded in messages and bytes, so a server that floods stdout
+        # blocks instead of filling memory; the reader gives up waiting for
+        # room once closing starts.
         self._messages: "queue.Queue[Optional[Tuple[Any, int]]]" = queue.Queue(_STDIO_BACKLOG)
+        self._room = threading.Condition()
+        self._backlog_bytes = 0
         self._outbox: "queue.Queue[Optional[Tuple[bytes, threading.Event]]]" = queue.Queue()
         self._closing = threading.Event()
         self._exited = False
@@ -233,9 +244,11 @@ class StdioTransport(Transport):
                 if not line:
                     break
                 try:
-                    message = json.loads(line)
+                    message = _loads(line)
                 except ValueError:
                     message = _NOISE  # servers sometimes log to stdout
+                except McpError as exc:
+                    message = exc  # raised when the caller reaches it
                 if not self._put((message, len(line))):
                     return
         except (OSError, ValueError):
@@ -244,7 +257,19 @@ class StdioTransport(Transport):
             self._put(None)
 
     def _put(self, item: Optional[Tuple[Any, int]]) -> bool:
-        """Queue *item*, waiting for room until the transport closes."""
+        """Queue *item*, waiting for room until the transport closes.
+
+        Past the first message, the backlog holds at most
+        ``MAX_MESSAGE_BYTES``: the byte budget is charged only as messages
+        are taken, so it cannot bound what waits here.
+        """
+        size = 0 if item is None else item[1]
+        with self._room:
+            while self._backlog_bytes and self._backlog_bytes + size > MAX_MESSAGE_BYTES:
+                if self._closing.is_set():
+                    return False
+                self._room.wait(0.1)
+            self._backlog_bytes += size
         while not self._closing.is_set():
             try:
                 self._messages.put(item, timeout=0.1)
@@ -306,10 +331,15 @@ class StdioTransport(Transport):
                 self._exited = True
                 raise McpError("server process exited")
             incoming, size = item
+            with self._room:
+                self._backlog_bytes -= size
+                self._room.notify()
             received += size
             self.bytes_received += size
             if received > limit:
                 raise McpSizeError(f"the response to {method} exceeded {limit} bytes")
+            if isinstance(incoming, McpError):
+                raise incoming
             response = _response_for(incoming, request_id)
             if response is not None:
                 return response
@@ -449,7 +479,7 @@ def _sse_messages(
             if not line:
                 if data:
                     try:
-                        yield json.loads(b"\n".join(data)), total
+                        yield _loads(b"\n".join(data)), total
                     except ValueError:
                         pass
                     data = []
@@ -720,8 +750,8 @@ class HttpTransport(Transport):
         except (OSError, http.client.HTTPException):
             payload = b""
         try:
-            parsed = json.loads(payload)
-        except ValueError:
+            parsed = _loads(payload)
+        except (ValueError, McpError):
             parsed = None
         if exc.code == 401:
             raise McpAuthError("the server requires authorization (HTTP 401)") from exc
@@ -749,7 +779,7 @@ class HttpTransport(Transport):
             raise McpError(f"event stream ended without a response to {method}")
         payload = _read_body(body, limit=limit, **bounds)
         try:
-            parsed = json.loads(payload)
+            parsed = _loads(payload)
         except ValueError as exc:
             raise McpError("server returned a non-JSON response") from exc
         found = _response_for(parsed, request_id)
